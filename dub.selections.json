@@ -1,0 +1,11 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"x11": "1.0.6",
+		"ws": "~master",
+		"derelict-ft": "1.0.2",
+		"derelict-util": "2.0.0",
+		"derelict-fi": "~master",
+		"derelict-gl3": "~master"
+	}
+}

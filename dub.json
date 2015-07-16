@@ -1,0 +1,10 @@
+{
+	"name" : "flatman",
+	"description" : "window manager",
+	"targetType": "executable",
+	"sourcePaths": ["src"],
+	"dependencies" : {
+		"ws": "~master"
+	},
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+}
