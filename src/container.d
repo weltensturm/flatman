@@ -30,21 +30,9 @@ class Container {
 
 	void deactivate(){}
 
-	void setFocus(int dir){
-		if(clients.length){
-			clientActive += dir;
-			if(clientActive > clients.length-1){
-				if(dir > 0)
-					clientActive = cast(int)clients.length-1;
-				else
-					clientActive = 0;
-			}
-		}else
-			clientActive = -1;
-	}
-
 	void add(Client client){
 		clients ~= client;
+		focus(client);
 	}
 
 	void remove(Client client){
@@ -52,22 +40,23 @@ class Container {
 		if(idx < 0)
 			return;
 		clients = clients[0..idx] ~ clients[idx+1..$];
-		focus(-1);
+		focus(null);
 	}
 
 	void setFocus(Client client){
-		setFocus(cast(int)clients.countUntil(client));
+		foreach(i,c; clients){
+			if(c == client){
+				clientActive = cast(int)i;
+				return;
+			}
+		}
+		clientActive = -1;
 	}
 
 	void focus(Client client){
-		focus(cast(int)clients.countUntil(client));
-	}
-
-	void focus(int dir){
-		setFocus(dir);
-		if(clients.length){
-			clients[clientActive].focus;
-		}
+		setFocus(client);
+		if(active)
+			active.focus;
 	}
 
 	Client active(){

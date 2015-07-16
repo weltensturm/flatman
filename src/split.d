@@ -78,6 +78,21 @@ class Split: Container {
 		rebuild;
 	}
 
+	override void focus(Client c){
+		super.focus(c);
+	}
+
+	void focus(int dir){
+		if(!clients.length)
+			return;
+		auto i = clientActive+dir;
+		if(i < 0)
+			i = cast(int)clients.length-1;
+		if(i >= clients.length)
+			i = 0;
+		focus(clients[i]);
+	}
+
 	override void activate(){
 		rebuild;
 		focus(0);

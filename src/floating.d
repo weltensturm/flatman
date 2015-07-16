@@ -24,7 +24,7 @@ class Floating: Container {
 		foreach(c; clients){
 			updateClient(c);
 		}
-		focus(0);
+		focus(active);
 	}
 
 	override void deactivate(){
