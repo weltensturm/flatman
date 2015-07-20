@@ -41,10 +41,12 @@ class WorkspaceDock {
 
 	void show(){
 		XMapRaised(dpy, window);
+		XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), AnyModifier, window, true, GrabModeAsync, GrabModeAsync);
 	}
 
 	void hide(){
 		XUnmapWindow(dpy, window);
+		XUngrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), AnyModifier, window);
 	}
 
 	void destroy(){
@@ -100,8 +102,8 @@ class WorkspaceDock {
 				draw.setColor("#444444");
 				auto wx = x+cast(int)(c.pos.x*scale).lround;
 				auto wy = y+cast(int)(c.pos.y*scale).lround;
-				auto ww = cast(int)(c.size.w*scale).lround-1;
-				auto wh = cast(int)(c.size.h*scale).lround-1;
+				auto ww = cast(int)(c.size.w*scale).lround;
+				auto wh = cast(int)(c.size.h*scale).lround;
 				draw.rect(wx, wy, ww, wh);
 				if(c == ws.active){
 					draw.setColor(selbgcolor);

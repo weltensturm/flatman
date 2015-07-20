@@ -39,7 +39,7 @@ enum resizehints = true;
 
 enum MODKEY = Mod1Mask;
 
-enum launcher = "dinu -fn Consolas-11";
+enum launcher = "dinu -fn Consolas-10";
 enum terminal  = "terminator";
 
 static Key[] keys;
@@ -47,7 +47,6 @@ static Button[] buttons;
 
 shared static this(){
 	keys = [
-		Key(0, XK_Alt_L, {}),
 		Key(MODKEY,                       XK_d,      {pipeShell(launcher ~ " -c ~/.dinu/" ~ monitorActive.workspaceActive.to!string);}),
 		Key(MODKEY,			              XK_Return, {pipeShell(terminal);}),
 		Key(MODKEY,                       XK_j,      {focusstack(-1);}),
@@ -58,6 +57,8 @@ shared static this(){
 		Key(MODKEY,                       XK_l, {monitorActive.prevWs;}),
 		Key(MODKEY,                       XK_Tab, {monitorActive.nextWs;}),
 		Key(MODKEY|ShiftMask,             XK_Tab, {monitorActive.prevWs;}),
+		Key(MODKEY|ShiftMask,			  XK_j, {monitorActive.workspace.split.moveDir(-1);}),
+		Key(MODKEY|ShiftMask,			  XK_semicolon, {monitorActive.workspace.split.moveDir(1);}),
 		Key(MODKEY|ShiftMask,             XK_k, {monitorActive.moveDown;}),
 		Key(MODKEY|ShiftMask,             XK_l, {monitorActive.moveUp;}),
 		//Key(MODKEY,                       XK_Tab,    {view;}),

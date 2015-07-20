@@ -29,10 +29,11 @@ class Split: Container {
 
 	Window window;
 
-	long[] separators;
+	long[] sizes;
 
 	this(int[2] pos, int[2] size, int mode=horizontal){
-		super(pos, size);
+		move(pos);
+		resize(size);
 		this.mode = mode;
 		titleHeight = bh;
 		paddingElem = bh/2;
@@ -46,27 +47,17 @@ class Split: Container {
 				DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
-		XDefineCursor(dpy, window, cursor[CurMove].cursor);
+		XDefineCursor(dpy, window, flatman.cursor[CurMove].cursor);
 		//XMapRaised(dpy, window);
 	}
 
 	void sizeInc(){
-		foreach(i, ref s; separators[0..$-1]){
-			if(i < clientActive)
-				s -= 10;
-			else
-				s += 10;
-		}
+		sizes[clientActive] += 25;
 		rebuild;
 	}
 
 	void sizeDec(){
-		foreach(i, ref s; separators[0..$-1]){
-			if(i < clientActive)
-				s += 10;
-			else
-				s -= 10;
-		}
+		sizes[clientActive] -= 25;
 		rebuild;
 	}
 
@@ -78,49 +69,55 @@ class Split: Container {
 		rebuild;
 	}
 
-	override void focus(Client c){
-		super.focus(c);
-	}
-
-	void focus(int dir){
-		if(!clients.length)
+	void focusDir(int dir){
+		if(!children.length)
 			return;
 		auto i = clientActive+dir;
 		if(i < 0)
-			i = cast(int)clients.length-1;
-		if(i >= clients.length)
+			i = cast(int)children.length-1;
+		if(i >= children.length)
 			i = 0;
-		focus(clients[i]);
+		focus(children[i]);
 	}
 
-	override void activate(){
+	void moveDir(int dir){
+		if(children.length < 2 || clientActive+dir >= children.length || clientActive+dir < 0)
+			return;
+		auto active = active;
+		children[clientActive] = children[clientActive+dir];
+		children[clientActive+dir] = active;
+		auto size = sizes[clientActive];
+		sizes[clientActive] = sizes[clientActive+dir];
+		sizes[clientActive+dir] = size;
+		clientActive += dir;
 		rebuild;
-		focus(0);
 	}
 
-	override void deactivate(){
-		foreach(c; clients)
-			XMoveWindow(dpy, c.win, size.w+pos.x, 0);
+	override void onShow(){
+		rebuild;
+		focus(active);
+	}
+
+	override void onHide(){
+		foreach(c; children)
+			XMoveWindow(dpy, (cast(Client)c).win, size.w+pos.x, 0);
 		XUnmapWindow(dpy, window);
 	}
 
-	override void add(Client client){
+	override Base add(Base client){
 		super.add(client);
-		foreach(ref s; separators)
-			s = cast(int)(s*separators.length/(separators.length+1.0));
-		separators ~= size.w-paddingOuter+paddingElem;
+		sizes ~= client.size.w;
 		rebuild;
+		return client;
 	}
 
-	override void remove(Client client){
-		auto idx = clients.countUntil(client);
-		if(idx < 0)
+	override void remove(Base client){
+		auto i = children.countUntil(client);
+		if(i < 0)
 			return;
-		separators = separators[0..idx] ~ separators[idx+1..$];
-		foreach(ref s; separators)
-			s = cast(int)(s*(separators.length+1.0)/separators.length);
-		if(separators.length)
-			separators[$-1] = size.w-paddingOuter+paddingElem;
+		sizes = sizes[0..i] ~ sizes[i+1..$];
+		foreach(ref s; sizes)
+			s = cast(int)(s*(sizes.length+1.0)/sizes.length);
 		super.remove(client);
 		rebuild;
 	}
@@ -135,24 +132,34 @@ class Split: Container {
 		rebuild;
 	}
 
+	void normalize(){
+		double max = size.w-paddingOuter*2-paddingElem*(children.length-1);
+		double cur = sizes.sum;
+		foreach(ref s; sizes){
+			s = (s*max/cur).lround;
+		}
+	}
+
 	void rebuild(){
-		if(clients.length){
+		if(children.length){
 			XMapWindow(dpy, window);
 		}else{
 			XUnmapWindow(dpy, window);
 			return;
 		}
+		normalize;
 		XMoveWindow(dpy, window, pos.x, pos.y);
-		int offset = 0;
-		foreach(i, client; clients){
-			client.resize([
-					(mode==horizontal ? offset : 0) + pos.x + paddingOuter,
-					(mode==vertical ? offset : 0) + pos.y + titleHeight + paddingOuter
+		XResizeWindow(dpy, window, size.w, size.h);
+		int offset = paddingOuter;
+		foreach(i, client; children){
+			(cast(Client)client).moveResize([
+					(mode==horizontal ? offset : paddingOuter) + pos.x,
+					(mode==vertical ? offset : paddingOuter) + pos.y + titleHeight
 				],[
-					mode==horizontal ? cast(int)separators[i]-offset-paddingElem : this.size.w-paddingOuter*2,
-					(mode==vertical ? cast(int)separators[i]-offset-paddingElem : this.size.h-paddingOuter*2) - titleHeight
-				], false);
-			offset = cast(int)separators[i];
+					mode==horizontal ? cast(int)sizes[i] : size.w-paddingOuter*2,
+					(mode==vertical ? cast(int)sizes[i] : size.h-paddingOuter*2) - titleHeight
+			]);
+			offset += cast(int)sizes[i]+paddingElem;
 		}
 		onDraw;
 	}
@@ -178,8 +185,8 @@ class Split: Container {
 		}
 		if(titleHeight){
 			draw.setColor(selfgcolor);
-			foreach(c; clients){
-				draw.text(c.name, [c.pos.x-pos.x-1, c.pos.y-pos.y-titleHeight]);
+			foreach(c; children){
+				draw.text((cast(Client)c).name, [c.pos.x-pos.x-1, c.pos.y-pos.y-titleHeight]);
 			}
 		}
 		draw.map(window, 0, 0, size.w, size.h);

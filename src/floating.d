@@ -17,26 +17,29 @@ long find(T)(T[] array, T what){
 class Floating: Container {
 
 	this(int[2] pos, int[2] size){
-		super(pos, size);
+		move(pos);
+		resize(size);
 	}
 
-	override void activate(){
-		foreach(c; clients){
+	override void onShow(){
+		foreach(c; children){
+			c.show;
 			updateClient(c);
 		}
 		focus(active);
 	}
 
-	override void deactivate(){
-		foreach(c; clients)
-			XMoveWindow(dpy, c.win, pos.x+size.w, 0);
+	override void onHide(){
+		foreach(c; children)
+			c.hide;
+			//XMoveWindow(dpy, c.win, pos.x+size.w, 0);
 	}
 
-	void updateClient(Client client){
-		client.resize([size.w/2-client.size.w/2,pos.y+size.y-client.size.h],client.size,false);
+	void updateClient(Base client){
+		client.move([size.w/2-client.size.w/2,pos.y+size.y-client.size.h]);
 	}
 
-	override void add(Client client){
+	void addChild(Base client){
 		super.add(client);
 		updateClient(client);
 	}

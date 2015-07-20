@@ -492,7 +492,7 @@ void focusmon(int arg){
 }
 
 void focusstack(int arg){
-	monitorActive.workspace.split.focus(arg);
+	monitorActive.workspace.split.focusDir(arg);
 	monitorActive.draw;
 }
 

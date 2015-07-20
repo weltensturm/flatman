@@ -4,27 +4,14 @@ import
 	flatman;
 
 
-ref T x(T,int N)(ref T[N] array){
-	return array[0];
-}
-alias w = x;
-
-ref T y(T,int N)(ref T[N] array){
-	return array[1];
-}
-alias h = y;
-
-
 enum BUTTONMASK = ButtonPressMask|ButtonReleaseMask;
 enum MOUSEMASK = BUTTONMASK|PointerMotionMask;
 
 
-class Client {
+class Client: Base {
 
 	string name;
 	float mina, maxa;
-	int[2] pos;
-	int[2] size;
 	int[2] posOld;
 	int[2] sizeOld;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh;
@@ -52,11 +39,15 @@ class Client {
 		//XShapeSelectInput(dpy, win, ShapeNotifyMask);
 	}
 
-	void resize(int[2] pos, int[2] size, bool interact){
-		resizeclient(pos, size);
+	override void onHide(){
+		XUnmapWindow(dpy, win);
 	}
 
-	void resizeclient(int[2] pos, int[2] size){
+	override void onShow(){
+		XMapWindow(dpy, win);
+	}
+
+	void moveResize(int[2] pos, int[2] size){
 		pos.x = pos.x.max(0);
 		pos.y = pos.y.max(0);
 		size.w = size.w.max(1);
@@ -95,7 +86,6 @@ class Client {
 		ce.y = pos.y;
 		ce.width = size.w;
 		ce.height = size.h;
-		//ce.border_width = c.bw;
 		ce.above = None;
 		ce.override_redirect = false;
 		XSendEvent(dpy, win, false, StructureNotifyMask, cast(XEvent*)&ce);
@@ -237,7 +227,8 @@ void setfullscreen(Client c, bool fullscreen){
 		c.isfullscreen = true;
 		c.oldbw = c.bw;
 		c.bw = 0;
-		c.resizeclient(c.monitor.pos, c.monitor.size);
+		c.move(c.monitor.pos);
+		c.resize(c.monitor.size);
 		XRaiseWindow(dpy, c.win);
 	}
 	else {
@@ -246,7 +237,8 @@ void setfullscreen(Client c, bool fullscreen){
 		c.bw = c.oldbw;
 		c.pos = c.posOld;
 		c.size = c.sizeOld;
-		c.resizeclient(c.pos, c.size);
+		c.move(c.pos);
+		c.resize(c.size);
 	}
 }
 
@@ -262,7 +254,6 @@ void unfocus(Client c, bool setfocus){
 
 void unmanage(Client c, bool destroyed){
 	Monitor m = c.monitor;
-	"unmanage %s %s".format(c.name, destroyed).log;
 	if(destroyed)
 		m.remove(c);
 	XWindowChanges wc;

@@ -40,7 +40,7 @@ class Monitor {
 		if(monitorActive.workspaceActive == workspaces.length)
 			workspaceActive = 0;
 		workspace.activate;
-		dock.show;
+		//dock.show;
 		draw;
 	}
 	
@@ -57,9 +57,9 @@ class Monitor {
 		if(win){
 			remove(win);
 			if(workspaceActive == workspaces.length-1)
-				workspaces[0].add(win);
+				workspaces[0].addClient(win);
 			else
-				workspaces[workspaceActive+1].add(win);
+				workspaces[workspaceActive+1].addClient(win);
 		}
 		switchWorkspace(workspaceActive+1);
 		win.focus;
@@ -70,21 +70,21 @@ class Monitor {
 		if(win){
 			remove(win);
 			if(workspaceActive == 0)
-				workspaces[workspaces.length-1].add(win);
+				workspaces[workspaces.length-1].addClient(win);
 			else
-				workspaces[workspaceActive-1].add(win);
+				workspaces[workspaceActive-1].addClient(win);
 		}
 		switchWorkspace(workspaceActive-1);
 		win.focus;
 	}
 
 	void add(Client client){
-		workspace.add(client);
+		workspace.addClient(client);
 	}
 
 	void move(Client client, int workspace){
 		this.workspace.remove(client);
-		workspaces[workspace].add(client);
+		workspaces[workspace].addClient(client);
 	}
 
 	void remove(Client client){

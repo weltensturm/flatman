@@ -46,6 +46,8 @@ class Bar {
 			monitorActive.nextWs;
 		else if(ev.button == Mouse.wheelUp)
 			monitorActive.prevWs;
+		else
+			quit;
 	}
 
 	void onDraw(){
@@ -59,6 +61,9 @@ class Bar {
 		}catch{
 			draw.text(tags[monitorActive.workspaceActive], [0,0]);
 		}
+		auto ct = Clock.currTime();
+		auto text = "%s.%s. %s:%02d".format(ct.day, cast(int)ct.month, ct.hour, ct.minute);
+		draw.text(text, [size.w/2, 0], 0.5);
 		draw.map(window, 0, 0, size.w, size.h);
 	}
 
