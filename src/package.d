@@ -33,6 +33,7 @@ public import
 	ws.bindings.fontconfig,
 	ws.bindings.xft,
 	flatman.util,
+	flatman.ewmh,
 	flatman.draw,
 	flatman.flatman,
 	flatman.monitor,

@@ -44,4 +44,9 @@ class Floating: Container {
 		updateClient(client);
 	}
 
+	void destroy(){
+		foreach(c; children)
+			unmanage(cast(Client)c, false);
+	}
+
 }

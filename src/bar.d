@@ -62,7 +62,7 @@ class Bar {
 			draw.text(tags[monitorActive.workspaceActive], [0,0]);
 		}
 		auto ct = Clock.currTime();
-		auto text = "%s.%s. %s:%02d".format(ct.day, cast(int)ct.month, ct.hour, ct.minute);
+		auto text = "%s:%02d   %s.%s.".format(ct.hour, ct.minute, ct.day, cast(int)ct.month);
 		draw.text(text, [size.w/2, 0], 0.5);
 		draw.map(window, 0, 0, size.w, size.h);
 	}

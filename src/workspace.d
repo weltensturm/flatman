@@ -23,6 +23,7 @@ class Workspace: Base {
 	}
 
 	void addClient(Client client){
+		updateWindowDesktop(client, monitorActive.workspaces.countUntil(this));
 		if(client.isFloating){
 			floating.add(client);
 		}else{
@@ -80,6 +81,11 @@ class Workspace: Base {
 	override void onDraw(){
 		foreach(c; children)
 			c.onDraw;
+	}
+
+	void destroy(){
+		floating.destroy;
+		split.destroy;
 	}
 
 }

@@ -50,21 +50,6 @@ struct WmAtoms {
 WmAtoms wm;
 
 
-struct NetAtoms {
-	@("_NET_SUPPORTED") Atom supported;
-	@("_NET_WM_NAME") Atom wmName;
-	@("_NET_WM_STATE") Atom wmState;
-	@("_NET_WM_STATE_FULLSCREEN") Atom wmFullscreen;
-	@("_NET_ACTIVE_WINDOW") Atom activeWindow;
-	@("_NET_WM_WINDOW_TYPE") Atom wmWindowType;
-	@("_NET_WM_WINDOW_TYPE_DIALOG") Atom wmWindowTypeDialog;
-	@("_NET_CLIENT_LIST") Atom clientList;
-	@("_NET_WORKAREA") Atom workArea;
-}
-
-NetAtoms net;
-
-
 void fillAtoms(T)(ref T data){
 	foreach(n; FieldNameTuple!T){
 		mixin("data." ~ n ~ " = atom(__traits(getAttributes, data."~n~")[0]);");
@@ -108,6 +93,7 @@ extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
 static uint numlockmask = 0;
 enum handler = [
 	ButtonPress: &onButton,
+	ButtonRelease: &onButtonRelease,
 	ClientMessage: &onClientMessage,
 	ConfigureRequest: &onConfigureRequest,
 	ConfigureNotify: &onConfigure,
@@ -152,18 +138,25 @@ void main(string[] args){
 		XSynchronize(dpy, true);
 		if(!dpy)
 			throw new Exception("flatman: cannot open display");
+		"checkOtherWm".log;
 		checkOtherWm();
+		"setup".log;
 		setup();
+		"scan".log;
 		scan();
+		"run".log;
 		run();
 	}catch(Throwable t){
 		"/tmp/flatman.log".append(t.toString);
 		throw t;
 	}
+	"cleanup".log;
 	cleanup();
 	XCloseDisplay(dpy);
-	if(restart)
+	if(restart){
+		"restart".log;
 		spawnProcess(args);
+	}
 }
 
 
@@ -220,11 +213,15 @@ void setup(){
 	foreach(n; FieldNameTuple!NetAtoms)
 		mixin("XChangeProperty(dpy, root, net.supported, XA_ATOM, 32, PropModeAppend, cast(ubyte*)&net." ~ n ~", 1);");
 	XDeleteProperty(dpy, root, net.clientList);
+	updateDesktopCount;
+	updateCurrentDesktop;
 	/* select for events */
 	XSetWindowAttributes wa;
 	wa.cursor = cursor[CurNormal].cursor;
-	wa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask|ButtonPressMask|PointerMotionMask
-	                |EnterWindowMask|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
+	wa.event_mask = 
+			SubstructureRedirectMask|SubstructureNotifyMask|ButtonPressMask
+			|PointerMotionMask|EnterWindowMask|LeaveWindowMask|StructureNotifyMask
+			|PropertyChangeMask|KeyReleaseMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
 	grabkeys();
@@ -259,6 +256,8 @@ void onButton(XEvent* e){
 		monitorActive.bar.onButton(e);
 	}else if(ev.window == monitorActive.dock.window){
 		monitorActive.dock.onButton(e);
+	}else if(ev.window == monitorActive.workspace.split.window){
+		monitorActive.workspace.split.onButton(ev);
 	}else if(c){
 		c.focus;
 		for(i = 0; i < buttons.length; i++)
@@ -268,20 +267,45 @@ void onButton(XEvent* e){
 	}
 }
 
+void onButtonRelease(XEvent* e){
+	XButtonReleasedEvent* ev = &e.xbutton;
+	if(ev.window == monitorActive.workspace.split.window)
+		monitorActive.workspace.split.onButtonRelease(ev);
+}
+
 void onClientMessage(XEvent *e){
 	XClientMessageEvent *cme = &e.xclient;
-	Client c = wintoclient(cme.window);
-	if(!c)
-		return;
-	if(cme.message_type == net.wmState){
-		if(cme.data.l[1] == net.wmFullscreen || cme.data.l[2] == net.wmFullscreen)
-			setfullscreen(c, (cme.data.l[0] == 1 /* _NET_WM_STATE_ADD    */
+	auto handler = [
+		net.currentDesktop: {
+			monitorActive.switchWorkspace(cast(int)cme.data.l[0]);
+		},
+		net.wmState: {
+			Client c = wintoclient(cme.window);
+			if(!c)
+				return;
+			if(cme.message_type == net.wmState){
+				if(cme.data.l[1] == net.wmFullscreen || cme.data.l[2] == net.wmFullscreen)
+					setfullscreen(c, (cme.data.l[0] == 1 /* _NET_WM_STATE_ADD    */
 			              || (cme.data.l[0] == 2 /* _NET_WM_STATE_TOGGLE */ && !c.isfullscreen)));
-	}else if(cme.message_type == net.activeWindow){
-		XDeleteProperty(dpy, c.win, net.activeWindow);
-		//XChangeProperty(dpy, c.win, netatom[Attention])
-		//pop(c);
-	}
+			}
+		},
+		net.activeWindow: {
+			Client c = wintoclient(cme.window);
+			if(!c)
+				return;
+			c.focus;
+			//XDeleteProperty(dpy, c.win, net.activeWindow);
+			//XChangeProperty(dpy, c.win, net.attention);
+		},
+		net.appDesktop: {
+			Client c = wintoclient(cme.window);
+			if(!c)
+				return;
+			c.setWorkspace(cme.data.l[0]);
+		}
+	];
+	if(cme.message_type in handler)
+		handler[cme.message_type]();
 }
 
 void onConfigure(XEvent *e){
@@ -426,10 +450,12 @@ void onMapRequest(XEvent *e){
 void onMotion(XEvent* e){
 	static Monitor mon = null;
 	Monitor m;
-	XMotionEvent *ev = &e.xmotion;
-	if(ev.x <= 1){
+	XMotionEvent* ev = &e.xmotion;
+	if(ev.x_root <= 1){
 		monitorActive.dock.show;
 	}
+	if(ev.window == monitorActive.workspace.split.window)
+		monitorActive.workspace.split.onMotion(ev);
 	if(ev.window != root)
 		return;
 	if((m = recttomon(ev.x_root, ev.y_root, 1, 1)) != mon && mon){
@@ -588,7 +614,7 @@ void manage(Window w, XWindowAttributes* wa){
 		c.monitor = monitorActive;
 		c.applyRules;
 	}
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|PointerMotionMask|KeyReleaseMask);
 	c.grabbuttons(false);
 	if(!c.isFloating)
 		c.isFloating = c.oldstate = trans != None || c.isfixed;
@@ -664,18 +690,6 @@ void onUnmap(XEvent *e){
 	}
 }
 
-void updateclientlist(){
-	XDeleteProperty(dpy, root, net.clientList);
-	foreach(m; monitors)
-		foreach(c; m.allClients)
-			XChangeProperty(dpy, root, net.clientList, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
-}
-
-void updateWorkarea(){
-	int[4] wa;
-	XChangeProperty(dpy, root, net.workArea, XA_CARDINAL, 32, PropModeReplace, cast(ubyte*)wa.ptr, 4);
-}
-
 bool updategeom(){
 	bool dirty = false;
 	if(!monitors.length){
@@ -736,6 +750,13 @@ Monitor wintomon(Window w){
 
 void cleanup(){
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
+	foreach(ws; monitorActive.workspaces){
+		foreach(c; ws.clients){
+			unmanage(c, false);
+		}
+		ws.destroy;
+	}
+	monitorActive.destroy;
 	draw.free;
 	XSync(dpy, false);
 	XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);

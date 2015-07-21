@@ -40,8 +40,9 @@ class Monitor {
 		if(monitorActive.workspaceActive == workspaces.length)
 			workspaceActive = 0;
 		workspace.activate;
-		//dock.show;
+		dock.show;
 		draw;
+		updateCurrentDesktop;
 	}
 	
 	void nextWs(){
@@ -99,6 +100,13 @@ class Monitor {
 		bar.onDraw;
 	}
 
+	void destroy(){
+		bar.destroy;
+		dock.destroy;
+		foreach(ws; workspaces)
+			ws.destroy;
+	}
+
 	Client[] allClients(){
 		Client[] res;
 		foreach(ws; workspaces)
@@ -111,6 +119,7 @@ class Monitor {
 		foreach(ws; workspaces)
 			ws.resize([size.w, size.h-bh]);
 		dock.resize([size.w/cast(int)tags.length, size.h-bh]);
+		bar.update(bar.pos, [size.w, bh]);
 	}
 
 }

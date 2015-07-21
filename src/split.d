@@ -27,6 +27,15 @@ class Split: Container {
 	int border = 2;
 	int titleHeight;
 
+	class DragInfo {
+		size_t sizeIdx;
+		long sizeLeft;
+		long sizeRight;
+		int dragStart;
+	}
+
+	DragInfo dragInfo;
+
 	Window window;
 
 	long[] sizes;
@@ -40,7 +49,7 @@ class Split: Container {
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
 		wa.background_pixmap = ParentRelative;
-		wa.event_mask = ButtonPressMask|ExposureMask;
+		wa.event_mask = PointerMotionMask|ButtonPressMask|ButtonReleaseMask|ExposureMask;
 		window = XCreateWindow(
 				dpy, root, pos.x, pos.y, size.w, size.h,
 				0, DefaultDepth(dpy, screen), CopyFromParent,
@@ -96,6 +105,34 @@ class Split: Container {
 	override void onShow(){
 		rebuild;
 		focus(active);
+	}
+
+	void onButton(XButtonPressedEvent* ev){
+		if(ev.button == Mouse.buttonLeft){
+			foreach(i, c; children){
+				if(i+1 < children.length && ev.x > c.pos.x+c.size.w && ev.x < children[i+1].pos.x){
+					dragInfo = new DragInfo;
+					dragInfo.sizeIdx = i;
+					dragInfo.sizeLeft = sizes[i];
+					dragInfo.sizeRight = sizes[i+1];
+					dragInfo.dragStart = ev.x;
+				}
+			}
+		}
+	}
+
+	void onButtonRelease(XButtonReleasedEvent* ev){
+		if(ev.button == Mouse.buttonLeft){
+			dragInfo = null;
+		}
+	}
+
+	void onMotion(XMotionEvent* ev){
+		if(dragInfo){
+			sizes[dragInfo.sizeIdx] = dragInfo.sizeLeft + ev.x - dragInfo.dragStart;
+			sizes[dragInfo.sizeIdx+1] = dragInfo.sizeRight - ev.x + dragInfo.dragStart;
+			rebuild;
+		}
 	}
 
 	override void onHide(){
@@ -190,6 +227,13 @@ class Split: Container {
 			}
 		}
 		draw.map(window, 0, 0, size.w, size.h);
+	}
+
+	void destroy(){
+		foreach(c; children)
+			unmanage(cast(Client)c, false);
+		XUnmapWindow(dpy, window);
+		XDestroyWindow(dpy, window);
 	}
 
 }

@@ -47,6 +47,11 @@ class Client: Base {
 		XMapWindow(dpy, win);
 	}
 
+	void setWorkspace(long i){
+		monitorActive.remove(this);
+		monitorActive.workspaces[i].add(this);
+	}
+
 	void moveResize(int[2] pos, int[2] size){
 		pos.x = pos.x.max(0);
 		pos.y = pos.y.max(0);
@@ -270,7 +275,7 @@ void unmanage(Client c, bool destroyed){
 		XUngrabServer(dpy);
 	}
 	focus(null);
-	updateclientlist();
+	updateClientList();
 }
 
 void updatetitle(Client c){

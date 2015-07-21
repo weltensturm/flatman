@@ -18,7 +18,7 @@ class WorkspaceDock {
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
 		wa.background_pixmap = ParentRelative;
-		wa.event_mask = ButtonPressMask|ExposureMask|PointerMotionMask|LeaveWindowMask;
+		wa.event_mask = ButtonPressMask|ExposureMask|PointerMotionMask|LeaveWindowMask|KeyReleaseMask;
 		window = XCreateWindow(
 			dpy, root, pos.x, pos.y, size.w, size.h,
 			0, DefaultDepth(dpy, screen), CopyFromParent,
@@ -41,12 +41,14 @@ class WorkspaceDock {
 
 	void show(){
 		XMapRaised(dpy, window);
-		XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), AnyModifier, window, true, GrabModeAsync, GrabModeAsync);
+		//XGrabKeyboard(dpy, root, true, GrabModeSync, GrabModeSync, CurrentTime);
+		XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), 0, root, true, GrabModeAsync, GrabModeAsync);
 	}
 
 	void hide(){
 		XUnmapWindow(dpy, window);
-		XUngrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), AnyModifier, window);
+		//XUngrabKeyboard(dpy, CurrentTime);
+		XUngrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), 0, root);
 	}
 
 	void destroy(){
@@ -102,11 +104,14 @@ class WorkspaceDock {
 				draw.setColor("#444444");
 				auto wx = x+cast(int)(c.pos.x*scale).lround;
 				auto wy = y+cast(int)(c.pos.y*scale).lround;
-				auto ww = cast(int)(c.size.w*scale).lround;
-				auto wh = cast(int)(c.size.h*scale).lround;
+				auto ww = cast(int)(c.size.w*scale-bh/5).lround;
+				auto wh = cast(int)(c.size.h*scale-bh/5).lround;
 				draw.rect(wx, wy, ww, wh);
 				if(c == ws.active){
 					draw.setColor(selbgcolor);
+					draw.rect(wx,wy,ww,wh);
+				}else if(c.isUrgent){
+					draw.setColor("#bbbb00");
 					draw.rect(wx,wy,ww,wh);
 				}
 				draw.clip([wx,wy],[ww,wh]);
