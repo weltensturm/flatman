@@ -18,3 +18,12 @@ Flat window manager written in D
 * configure in `src/config.d`
 * usage of `weltensturm/dinu` as launcher is recommended
 * if `x11` causes problems, install `weltensturm/x11` and add it with `dub add-local <path-to-x11> <requested version>`
+
+## upcoming
+
+* full EWMH support
+* support for external docks
+* full mouse support
+* separation of bar, dock and window manager
+* text file configuration
+* tabbed windows
