@@ -2,6 +2,8 @@ module flatman.workspaceDock;
 
 import flatman;
 
+__gshared:
+
 
 class WorkspaceDock {
 
@@ -89,7 +91,7 @@ class WorkspaceDock {
 	}
 
 	void onDraw(){
-		draw.setColor(normbgcolor);
+		draw.setColor("#"~config["dock background"]);
 		draw.rect(0,0,size.w,size.h);
 		int border = 5;
 		foreach(i, ws; monitor.workspaces){
@@ -98,36 +100,35 @@ class WorkspaceDock {
 			auto scale = cast(double)w/monitor.size.w;
 			auto h = cast(int)(size.h*scale).lround;
 			auto y = cast(int)(i*(h+border)+border).lround;
-			draw.setColor("#262626");
+			draw.setColor("#"~config["dock workspace background"]);
 			draw.rect(x,y,w,h);
 			foreach(wi, c; ws.clients){
-				draw.setColor("#444444");
-				auto wx = x+cast(int)(c.pos.x*scale).lround;
-				auto wy = y+cast(int)(c.pos.y*scale).lround;
-				auto ww = cast(int)(c.size.w*scale-bh/5).lround;
-				auto wh = cast(int)(c.size.h*scale-bh/5).lround;
+				draw.setColor("#"~config["dock window background normal"]);
+				auto wx = x+cast(int)(c.pos.x*scale/2+1).lround*2;
+				auto wy = y+cast(int)(c.pos.y*scale/2-1).lround*2;
+				auto ww = cast(int)(c.size.w*scale/2-0.5).lround*2;
+				auto wh = cast(int)(c.size.h*scale/2-0.5).lround*2;
 				draw.rect(wx, wy, ww, wh);
 				if(c == ws.active){
-					draw.setColor(selbgcolor);
+					draw.setColor("#"~config["dock window background active"]);
 					draw.rect(wx,wy,ww,wh);
 				}else if(c.isUrgent){
-					draw.setColor("#bbbb00");
+					draw.setColor("#"~config["dock window background urgent"]);
 					draw.rect(wx,wy,ww,wh);
 				}
 				draw.clip([wx,wy],[ww,wh]);
-				draw.setColor(selfgcolor);
+				draw.setColor("#"~config["dock window text"]);
 				draw.text(c.name, [wx,wy]);
 				draw.noclip;
 			}
+			draw.setColor("#"~config["dock workspace title"]);
 			if(ws == monitor.workspace){
-				draw.setColor(normfgcolor);
 				draw.rectOutline([x,y],[w,h]);
 			}
 			try{
-				draw.setColor(normfgcolor);
 				auto name = ("~/.dinu/".expandTilde ~ i.to!string).readText;
 				name = name.replace("~".expandTilde, "~");
-				draw.text(name, [x, y+h-bh]);
+				draw.text(name, [x+w, y+h-bh], 1.5);
 			}catch(Exception e){
 			}
 			draw.text(tags[i], [x+w,y+h-bh], 0.5);

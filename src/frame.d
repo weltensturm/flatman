@@ -2,6 +2,8 @@ module flatman.frame;
 
 import flatman;
 
+__gshared:
+
 
 class Frame {
 

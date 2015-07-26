@@ -2,11 +2,14 @@ module flatman.workspace;
 
 import flatman;
 
+__gshared:
+
 
 class Workspace: Base {
 
 	Split split;
 	Floating floating;
+	Client[] fullscreen;
 	bool focusFloating;
 
 	this(int[2] pos, int[2] size){
@@ -18,13 +21,18 @@ class Workspace: Base {
 
 	override void resize(int[2] size){
 		this.size = size;
-		foreach(c; children)
+		foreach(c; children ~ hiddenChildren)
 			c.resize(size);
+		foreach(c; fullscreen)
+			c.moveResize(pos, size);
 	}
 
 	void addClient(Client client){
 		updateWindowDesktop(client, monitorActive.workspaces.countUntil(this));
-		if(client.isFloating){
+		if(client.isfullscreen){
+			fullscreen ~= client;
+			client.moveResize(pos, size);
+		}else if(client.isFloating){
 			floating.add(client);
 		}else{
 			split.add(client);
@@ -50,18 +58,24 @@ class Workspace: Base {
 	}
 
 	override void remove(Base client){
-		foreach(c; children)
+		auto refocus = client == active;
+		foreach(c; children ~ hiddenChildren)
 			c.remove(client);
+		if(refocus)
+			focus(active);
 	}
 
-	void activate(){
-		foreach(c; hiddenChildren)
-			c.show;
+	override void show(){
+		super.show;
+		split.show;
+		floating.show;
+		focus(active);
 	}
 
-	void deactivate(){
+	override void hide(){
 		foreach(c; children)
 			c.hide;
+		super.hide;
 	}
 
 	Client active(){
@@ -72,9 +86,11 @@ class Workspace: Base {
 
 	Client[] clients(){
 		Client[] clients;
-		foreach(container; children ~ hiddenChildren)
-			foreach(c; container.children ~ container.hiddenChildren)
-				clients ~= cast(Client)c;
+		foreach(c; split.hiddenChildren ~ split.children)
+			clients ~= cast(Client)c;
+		clients ~= fullscreen;
+		foreach(c; floating.hiddenChildren ~ floating.children)
+			clients ~= cast(Client)c;
 		return clients;
 	}
 

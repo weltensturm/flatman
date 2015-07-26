@@ -2,6 +2,44 @@ module flatman.config;
 
 import flatman;
 
+__gshared:
+
+
+class Config {
+
+	string[string] values;
+
+	string opIndex(string name){
+		return values.get(name, "ff9999");
+	}
+
+	void loadBlock(string block, string namespace){
+		Decode.text(block, (name, value, isBlock){
+			if(isBlock)
+				loadBlock(value, namespace ~ " " ~ name);
+			else
+				values[(namespace ~ " " ~ name).strip] = value;
+		});
+	}
+
+	void load(){
+		try {
+			loadBlock("~/.config/flatman/config.ws".expandTilde.readText, "");
+		}catch(Exception e){
+			e.toString.log;
+		}
+	}
+
+}
+
+Config config;
+
+
+shared static this(){
+	config = new Config;
+	config.load;
+}
+
 
 enum fonts = [
     "Sans:size=10.5",
@@ -45,36 +83,52 @@ enum terminal  = "terminator";
 static Key[] keys;
 static Button[] buttons;
 
+string currentContext(){
+	try
+		return "~/.dinu/%s".format(monitorActive.workspaceActive).expandTilde.readText;
+	catch
+		return "~".expandTilde;
+}
+
 shared static this(){
 	keys = [
-		Key(MODKEY,                       XK_d,      {pipeShell(launcher ~ " -c ~/.dinu/" ~ monitorActive.workspaceActive.to!string);}),
-		Key(MODKEY,			              XK_Return, {pipeShell(terminal);}),
-		Key(MODKEY,                       XK_j,      {focusstack(-1);}),
-		Key(MODKEY,                       XK_semicolon,      {focusstack(1);}),
-		Key(MODKEY|ControlMask,           XK_j, {sizeDec;}),
-		Key(MODKEY|ControlMask,           XK_semicolon, {sizeInc;}),
-		Key(MODKEY,                       XK_k, {monitorActive.nextWs;}),
-		Key(MODKEY,                       XK_l, {monitorActive.prevWs;}),
-		Key(MODKEY,                       XK_Tab, {monitorActive.nextWs;}),
-		Key(MODKEY|ShiftMask,             XK_Tab, {monitorActive.prevWs;}),
-		Key(MODKEY|ShiftMask,			  XK_j, {monitorActive.workspace.split.moveDir(-1);}),
-		Key(MODKEY|ShiftMask,			  XK_semicolon, {monitorActive.workspace.split.moveDir(1);}),
-		Key(MODKEY|ShiftMask,             XK_k, {monitorActive.moveDown;}),
-		Key(MODKEY|ShiftMask,             XK_l, {monitorActive.moveUp;}),
-		//Key(MODKEY,                       XK_Tab,    {view;}),
-		Key(MODKEY|ShiftMask,             XK_q,      {killclient;}),
-		Key(MODKEY|ShiftMask,             XK_space,  {togglefloating;}),
-		Key(MODKEY,                       XK_comma,  {focusmon(-1);}),
-		Key(MODKEY,                       XK_period, {focusmon(1);}),
-		Key(MODKEY|ShiftMask,             XK_e,      {quit;} ),
-		Key(MODKEY,             		  XK_t,      {monitorActive.workspace.split.toggleTitles;} ),
-		Key(MODKEY|ShiftMask,			  XK_r,		 {restart=true;running=false;}),
+		Key(MODKEY,             XK_d,      {pipeShell(launcher ~ " -c ~/.dinu/" ~ monitorActive.workspaceActive.to!string);}),
+		Key(MODKEY,			    XK_Return, {pipeShell("cd \"%s\" && %s".format(currentContext, terminal));}),
+		Key(MODKEY,             XK_j,      {focusstack(-1);}),
+		Key(MODKEY,             XK_semicolon,      {focusstack(1);}),
+		
+		Key(MODKEY|ControlMask, XK_j, {sizeDec;}),
+		Key(MODKEY|ControlMask, XK_semicolon, {sizeInc;}),
+		Key(MODKEY,				XK_r, {mouseresize;}),
+		Key(MODKEY,				XK_m, {mousemove;}),
+
+		Key(MODKEY,             XK_k, {monitorActive.nextWs;}),
+		Key(MODKEY,             XK_l, {monitorActive.prevWs;}),
+		Key(MODKEY,             XK_Tab, {monitorActive.nextWs;}),
+		Key(MODKEY|ShiftMask,   XK_Tab, {monitorActive.prevWs;}),
+		Key(MODKEY|ShiftMask,	XK_j, {monitorActive.workspace.split.moveDir(-1);}),
+		Key(MODKEY|ShiftMask,	XK_semicolon, {monitorActive.workspace.split.moveDir(1);}),
+		Key(MODKEY|ShiftMask,   XK_k, {monitorActive.moveDown;}),
+		Key(MODKEY|ShiftMask,   XK_l, {monitorActive.moveUp;}),
+		//Key(MODKEY,             XK_Tab,    {view;}),
+		Key(MODKEY|ShiftMask,   XK_q,      {killclient;}),
+		Key(MODKEY|ShiftMask,   XK_space,  {togglefloating;}),
+		Key(MODKEY,				XK_f,	   {togglefullscreen;}),
+		Key(MODKEY,             XK_comma,  {focusmon(-1);}),
+		Key(MODKEY,             XK_period, {focusmon(1);}),
+		Key(MODKEY|ShiftMask,   XK_e,      {quit;} ),
+		Key(MODKEY,             XK_t,      {monitorActive.workspace.split.toggleTitles;} ),
+		Key(MODKEY|ShiftMask,	XK_r,		 {config.load;}),
 	];
 
 	[XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9, XK_0].each((size_t i, size_t k){
-		keys ~= Key(MODKEY,                       k,      {monitorActive.switchWorkspace(cast(int)i);});
+		keys ~= Key(MODKEY, k, {monitorActive.switchWorkspace(cast(int)i);});
 	});
 
-	buttons = [];
+	buttons = [
+		Button(MODKEY, Button1, {mousemove;} ),
+		Button(MODKEY, Button2, {togglefloating;} ),
+		Button(MODKEY, Button3, {mouseresize;} ),
+	];
 
 }

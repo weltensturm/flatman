@@ -2,6 +2,8 @@ module flatman.bar;
 
 import flatman;
 
+__gshared:
+
 
 class Bar {
 

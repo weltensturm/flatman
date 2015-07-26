@@ -2,10 +2,12 @@ module flatman.container;
 
 import flatman;
 
+__gshared:
+
 
 class Container: Base {
 
-	int clientActive;
+	long clientActive;
 	
 	Client active(){
 		if(clientActive < children.length && clientActive >= 0)
@@ -14,13 +16,11 @@ class Container: Base {
 	}
 
 	void setFocus(Base client){
-		int i;
-		foreach(c; children){
+		foreach(i, c; children){
 			if(c == client){
 				clientActive = i;
 				return;
 			}
-			i++;
 		}
 	}
 

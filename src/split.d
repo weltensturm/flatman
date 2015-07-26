@@ -2,6 +2,8 @@ module flatman.split;
 
 import flatman;
 
+__gshared:
+
 
 long find(T)(T[] array, T what){
 	long i;
@@ -22,9 +24,9 @@ class Split: Container {
 	}
 
 	int mode;
-	int paddingElem = 0;
-	int paddingOuter = 0;
-	int border = 2;
+	int paddingElem;
+	int paddingOuter;
+	int border;
 	int titleHeight;
 
 	class DragInfo {
@@ -35,17 +37,21 @@ class Split: Container {
 	}
 
 	DragInfo dragInfo;
+	long dragWindow = -1;
 
 	Window window;
 
 	long[] sizes;
+	long[] sizesOrig;
 
 	this(int[2] pos, int[2] size, int mode=horizontal){
 		move(pos);
 		resize(size);
 		this.mode = mode;
-		titleHeight = bh;
-		paddingElem = bh/2;
+		titleHeight = cast(int)(bh*config["split title height"].to!double).lround;
+		border = config["split border"].to!int;
+		paddingElem = config["split paddingElem"].to!int;
+		paddingOuter = config["split paddingOuter"].to!int;
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
 		wa.background_pixmap = ParentRelative;
@@ -61,16 +67,18 @@ class Split: Container {
 	}
 
 	void sizeInc(){
-		sizes[clientActive] += 25;
+		sizes[clientActive] += 50;
 		rebuild;
 	}
 
 	void sizeDec(){
-		sizes[clientActive] -= 25;
+		sizes[clientActive] -= 50;
 		rebuild;
 	}
 
 	void toggleTitles(){
+		if(clientActive >= sizes.length || clientActive < 0)
+			return;
 		if(!titleHeight)
 			titleHeight = bh;
 		else
@@ -103,8 +111,9 @@ class Split: Container {
 	}
 
 	override void onShow(){
+		foreach(c; hiddenChildren)
+			c.show;
 		rebuild;
-		focus(active);
 	}
 
 	void onButton(XButtonPressedEvent* ev){
@@ -116,6 +125,11 @@ class Split: Container {
 					dragInfo.sizeLeft = sizes[i];
 					dragInfo.sizeRight = sizes[i+1];
 					dragInfo.dragStart = ev.x;
+					return;
+				}else{
+					if(ev.x > c.pos.x && ev.x < c.pos.x+c.size.w){
+						dragWindow = i;
+					}
 				}
 			}
 		}
@@ -124,26 +138,61 @@ class Split: Container {
 	void onButtonRelease(XButtonReleasedEvent* ev){
 		if(ev.button == Mouse.buttonLeft){
 			dragInfo = null;
+			dragWindow = -1;
 		}
 	}
 
+	Time lasttime;
 	void onMotion(XMotionEvent* ev){
 		if(dragInfo){
+			if((ev.time - lasttime) <= (1000 / 60))
+				return;
+			lasttime = ev.time;
 			sizes[dragInfo.sizeIdx] = dragInfo.sizeLeft + ev.x - dragInfo.dragStart;
 			sizes[dragInfo.sizeIdx+1] = dragInfo.sizeRight - ev.x + dragInfo.dragStart;
 			rebuild;
+		}
+		if(dragWindow >= 0){
+			auto c = children[dragWindow];
+			if(ev.x > c.pos.x+c.size.w && dragWindow+1 < children.length){
+				auto cn = children[dragWindow+1];
+				if(ev.x > c.pos.x+paddingElem+cn.size.w){
+					clientActive = dragWindow;
+					moveDir(1);
+					dragWindow++;
+				}
+			}else if(ev.x < children[dragWindow].pos.x && dragWindow > 0){
+				auto cp = children[dragWindow-1];
+				if(ev.x < cp.pos.x+c.size.w){
+					clientActive = dragWindow;
+					moveDir(-1);
+					dragWindow--;
+				}
+			}
 		}
 	}
 
 	override void onHide(){
 		foreach(c; children)
-			XMoveWindow(dpy, (cast(Client)c).win, size.w+pos.x, 0);
+			c.hide;
 		XUnmapWindow(dpy, window);
 	}
 
 	override Base add(Base client){
-		super.add(client);
-		sizes ~= client.size.w;
+		assert(!client.parent);
+		client.parent = this;
+		client.hidden = false;
+		if(clientActive < children.length){
+			children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
+			sizesOrig = sizesOrig[0..clientActive+1] ~ client.size.w ~ sizesOrig[clientActive+1..$];
+			sizes = sizes[0..clientActive+1] ~ client.size.w ~ sizes[clientActive+1..$];
+		}else{
+			children ~= client;
+			sizesOrig ~= client.size.w;
+			sizes ~= client.size.w;
+		}
+		foreach(ref s; sizes)
+			s = s.max(10);
 		rebuild;
 		return client;
 	}
@@ -153,9 +202,12 @@ class Split: Container {
 		if(i < 0)
 			return;
 		sizes = sizes[0..i] ~ sizes[i+1..$];
+		sizesOrig = sizesOrig[0..i] ~ sizesOrig[i+1..$];
 		foreach(ref s; sizes)
 			s = cast(int)(s*(sizes.length+1.0)/sizes.length);
 		super.remove(client);
+		if(clientActive >= children.length)
+			clientActive = cast(int)children.length-1;
 		rebuild;
 	}
 
@@ -171,6 +223,8 @@ class Split: Container {
 
 	void normalize(){
 		double max = size.w-paddingOuter*2-paddingElem*(children.length-1);
+		foreach(ref s; sizes)
+			s = s.max(10);
 		double cur = sizes.sum;
 		foreach(ref s; sizes){
 			s = (s*max/cur).lround;
@@ -192,7 +246,8 @@ class Split: Container {
 			(cast(Client)client).moveResize([
 					(mode==horizontal ? offset : paddingOuter) + pos.x,
 					(mode==vertical ? offset : paddingOuter) + pos.y + titleHeight
-				],[
+			],
+			[
 					mode==horizontal ? cast(int)sizes[i] : size.w-paddingOuter*2,
 					(mode==vertical ? cast(int)sizes[i] : size.h-paddingOuter*2) - titleHeight
 			]);
@@ -202,28 +257,30 @@ class Split: Container {
 	}
 
 	override void onDraw(){
-		draw.setColor(normbgcolor);
+		draw.setColor("#"~config["split background"]);
 		draw.rect(0, 0, size.w, size.h);
-		auto client = active;
-		if(client && client == monitorActive.active){
-			draw.setColor(selbgcolor);
+		foreach(c; children){
+			auto client = cast(Client)c;
+			auto act = (client == monitorActive.active ? "active" : "normal");
+			draw.setColor("#"~config["split border " ~ act]);
 			draw.rect(
 					client.pos.x-pos.x-border,
 					client.pos.y-pos.y-border,
 					client.size.w+border+1,
 					client.size.h+border+1
 			);
-			draw.rect(
-					client.pos.x-pos.x-border,
-					client.pos.y-pos.y-border-titleHeight,
-					cast(int)draw.width(client.name)+border+1,
-					client.size.h+border+1
-			);
-		}
-		if(titleHeight){
-			draw.setColor(selfgcolor);
-			foreach(c; children){
-				draw.text((cast(Client)c).name, [c.pos.x-pos.x-1, c.pos.y-pos.y-titleHeight]);
+			if(titleHeight){
+				auto w = cast(int)draw.width(client.name)+border+1;
+				//draw.clip(client.pos.a-[0,bh], [w, bh]);
+				draw.rect(
+						client.pos.x-pos.x-border,
+						client.pos.y-pos.y-border-titleHeight,
+						w,
+						bh
+				);
+				draw.setColor("#"~config["split title " ~ act]);
+				draw.text(client.name, [c.pos.x-pos.x-1, c.pos.y-pos.y-titleHeight]);
+				//draw.noclip;
 			}
 		}
 		draw.map(window, 0, 0, size.w, size.h);

@@ -1,7 +1,8 @@
 module flatman.client;
 
-import
-	flatman;
+import flatman;
+
+__gshared:
 
 
 enum BUTTONMASK = ButtonPressMask|ButtonReleaseMask;
@@ -40,16 +41,19 @@ class Client: Base {
 	}
 
 	override void onHide(){
-		XUnmapWindow(dpy, win);
+		XMoveWindow(dpy, win, monitorActive.pos.x+monitorActive.size.w, 0);
 	}
 
 	override void onShow(){
-		XMapWindow(dpy, win);
+		XMoveWindow(dpy, win, pos.x, pos.y);
 	}
 
 	void setWorkspace(long i){
 		monitorActive.remove(this);
-		monitorActive.workspaces[i].add(this);
+		if(i < monitorActive.workspaces.length)
+			monitorActive.workspaces[i].add(this);
+		else
+			monitorActive.addGlobal(this);
 	}
 
 	void moveResize(int[2] pos, int[2] size){
@@ -232,18 +236,15 @@ void setfullscreen(Client c, bool fullscreen){
 		c.isfullscreen = true;
 		c.oldbw = c.bw;
 		c.bw = 0;
-		c.move(c.monitor.pos);
-		c.resize(c.monitor.size);
+		c.moveResize(c.monitor.pos, c.monitor.size);
 		XRaiseWindow(dpy, c.win);
-	}
-	else {
+	}else{
 		XChangeProperty(dpy, c.win, net.wmState, XA_ATOM, 32, PropModeReplace, null, 0);
 		c.isfullscreen = false;
 		c.bw = c.oldbw;
 		c.pos = c.posOld;
 		c.size = c.sizeOld;
-		c.move(c.pos);
-		c.resize(c.size);
+		c.moveResize(c.pos, c.size);
 	}
 }
 
@@ -258,16 +259,14 @@ void unfocus(Client c, bool setfocus){
 }
 
 void unmanage(Client c, bool destroyed){
-	Monitor m = c.monitor;
 	if(destroyed)
-		m.remove(c);
-	XWindowChanges wc;
+		c.monitor.remove(c);
 	/* The server grab construct avoids race conditions. */
 	if(!destroyed){
+		XWindowChanges wc;
 		wc.border_width = c.oldbw;
 		XGrabServer(dpy);
 		XSetErrorHandler(&xerrordummy);
-		XConfigureWindow(dpy, c.win, CWBorderWidth, &wc); /* restore border */
 		XUngrabButton(dpy, AnyButton, AnyModifier, c.win);
 		c.setState(WithdrawnState);
 		XSync(dpy, false);
@@ -351,6 +350,23 @@ void focus(Client c){
 	}
 	foreach(m; monitors)
 		m.draw;
+}
+
+void updateStrut(Client client){
+	int actualFormat;
+	ulong bytes, items, count;
+	ubyte* data;
+	Atom actualType, atom;
+	if(XGetWindowProperty(dpy, client.win, net.wmStrutPartial, 0, 12, false, XA_CARDINAL, &actualType, &actualFormat, &count, &bytes, &data) == Success && data){
+		assert(actualType == XA_CARDINAL);
+		assert(actualFormat == 32);
+		assert(count == 12);
+		auto array = (cast(CARDINAL*)data)[0..12];
+		"RESERVE_BORDERS %s".format(array).log;
+		XFree(data);
+		monitorActive.reserveBorders([array[2],array[3],array[4],array[5]]);
+	}
+
 }
 
 Atom getatomprop(Client c, Atom prop){

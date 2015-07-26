@@ -2,6 +2,8 @@ module flatman.draw;
 
 import flatman;
 
+__gshared:
+
 
 enum DRW_FONT_CACHE_SIZE = 32;
 
@@ -193,7 +195,7 @@ class Draw {
 			auto offsetRight = max(0.0,-offset)*fontHeight;
 			auto offsetLeft = max(0.0,offset-1)*fontHeight;
 			auto x = pos.x - min(1,max(0,offset))*width + offsetRight - offsetLeft;
-			auto y = pos.y + fontHeight;
+			auto y = pos.y + bh - fontHeight/2.0;
 			XftDrawStringUtf8(xft, &color.rgb, curfont.xfont, cast(int)x.lround, cast(int)y.lround, text.toStringz, cast(int)text.length);
 		}
 	}

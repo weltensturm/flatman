@@ -2,6 +2,8 @@ module flatman.floating;
 
 import flatman;
 
+__gshared:
+
 
 long find(T)(T[] array, T what){
 	long i;
@@ -22,11 +24,10 @@ class Floating: Container {
 	}
 
 	override void onShow(){
-		foreach(c; children){
+		foreach(c; hiddenChildren){
 			c.show;
 			updateClient(c);
 		}
-		focus(active);
 	}
 
 	override void onHide(){
@@ -36,7 +37,7 @@ class Floating: Container {
 	}
 
 	void updateClient(Base client){
-		client.move([size.w/2-client.size.w/2,pos.y+size.y-client.size.h]);
+		XRaiseWindow(dpy, (cast(Client)client).win);
 	}
 
 	void addChild(Base client){

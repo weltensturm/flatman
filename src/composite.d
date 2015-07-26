@@ -2,6 +2,8 @@ module flatman.composite;
 
 import flatman;
 
+__gshared:
+
 
 class CompositeManager {
 
