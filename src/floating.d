@@ -33,16 +33,18 @@ class Floating: Container {
 	override void onHide(){
 		foreach(c; children)
 			c.hide;
-			//XMoveWindow(dpy, c.win, pos.x+size.w, 0);
 	}
 
 	void updateClient(Base client){
 		XRaiseWindow(dpy, (cast(Client)client).win);
 	}
 
-	void addChild(Base client){
+	override Base add(Base c){
+		auto client = cast(Client)c;
 		super.add(client);
-		updateClient(client);
+		if(!client.isfullscreen && !client.isfixed && !client.pos.x && !client.pos.y)
+			client.moveResize([pos.x/2-client.size.w/2, size.h-client.size.h], client.size);
+		return client;
 	}
 
 	void destroy(){

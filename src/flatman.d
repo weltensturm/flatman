@@ -2,6 +2,7 @@ module flatman.flatman;
 
 import flatman;
 
+
 __gshared:
 
 
@@ -92,6 +93,7 @@ static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh, blw = 0;      /* bar geometry */
 extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
+extern(C) nothrow int function(Display*) xerrorfatalxlib;
 static uint numlockmask = 0;
 enum handler = [
 	ButtonPress: &onButton,
@@ -101,11 +103,9 @@ enum handler = [
 	ConfigureNotify: &onConfigure,
 	DestroyNotify: &onDestroy,
 	EnterNotify: &onEnter,
-	LeaveNotify: &onLeave,
 	Expose: &onExpose,
 	FocusIn: &onFocus,
 	KeyPress: &onKey,
-	KeyRelease: &onKeyRelease,
 	MappingNotify: &onMapping,
 	MapRequest: &onMapRequest,
 	MotionNotify: &onMotion,
@@ -116,11 +116,12 @@ static bool running = true;
 bool restart = false;
 static Cur[CurLast] cursor;
 static Display* dpy;
-static Monitor monitorActive;
+static Monitor monitor;
 static Monitor[] monitors;
 static Window root;
 static Draw draw;
-
+Client previousFocus;
+Window[] unmanaged;
 
 void log(string s){
 	"/tmp/flatman.log".append(s ~ '\n');
@@ -130,7 +131,6 @@ void log(string s){
 
 void main(string[] args){
 	try{
-		XInitThreads();
 		if(args.length == 2 && args[1] == "-v")
 			throw new Exception(WM_NAME~", © Robert Luger");
 		else if(args.length != 1)
@@ -138,9 +138,9 @@ void main(string[] args){
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			writeln("warning: no locale support");
 		dpy = XOpenDisplay(null);
-		XSynchronize(dpy, true);
 		if(!dpy)
 			throw new Exception("flatman: cannot open display");
+		XSynchronize(dpy, true);
 		"checkOtherWm".log;
 		checkOtherWm();
 		"setup".log;
@@ -154,7 +154,10 @@ void main(string[] args){
 		throw t;
 	}
 	"cleanup".log;
-	cleanup();
+	try
+		cleanup();
+	catch(Throwable t)
+		"cleanup error %s".format(t).log;
 	XCloseDisplay(dpy);
 	if(restart){
 		"restart".log;
@@ -168,6 +171,7 @@ void checkOtherWm(){
 	XSelectInput(dpy, DefaultRootWindow(dpy), SubstructureRedirectMask);
 	XSync(dpy, false);
 	XSetErrorHandler(&xerror);
+	//XSetErrorHandler(xerrorxlib);
 	XSync(dpy, false);
 }
 
@@ -182,6 +186,7 @@ Atom atom(string n){
 
 void setup(){
 	/* clean up any zombies immediately */
+	xerrorfatalxlib = XSetIOErrorHandler(&xerrorfatal);
 	sigchld(0);
 
 	/* init screen */
@@ -198,7 +203,7 @@ void setup(){
 	draw.load_fonts(fonts);
 	if (!draw.fonts.length)
 		throw new Exception("No fonts could be loaded.");
-	bh = cast(int)(draw.fonts[0].h*1.4).lround;
+	bh = cast(int)(draw.fonts[0].h*1.2).lround;
 	/* init atoms */
 	/* init cursors */
 	cursor[CurNormal] = new Cur(XC_left_ptr);
@@ -223,8 +228,8 @@ void setup(){
 	wa.cursor = cursor[CurNormal].cursor;
 	wa.event_mask = 
 			SubstructureRedirectMask|SubstructureNotifyMask|ButtonPressMask
-			|PointerMotionMask|EnterWindowMask|LeaveWindowMask|StructureNotifyMask
-			|PropertyChangeMask|KeyReleaseMask;
+			|PointerMotionMask|EnterWindowMask|StructureNotifyMask
+			|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
 	grabkeys();
@@ -240,8 +245,13 @@ void run(){
 	/* main event loop */
 	XSync(dpy, false);
 	while(running && !XNextEvent(dpy, &ev)){
-		if(ev.type in handler && handler[ev.type])
-			handler[ev.type](&ev); /* call handler */
+		if(ev.type in handler){
+			try{
+				handler[ev.type](&ev);
+			}catch(Throwable t){
+				t.toString.log;
+			}
+		}
 	}
 }
 
@@ -254,17 +264,15 @@ void onButton(XEvent* e){
 	click = ClkRootWin;
 	/* focus monitor if necessary */
 	Monitor m = wintomon(ev.window);
-	if(m && m != monitorActive){
-		unfocus(monitorActive.active, true);
-		monitorActive = m;
+	if(m && m != monitor){
+		unfocus(monitor.active, true);
+		monitor = m;
 		focus(null);
 	}
-	//if(ev.window == monitorActive.bar.window){
-	//	monitorActive.bar.onButton(e);
-	if(ev.window == monitorActive.dock.window){
-		monitorActive.dock.onButton(e);
-	}else if(ev.window == monitorActive.workspace.split.window){
-		monitorActive.workspace.split.onButton(ev);
+	//if(ev.window == monitor.bar.window){
+	//	monitor.bar.onButton(e);
+	if(ev.window == monitor.workspace.split.window){
+		monitor.workspace.split.onButton(ev);
 	}else if(c){
 		c.focus;
 		for(i = 0; i < buttons.length; i++)
@@ -276,35 +284,49 @@ void onButton(XEvent* e){
 
 void onButtonRelease(XEvent* e){
 	XButtonReleasedEvent* ev = &e.xbutton;
-	if(ev.window == monitorActive.workspace.split.window)
-		monitorActive.workspace.split.onButtonRelease(ev);
+	if(ev.window == monitor.workspace.split.window)
+		monitor.workspace.split.onButtonRelease(ev);
 }
 
 void onClientMessage(XEvent *e){
 	XClientMessageEvent *cme = &e.xclient;
 	auto handler = [
 		net.currentDesktop: {
-			monitorActive.switchWorkspace(cast(int)cme.data.l[0]);
+			monitor.switchWorkspace(cast(int)cme.data.l[0]);
 		},
-		net.wmState: {
+		net.state: {
 			Client c = wintoclient(cme.window);
 			if(!c)
 				return;
-			if(cme.message_type == net.wmState){
-				if(cme.data.l[1] == net.wmFullscreen || cme.data.l[2] == net.wmFullscreen)
-					setfullscreen(c, (cme.data.l[0] == 1 /* _NET_WM_STATE_ADD    */
-			              || (cme.data.l[0] == 2 /* _NET_WM_STATE_TOGGLE */ && !c.isfullscreen)));
+			if(cme.message_type == net.state){
+				auto sh = [
+					net.fullscreen: {
+						bool s = (cme.data.l[0] == _NET_WM_STATE_ADD
+			              || (cme.data.l[0] == _NET_WM_STATE_TOGGLE && !c.isfullscreen));
+						c.setfullscreen(s);
+					},
+					net.attention: {
+						if(cme.data.l[0] == _NET_WM_STATE_ADD){
+							c.requestAttention;
+						}
+					}
+				];
+				if(cme.data.l[1] in sh)
+					sh[cme.data.l[1]]();
+				if(cme.data.l[2] in sh)
+					sh[cme.data.l[2]]();
 			}
 		},
-		net.activeWindow: {
+		net.windowActive: {
 			Client c = wintoclient(cme.window);
-			if(!c)
+			if(!c || c == monitor.active)
 				return;
-			c.focus;
-			//XDeleteProperty(dpy, c.win, net.activeWindow);
-			//XChangeProperty(dpy, c.win, net.attention);
+			if(cme.data.l[0] < 2){
+				c.requestAttention;
+			}else
+				c.focus;
 		},
-		net.appDesktop: {
+		net.windowDesktop: {
 			Client c = wintoclient(cme.window);
 			if(!c)
 				return;
@@ -312,10 +334,16 @@ void onClientMessage(XEvent *e){
 		},
 		net.moveResize: {
 			Client c = wintoclient(cme.window);
-			if(!c)
+			if(!c || !c.isFloating)
 				return;
 			c.moveResize(cme.data.l[0..2].to!(int[2]), cme.data.l[2..4].to!(int[2]));
 		},
+		net.restack: {
+			Client c = wintoclient(cme.window);
+			if(!c || c == monitor.active)
+				return;
+			c.requestAttention;
+		}
 	];
 	if(cme.message_type in handler)
 		handler[cme.message_type]();
@@ -327,50 +355,65 @@ void onProperty(XEvent *e){
 	Window trans;
 	if((ev.window == root) && (ev.atom == XA_WM_NAME))
 		updatestatus();
-	else if(ev.state == PropertyDelete)
-		return; /* ignore */
 	else if(c){
-		switch(ev.atom){
-		default: break;
-		case XA_WM_TRANSIENT_FOR:
-			if(!c.isFloating && XGetTransientForHint(dpy, c.win, &trans)){
-				c.isFloating = (wintoclient(trans) !is null);
-			}
-			break;
-		case XA_WM_NORMAL_HINTS:
-			c.updateSizeHints;
-			break;
-		case XA_WM_HINTS:
-			c.updateWmHints;
-			foreach(m; monitors)
-				m.draw;
-			break;
-		}
-		if(ev.atom == XA_WM_NAME || ev.atom == net.wmName){
-			updatetitle(c);
-			if(c == c.monitor.active)
-				c.monitor.draw;
-		}
-		if(ev.atom == net.wmWindowType)
-			c.updateType;
-		if(ev.atom == net.wmStrutPartial){
-			c.updateStrut;
-		}
+		auto del = ev.state == PropertyDelete;
+		auto ph = [
+			XA_WM_TRANSIENT_FOR: {
+				if(del)
+					return;
+				if(!c.isFloating && XGetTransientForHint(dpy, c.win, &trans)){
+					c.isFloating = (wintoclient(trans) !is null);
+				}
+			},
+			XA_WM_NORMAL_HINTS: {
+				if(del)
+					return;
+				c.updateSizeHints;
+			},
+			XA_WM_HINTS: {
+				if(del)
+					return;
+				c.updateWmHints;
+				foreach(m; monitors)
+					m.draw;
+			},
+			XA_WM_NAME: {
+				if(del)
+					return;
+				updatetitle(c);
+				if(c == c.monitor.active)
+					c.monitor.draw;
+			},
+			net.name: {
+				if(del)
+					return;
+				updatetitle(c);
+				if(c == c.monitor.active)
+					c.monitor.draw;
+			},
+			net.windowType: {
+				c.updateType;
+			},
+			net.strutPartial: {
+				c.updateStrut;
+			},
+		];
+		if(ev.atom in ph)
+			ph[ev.atom]();
 	}
 }
 
 void onConfigure(XEvent *e){
 	Monitor m;
 	XConfigureEvent *ev = &e.xconfigure;
-	bool dirty;
 	if(ev.window == root){
-		dirty = (sw != ev.width || sh != ev.height);
+		bool dirty = (sw != ev.width || sh != ev.height);
 		sw = ev.width;
 		sh = ev.height;
 		if(updategeom() || dirty){
 			draw.resize(sw, sh);
-			monitorActive.resize([sw, sh]);
-			focus(null);
+			monitor.resize([sw, sh]);
+			restack;
 		}
 	}
 }
@@ -379,16 +422,8 @@ void onConfigureRequest(XEvent* e){
 	XConfigureRequestEvent* ev = &e.xconfigurerequest;
 	Client c = wintoclient(ev.window);
 	if(c){
-		if(c.isFloating){
+		if(c.isFloating || c.global || c.isfullscreen){
 			Monitor m = c.monitor;
-			if(ev.value_mask & CWX){
-				c.posOld.x = c.pos.x;
-				c.pos.x = m.pos.x + ev.x;
-			}
-			if(ev.value_mask & CWY){
-				c.posOld.y = c.pos.y;
-				c.pos.y = m.pos.y + ev.y;
-			}
 			if(ev.value_mask & CWWidth){
 				c.sizeOld.w = c.size.w;
 				c.size.w = ev.width;
@@ -397,12 +432,21 @@ void onConfigureRequest(XEvent* e){
 				c.sizeOld.h = c.size.h;
 				c.size.h = ev.height;
 			}
+			if(ev.value_mask & CWX){
+				c.posOld.x = c.pos.x;
+				c.pos.x = m.pos.x + ev.x;
+				if(!c.global)
+					c.pos.x = c.pos.x.min(c.monitor.pos.x+c.monitor.size.w-c.size.w);
+			}
+			if(ev.value_mask & CWY){
+				c.posOld.y = c.pos.y;
+				c.pos.y = m.pos.y + ev.y;
+				if(!c.global)
+					c.pos.y = c.pos.y.min(c.monitor.pos.y+c.monitor.size.h-c.size.h);
+			}
 			if((ev.value_mask & (CWX|CWY))){
 				if(!(ev.value_mask & (CWWidth|CWHeight)))
 					c.configure;
-			}else{
-				//c.pos.x = monitorActive.size.x/2 - c.size.w/2;
-				//c.pos.y = monitorActive.size.y - c.size.h;
 			}
 			if(c.isVisible)
 				XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
@@ -435,18 +479,15 @@ void onEnter(XEvent* e){
 		return;
 	Client c = wintoclient(ev.window);
 	Monitor m = c ? c.monitor : wintomon(ev.window);
-	if(m != monitorActive){
-		unfocus(monitorActive.active, true);
-		monitorActive = m;
-	}else if(!c || c == monitorActive.active)
+	Window curFocus;
+	int curRevert;
+	XGetInputFocus(dpy, &curFocus, &curRevert);
+	if(m != monitor){
+		unfocus(monitor.active, true);
+		monitor = m;
+	}else if(!c || c.win == curFocus)
 		return;
 	c.focus;
-}
-
-void onLeave(XEvent* e){
-	if(e.xany.window == monitorActive.dock.window){
-		monitorActive.dock.hide;
-	}
 }
 
 void onExpose(XEvent *e){
@@ -458,8 +499,11 @@ void onExpose(XEvent *e){
 
 void onFocus(XEvent* e){ /* there are some broken focus acquiring clients */
 	XFocusChangeEvent *ev = &e.xfocus;
-	if(monitorActive.active && ev.window != monitorActive.active.win)
-		setfocus(monitorActive.active);
+	//if(monitor.active && ev.window != monitor.active.win)
+	//	setfocus(monitor.active);
+	auto c = wintoclient(ev.window);
+	if(c && c != active)
+		c.requestAttention;
 }
 
 void onKey(XEvent* e){
@@ -468,13 +512,6 @@ void onKey(XEvent* e){
 	foreach(key; flatman.keys){
 		if(keysym == key.keysym && CLEANMASK(key.mod) == CLEANMASK(ev.state) && key.func)
 			key.func();
-	}
-}
-
-void onKeyRelease(XEvent* e){
-	KeySym keysym = XLookupKeysym(&e.xkey,0);
-	if(keysym == XK_Alt_L){
-		monitorActive.dock.hide;
 	}
 }
 
@@ -488,10 +525,12 @@ void onMapping(XEvent *e){
 void onMapRequest(XEvent *e){
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e.xmaprequest;
-	if(!XGetWindowAttributes(dpy, ev.window, &wa))
+	if(!XGetWindowAttributes(dpy, ev.window, &wa) || wa.override_redirect){
+		"unmanaged window".log;
+		if(!unmanaged.canFind(ev.window))
+			unmanaged ~= ev.window;
 		return;
-	if(wa.override_redirect)
-		return;
+	}
 	if(!wintoclient(ev.window)){
 		XMapWindow(dpy, ev.window);
 		manage(ev.window, &wa);
@@ -502,19 +541,35 @@ void onMotion(XEvent* e){
 	static Monitor mon = null;
 	Monitor m;
 	XMotionEvent* ev = &e.xmotion;
-	if(ev.x_root >= monitorActive.size.w-2){
-		monitorActive.dock.show;
-	}
-	if(ev.window == monitorActive.workspace.split.window)
-		monitorActive.workspace.split.onMotion(ev);
+	if(ev.window == monitor.workspace.split.window)
+		monitor.workspace.split.onMotion(ev);
 	if(ev.window != root)
 		return;
 	if((m = recttomon(ev.x_root, ev.y_root, 1, 1)) != mon && mon){
-		unfocus(monitorActive.active, true);
-		monitorActive = m;
+		unfocus(monitor.active, true);
+		monitor = m;
 		focus(null);
 	}
 	mon = m;
+}
+
+
+Client active(){
+	return monitor.active;
+}
+
+Client[] clients(){
+	return monitor.clients;
+}
+
+void restack(){
+	foreach(c; clients)
+		c.raise;
+	foreach(w; unmanaged)
+		XRaiseWindow(dpy, w);
+	XSync(dpy, false);
+	XEvent ev;
+	while(XCheckMaskEvent(dpy, EnterWindowMask, &ev)){}
 }
 
 Monitor dirtomon(int dir){
@@ -525,25 +580,25 @@ void focusmon(int arg){
 	Monitor m = dirtomon(arg);
 	if(!m)
 		return;
-	if(m == monitorActive)
+	if(m == monitor)
 		return;
-	unfocus(monitorActive.active, false); /* s/true/false/ fixes input focus issues
+	unfocus(monitor.active, false); /* s/true/false/ fixes input focus issues
 					in gedit and anjuta */
-	monitorActive = m;
+	monitor = m;
 	focus(null);
 }
 
 void focusstack(int arg){
-	monitorActive.workspace.split.focusDir(arg);
-	monitorActive.draw;
+	monitor.workspace.split.focusDir(arg);
+	monitor.draw;
 }
 
 void sizeInc(){
-	monitorActive.workspace.split.sizeInc;
+	monitor.workspace.split.sizeInc;
 }
 
 void sizeDec(){
-	monitorActive.workspace.split.sizeDec;
+	monitor.workspace.split.sizeDec;
 }
 
 bool getrootptr(int *x, int *y){
@@ -602,16 +657,20 @@ void grabkeys(){
 	}
 }
 
-void killclient(){
-	if(!monitorActive.active)
-		return;
-	if(!sendevent(monitorActive.active, wm.delete_)){
+void killclient(Client client=null){
+	if(!client){
+		if(!monitor.active)
+			return;
+		client = monitor.active;
+	}
+	if(!sendevent(client, wm.delete_)){
 		XGrabServer(dpy);
 		XSetErrorHandler(&xerrordummy);
 		XSetCloseDownMode(dpy, CloseDownMode.DestroyAll);
-		XKillClient(dpy, monitorActive.active.win);
+		XKillClient(dpy, client.win);
 		XSync(dpy, false);
 		XSetErrorHandler(&xerror);
+		//XSetErrorHandler(xerrorxlib);
 		XUngrabServer(dpy);
 	}
 }
@@ -619,7 +678,7 @@ void killclient(){
 void manage(Window w, XWindowAttributes* wa){
 	if(!w)
 		throw new Exception("No window given");
-	auto c = new Client(w);
+	auto c = new Client(w, monitor);
 	Window trans = None;
 	XWindowChanges wc;
 	updatetitle(c);
@@ -627,21 +686,25 @@ void manage(Window w, XWindowAttributes* wa){
 	if(XGetTransientForHint(dpy, w, &trans) && t){
 		c.monitor = t.monitor;
 	}else{
-		c.monitor = monitorActive;
+		c.monitor = monitor;
 		c.applyRules;
 	}
 	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|PointerMotionMask|KeyReleaseMask);
 	c.grabbuttons(false);
 	if(!c.isFloating)
 		c.isFloating = c.oldstate = trans != None || c.isfixed;
-	if(c.monitor == monitorActive)
-		unfocus(monitorActive.active, false);
-	c.monitor.add(c);
+	if(c.monitor == monitor)
+		unfocus(monitor.active, false);
+	if(!clients.canFind(c))
+		c.monitor.add(c, c.originWorkspace);
 	XChangeProperty(dpy, root, net.clientList, XA_WINDOW, 32, PropModeAppend,
 	                cast(ubyte*)&c.win, 1);
 	XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
 	c.setState(NormalState);
-	c.focus;
+	if(!active || c.isFloating || c.isfullscreen)
+		c.focus;
+	else
+		c.requestAttention;
 }
 
 void quit(){
@@ -649,7 +712,7 @@ void quit(){
 }
 
 Monitor recttomon(int x, int y, int w, int h){
-	Monitor r = monitorActive;
+	Monitor r = monitor;
 	int a, area = 0;
 	foreach(m; monitors)
 		if((a = intersect(x, y, w, h, m)) > area){
@@ -669,15 +732,19 @@ void scan(){
 			if(!XGetWindowAttributes(dpy, wins[i], &wa)
 			|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
 				continue;
-			if(wa.map_state == IsViewable || getstate(wins[i]) == IconicState)
+			if(wa.map_state == IsViewable || getstate(wins[i]) == IconicState){
 				manage(wins[i], &wa);
+				XMapWindow(dpy, wins[i]);
+			}
 		}
 		for(i = 0; i < num; i++){
 			if(!XGetWindowAttributes(dpy, wins[i], &wa))
 				continue;
 			if(XGetTransientForHint(dpy, wins[i], &d1)
-			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState))
+			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)){
 				manage(wins[i], &wa);
+				XMapWindow(dpy, wins[i]);
+			}
 		}
 		if(wins)
 			XFree(wins);
@@ -685,7 +752,7 @@ void scan(){
 }
 
 void togglefloating(){
-	auto client = monitorActive.active;
+	auto client = monitor.active;
 	if(!client)
 		return;
 	//if(client.isfullscreen) /* no support for fullscreen windows */
@@ -694,13 +761,13 @@ void togglefloating(){
 	if(client.isFloating){
 		client.moveResize(client.posOld, client.sizeOld);
 	}
-	monitorActive.remove(client);
-	monitorActive.add(client);
+	monitor.remove(client);
+	monitor.add(client);
 	client.focus;
 }
 
 void togglefullscreen(){
-	auto client = monitorActive.active;
+	auto client = monitor.active;
 	if(!client)
 		return;
 	client.setfullscreen(!client.isfullscreen);
@@ -729,8 +796,8 @@ bool updategeom(){
 		monitors[0].size.h = monitors[0].size.h = sh;
 	}
 	if(dirty){
-		monitorActive = monitors[0];
-		monitorActive = wintomon(root);
+		monitor = monitors[0];
+		monitor = wintomon(root);
 	}
 	return dirty;
 }
@@ -751,14 +818,13 @@ void updatenumlockmask(){
 void updatestatus(){
 	if(!gettextprop(root, XA_WM_NAME, statusText))
 		statusText = WM_NAME;
-	monitorActive.draw;
+	monitor.draw;
 }
 
 Client wintoclient(Window w){
-	foreach(m; monitors)
-		foreach(c; m.allClients)
-			if(c.win == w)
-				return c;
+	foreach(c; clients)
+		if(c.win == w)
+			return c;
 	return null;
 }
 
@@ -772,17 +838,15 @@ Monitor wintomon(Window w){
 	//		return m;
 	if(c)
 		return c.monitor;
-	return monitorActive;
+	return monitor;
 }
 
 void mousemove(){
-	Client c = monitorActive.active;
+	Client c = monitor.active;
 	if(!c)
 		return;
 	XEvent ev;
 	Time lasttime = 0;
-	if(c.isfullscreen) /* no support moving fullscreen windows by mouse */
-		return;
 	int ocx = c.pos.x;
 	int ocy = c.pos.y;
 	if(XGrabPointer(dpy, root, false, MOUSEMASK, GrabModeAsync, GrabModeAsync,
@@ -815,14 +879,12 @@ void mousemove(){
 
 void mouseresize(){
 	int ocx, ocy, nw, nh;
-	Client c = monitorActive.active;
+	Client c = monitor.active;
 	if(!c)
 		return;
 	Monitor* m;
 	XEvent ev;
 	Time lasttime = 0;
-	if(c.isfullscreen) /* no support resizing fullscreen windows by mouse */
-		return;
 	ocx = c.pos.x;
 	ocy = c.pos.y;
 	if(XGrabPointer(dpy, root, false, MOUSEMASK, GrabModeAsync, GrabModeAsync,
@@ -856,17 +918,21 @@ void mouseresize(){
 
 void cleanup(){
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
-	foreach(ws; monitorActive.workspaces){
+	foreach(ws; monitor.workspaces){
 		foreach(c; ws.clients){
+			if(!restart)
+				killclient(c);
 			unmanage(c, false);
 		}
 		ws.destroy;
 	}
-	monitorActive.destroy;
-	draw.free;
+	monitor.destroy;
+	draw.destroy;
+	foreach(c; cursor)
+		c.destroy;
 	XSync(dpy, false);
 	XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
-	XDeleteProperty(dpy, root, net.activeWindow);
+	XDeleteProperty(dpy, root, net.windowActive);
 }
 
 
@@ -877,10 +943,133 @@ void cleanup(){
 	while(0 < waitpid(-1, null, WNOHANG)){}
 }
 
+enum XRequestCode {
+    X_CreateWindow                   = 1,
+    X_ChangeWindowAttributes         = 2,
+    X_GetWindowAttributes            = 3,
+    X_DestroyWindow                  = 4,
+    X_DestroySubwindows              = 5,
+    X_ChangeSaveSet                  = 6,
+    X_ReparentWindow                 = 7,
+    X_MapWindow                      = 8,
+    X_MapSubwindows                  = 9,
+    X_UnmapWindow                   = 10,
+    X_UnmapSubwindows               = 11,
+    X_ConfigureWindow               = 12,
+    X_CirculateWindow               = 13,
+    X_GetGeometry                   = 14,
+    X_QueryTree                     = 15,
+    X_InternAtom                    = 16,
+    X_GetAtomName                   = 17,
+    X_ChangeProperty                = 18,
+    X_DeleteProperty                = 19,
+    X_GetProperty                   = 20,
+    X_ListProperties                = 21,
+    X_SetSelectionOwner             = 22,
+    X_GetSelectionOwner             = 23,
+    X_ConvertSelection              = 24,
+    X_SendEvent                     = 25,
+    X_GrabPointer                   = 26,
+    X_UngrabPointer                 = 27,
+    X_GrabButton                    = 28,
+    X_UngrabButton                  = 29,
+    X_ChangeActivePointerGrab       = 30,
+    X_GrabKeyboard                  = 31,
+    X_UngrabKeyboard                = 32,
+    X_GrabKey                       = 33,
+    X_UngrabKey                     = 34,
+    X_AllowEvents                   = 35,
+    X_GrabServer                    = 36,
+    X_UngrabServer                  = 37,
+    X_QueryPointer                  = 38,
+    X_GetMotionEvents               = 39,
+    X_TranslateCoords               = 40,
+    X_WarpPointer                   = 41,
+    X_SetInputFocus                 = 42,
+    X_GetInputFocus                 = 43,
+    X_QueryKeymap                   = 44,
+    X_OpenFont                      = 45,
+    X_CloseFont                     = 46,
+    X_QueryFont                     = 47,
+    X_QueryTextExtents              = 48,
+    X_ListFonts                     = 49,
+    X_ListFontsWithInfo             = 50,
+    X_SetFontPath                   = 51,
+    X_GetFontPath                   = 52,
+    X_CreatePixmap                  = 53,
+    X_FreePixmap                    = 54,
+    X_CreateGC                      = 55,
+    X_ChangeGC                      = 56,
+    X_CopyGC                        = 57,
+    X_SetDashes                     = 58,
+    X_SetClipRectangles             = 59,
+    X_FreeGC                        = 60,
+    X_ClearArea                     = 61,
+    X_CopyArea                      = 62,
+    X_CopyPlane                     = 63,
+    X_PolyPoint                     = 64,
+    X_PolyLine                      = 65,
+    X_PolySegment                   = 66,
+    X_PolyRectangle                 = 67,
+    X_PolyArc                       = 68,
+    X_FillPoly                      = 69,
+    X_PolyFillRectangle             = 70,
+    X_PolyFillArc                   = 71,
+    X_PutImage                      = 72,
+    X_GetImage                      = 73,
+    X_PolyText8                     = 74,
+    X_PolyText16                    = 75,
+    X_ImageText8                    = 76,
+    X_ImageText16                   = 77,
+    X_CreateColormap                = 78,
+    X_FreeColormap                  = 79,
+    X_CopyColormapAndFree           = 80,
+    X_InstallColormap               = 81,
+    X_UninstallColormap             = 82,
+    X_ListInstalledColormaps        = 83,
+    X_AllocColor                    = 84,
+    X_AllocNamedColor               = 85,
+    X_AllocColorCells               = 86,
+    X_AllocColorPlanes              = 87,
+    X_FreeColors                    = 88,
+    X_StoreColors                   = 89,
+    X_StoreNamedColor               = 90,
+    X_QueryColors                   = 91,
+    X_LookupColor                   = 92,
+    X_CreateCursor                  = 93,
+    X_CreateGlyphCursor             = 94,
+    X_FreeCursor                    = 95,
+    X_RecolorCursor                 = 96,
+    X_QueryBestSize                 = 97,
+    X_QueryExtension                = 98,
+    X_ListExtensions                = 99,
+    X_ChangeKeyboardMapping         = 100,
+    X_GetKeyboardMapping            = 101,
+    X_ChangeKeyboardControl         = 102,
+    X_GetKeyboardControl            = 103,
+    X_Bell                          = 104,
+    X_ChangePointerControl          = 105,
+    X_GetPointerControl             = 106,
+    X_SetScreenSaver                = 107,
+    X_GetScreenSaver                = 108,
+    X_ChangeHosts                   = 109,
+    X_ListHosts                     = 110,
+    X_SetAccessControl              = 111,
+    X_SetCloseDownMode              = 112,
+    X_KillClient                    = 113,
+    X_RotateProperties              = 114,
+    X_ForceScreenSaver              = 115,
+    X_SetPointerMapping             = 116,
+    X_GetPointerMapping             = 117,
+    X_SetModifierMapping            = 118,
+    X_GetModifierMapping            = 119,
+    X_NoOperation                   = 127
+}
+
 /* There's no way to check accesses to destroyed windows, thus those cases are
  * ignored (especially on UnmapNotify's).  Other types of errors call Xlibs
  * default error handler, which may call exit.  */
-extern(C) nothrow int xerror(Display *dpy, XErrorEvent *ee){
+extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
 	if(ee.error_code == XErrorCode.BadWindow
 	|| (ee.request_code == X_SetInputFocus && ee.error_code == XErrorCode.BadMatch)
 	|| (ee.request_code == X_PolyText8 && ee.error_code == XErrorCode.BadDrawable)
@@ -893,9 +1082,17 @@ extern(C) nothrow int xerror(Display *dpy, XErrorEvent *ee){
 		return 0;
 	try{
 		defaultTraceHandler.toString.log;
-		"flatman: fatal error: request code=%d, error code=%d".format(ee.request_code, ee.error_code).log;
+		"flatman: X11 error: request code=%d %s, error code=%d %s".format(ee.request_code, cast(XRequestCode)ee.request_code, ee.error_code, cast(XErrorCode)ee.error_code).log;
 	}catch {}
 	return xerrorxlib(dpy, ee); /* may call exit */
+}
+
+extern(C) nothrow int xerrorfatal(Display* dpy){
+	try{
+		defaultTraceHandler.toString.log;
+		"flatman: X11 fatal i/o error".log;
+	}catch{}
+	return xerrorfatalxlib(dpy);
 }
 
 extern(C) nothrow int xerrordummy(Display* dpy, XErrorEvent* ee){

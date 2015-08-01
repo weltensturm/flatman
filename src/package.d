@@ -9,6 +9,7 @@ public import
 	core.runtime,
 	core.thread,
 	std.parallelism,
+	std.regex,
 	std.traits,
 	std.process,
 	std.path,

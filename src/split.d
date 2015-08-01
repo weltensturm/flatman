@@ -42,13 +42,12 @@ class Split: Container {
 	Window window;
 
 	long[] sizes;
-	long[] sizesOrig;
 
 	this(int[2] pos, int[2] size, int mode=horizontal){
 		move(pos);
 		resize(size);
 		this.mode = mode;
-		titleHeight = cast(int)(bh*config["split title height"].to!double).lround;
+		titleHeight = cast(int)(config["split title height"].to!double*bh).lround;
 		border = config["split border"].to!int;
 		paddingElem = config["split paddingElem"].to!int;
 		paddingOuter = config["split paddingOuter"].to!int;
@@ -69,11 +68,15 @@ class Split: Container {
 	void sizeInc(){
 		sizes[clientActive] += 50;
 		rebuild;
+		XSync(dpy, false);
+		active.focus;
 	}
 
 	void sizeDec(){
 		sizes[clientActive] -= 50;
 		rebuild;
+		XSync(dpy, false);
+		active.focus;
 	}
 
 	void toggleTitles(){
@@ -111,7 +114,7 @@ class Split: Container {
 	}
 
 	override void onShow(){
-		foreach(c; hiddenChildren)
+		foreach(c; children)
 			c.show;
 		rebuild;
 	}
@@ -130,6 +133,13 @@ class Split: Container {
 					if(ev.x > c.pos.x && ev.x < c.pos.x+c.size.w){
 						dragWindow = i;
 					}
+				}
+			}
+		}else if(ev.button == Mouse.buttonMiddle){
+			foreach(i, c; children){
+				if(ev.x > c.pos.x && ev.x < c.pos.x+c.size.w){
+					focus(cast(Client)c);
+					killclient;
 				}
 			}
 		}
@@ -184,16 +194,14 @@ class Split: Container {
 		client.hidden = false;
 		if(clientActive < children.length){
 			children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
-			sizesOrig = sizesOrig[0..clientActive+1] ~ client.size.w ~ sizesOrig[clientActive+1..$];
 			sizes = sizes[0..clientActive+1] ~ client.size.w ~ sizes[clientActive+1..$];
 		}else{
 			children ~= client;
-			sizesOrig ~= client.size.w;
 			sizes ~= client.size.w;
 		}
-		foreach(ref s; sizes)
-			s = s.max(10);
 		rebuild;
+		if(hidden)
+			client.hide;
 		return client;
 	}
 
@@ -202,10 +210,10 @@ class Split: Container {
 		if(i < 0)
 			return;
 		sizes = sizes[0..i] ~ sizes[i+1..$];
-		sizesOrig = sizesOrig[0..i] ~ sizesOrig[i+1..$];
 		foreach(ref s; sizes)
 			s = cast(int)(s*(sizes.length+1.0)/sizes.length);
 		super.remove(client);
+		client.parent = null;
 		if(clientActive >= children.length)
 			clientActive = cast(int)children.length-1;
 		rebuild;
@@ -223,16 +231,18 @@ class Split: Container {
 
 	void normalize(){
 		double max = size.w-paddingOuter*2-paddingElem*(children.length-1);
-		foreach(ref s; sizes)
-			s = s.max(10);
 		double cur = sizes.sum;
-		foreach(ref s; sizes){
+		foreach(ref s; sizes)
 			s = (s*max/cur).lround;
-		}
+		foreach(i, ref s; sizes)
+			s = s.max(10, (cast(Client)children[i]).minw);
+		cur = sizes.sum;
+		foreach(ref s; sizes)
+			s = (s*max/cur).lround;
 	}
 
 	void rebuild(){
-		if(children.length){
+		if(children.length && !hidden){
 			XMapWindow(dpy, window);
 		}else{
 			XUnmapWindow(dpy, window);
@@ -261,7 +271,7 @@ class Split: Container {
 		draw.rect(0, 0, size.w, size.h);
 		foreach(c; children){
 			auto client = cast(Client)c;
-			auto act = (client == monitorActive.active ? "active" : "normal");
+			auto act = (client == monitor.active ? "active" : "normal");
 			draw.setColor("#"~config["split border " ~ act]);
 			draw.rect(
 					client.pos.x-pos.x-border,
@@ -271,7 +281,7 @@ class Split: Container {
 			);
 			if(titleHeight){
 				auto w = cast(int)draw.width(client.name)+border+1;
-				//draw.clip(client.pos.a-[0,bh], [w, bh]);
+				draw.clip(client.pos.a-pos-[border,border+titleHeight], [w, bh]);
 				draw.rect(
 						client.pos.x-pos.x-border,
 						client.pos.y-pos.y-border-titleHeight,
@@ -279,8 +289,8 @@ class Split: Container {
 						bh
 				);
 				draw.setColor("#"~config["split title " ~ act]);
-				draw.text(client.name, [c.pos.x-pos.x-1, c.pos.y-pos.y-titleHeight]);
-				//draw.noclip;
+				draw.text(client.name, [c.pos.x-pos.x+border+1, c.pos.y-pos.y-titleHeight]);
+				draw.noclip;
 			}
 		}
 		draw.map(window, 0, 0, size.w, size.h);

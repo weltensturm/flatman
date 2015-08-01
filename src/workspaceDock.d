@@ -28,13 +28,14 @@ class WorkspaceDock {
 			CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
 		XDefineCursor(dpy, window, cursor[CurNormal].cursor);
-		//XMapRaised(dpy, window);
+		XMapWindow(dpy, window);
+		XMoveWindow(dpy, window, monitor.size.w-1, 0);
 	}
 
 	void update(int[2] pos, int[2] size){
 		this.pos = pos;
 		this.size = size;
-		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
+		XMoveWindow(dpy, window, monitor.size.w-1, pos.y);
 	}
 
 	void resize(int[2] size){
@@ -42,13 +43,14 @@ class WorkspaceDock {
 	}
 
 	void show(){
-		XMapRaised(dpy, window);
+		XRaiseWindow(dpy, window);
+		XMoveWindow(dpy, window, pos.x, pos.y);
 		//XGrabKeyboard(dpy, root, true, GrabModeSync, GrabModeSync, CurrentTime);
 		XGrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), 0, root, true, GrabModeAsync, GrabModeAsync);
 	}
 
 	void hide(){
-		XUnmapWindow(dpy, window);
+		update(pos, size);
 		//XUngrabKeyboard(dpy, CurrentTime);
 		XUngrabKey(dpy, XKeysymToKeycode(dpy, XK_Alt_L), 0, root);
 	}
@@ -76,7 +78,7 @@ class WorkspaceDock {
 						auto ww = (c.size.w*scale).lround-1;
 						auto wh = (c.size.h*scale).lround-1;
 						if(ev.x >= wx && ev.x <= x+ww && ev.y > wy && ev.y <= wy+wh){
-							auto workspace = monitorActive.workspace;
+							auto workspace = monitor.workspace;
 							//workspace.focus(cast(int)workspace.activeWindow-cast(int)wi);
 							//log((cast(int)workspace.activeWindow-cast(int)wi).to!string);
 						}
@@ -84,9 +86,9 @@ class WorkspaceDock {
 				}
 			}
 		}else if(ev.button == Mouse.wheelDown){
-			monitorActive.nextWs;
+			monitor.nextWs;
 		}else if(ev.button == Mouse.wheelUp){
-			monitorActive.prevWs;
+			monitor.prevWs;
 		}
 	}
 
@@ -125,13 +127,14 @@ class WorkspaceDock {
 			if(ws == monitor.workspace){
 				draw.rectOutline([x,y],[w,h]);
 			}
+			draw.clip([x+bh/5,y+h-bh], [w-bh/5,bh]);
 			try{
 				auto name = ("~/.dinu/".expandTilde ~ i.to!string).readText;
 				name = name.replace("~".expandTilde, "~");
 				draw.text(name, [x+w, y+h-bh], 1.5);
-			}catch(Exception e){
-			}
+			}catch{}
 			draw.text(tags[i], [x+w,y+h-bh], 0.5);
+			draw.noclip;
 		}
 		draw.map(window, 0, 0, size.w, size.h);
 	}

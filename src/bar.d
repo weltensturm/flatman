@@ -45,9 +45,9 @@ class Bar {
 	void onButton(XEvent* e){
 		XButtonPressedEvent* ev = &e.xbutton;
 		if(ev.button == Mouse.wheelDown)
-			monitorActive.nextWs;
+			monitor.nextWs;
 		else if(ev.button == Mouse.wheelUp)
-			monitorActive.prevWs;
+			monitor.prevWs;
 		else
 			quit;
 	}
@@ -57,11 +57,11 @@ class Bar {
 		draw.rect(0,0,size.w,size.h);
 		draw.setColor(normfgcolor);
 		try{
-			auto name = ("~/.dinu/".expandTilde ~ monitorActive.workspaceActive.to!string).readText;
+			auto name = ("~/.dinu/".expandTilde ~ monitor.workspaceActive.to!string).readText;
 			name = name.replace("~".expandTilde, "~");
-			draw.text(tags[monitorActive.workspaceActive] ~ ": " ~ name, [0, 0]);
+			draw.text(tags[monitor.workspaceActive] ~ ": " ~ name, [0, 0]);
 		}catch{
-			draw.text(tags[monitorActive.workspaceActive], [0,0]);
+			draw.text(tags[monitor.workspaceActive], [0,0]);
 		}
 		auto ct = Clock.currTime();
 		auto text = "%s:%02d   %s.%s.".format(ct.hour, ct.minute, ct.day, cast(int)ct.month);

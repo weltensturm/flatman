@@ -1,3 +1,6 @@
-flatman
-dub.selections.json
-.dub/*
+**/flatman*
+**/dub.selections.json
+**/.dub
+**/.project
+**/.settings
+**/.buildpath

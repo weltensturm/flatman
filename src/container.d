@@ -30,4 +30,13 @@ class Container: Base {
 			active.focus;
 	}
 
+	Client[] clients(){
+		Client[] clients;
+		foreach(c; (hiddenChildren ~ children).without(active))
+			clients ~= cast(Client)c;
+		if(active)
+			clients ~= active;
+		return clients;
+	}
+
 }

@@ -9,7 +9,6 @@ class Workspace: Base {
 
 	Split split;
 	Floating floating;
-	Client[] fullscreen;
 	bool focusFloating;
 
 	this(int[2] pos, int[2] size){
@@ -21,18 +20,13 @@ class Workspace: Base {
 
 	override void resize(int[2] size){
 		this.size = size;
-		foreach(c; children ~ hiddenChildren)
+		foreach(c; children)
 			c.resize(size);
-		foreach(c; fullscreen)
-			c.moveResize(pos, size);
 	}
 
 	void addClient(Client client){
-		updateWindowDesktop(client, monitorActive.workspaces.countUntil(this));
-		if(client.isfullscreen){
-			fullscreen ~= client;
-			client.moveResize(pos, size);
-		}else if(client.isFloating){
+		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
+		if(client.isFloating){
 			floating.add(client);
 		}else{
 			split.add(client);
@@ -59,7 +53,7 @@ class Workspace: Base {
 
 	override void remove(Base client){
 		auto refocus = client == active;
-		foreach(c; children ~ hiddenChildren)
+		foreach(c; children)
 			c.remove(client);
 		if(refocus)
 			focus(active);
@@ -73,9 +67,9 @@ class Workspace: Base {
 	}
 
 	override void hide(){
-		foreach(c; children)
-			c.hide;
 		super.hide;
+		split.hide;
+		floating.hide;
 	}
 
 	Client active(){
@@ -85,13 +79,7 @@ class Workspace: Base {
 	}
 
 	Client[] clients(){
-		Client[] clients;
-		foreach(c; split.hiddenChildren ~ split.children)
-			clients ~= cast(Client)c;
-		clients ~= fullscreen;
-		foreach(c; floating.hiddenChildren ~ floating.children)
-			clients ~= cast(Client)c;
-		return clients;
+		return split.clients ~ floating.clients;
 	}
 
 	override void onDraw(){

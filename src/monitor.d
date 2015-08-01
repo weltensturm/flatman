@@ -9,9 +9,8 @@ class Monitor {
 
 	int[2] pos;
 	int[2] size;
-	long[4] reserve;
+	Client[] strutClients;
 	Bar bar;
-	WorkspaceDock dock;
 
 	Workspace[] workspaces;
 	Client[] globals;
@@ -24,8 +23,8 @@ class Monitor {
 		foreach(t; tags){
 			workspaces ~= new Workspace(pos, size);
 		}
-		auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
-		dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
+		//auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
+		//dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
 	}
 
 	Client active(){
@@ -41,26 +40,44 @@ class Monitor {
 			return;
 		workspace.hide;
 		workspaceActive = pos;
-		if(monitorActive.workspaceActive < 0)
+		if(monitor.workspaceActive < 0)
 			workspaceActive = cast(int)workspaces.length-1;
-		if(monitorActive.workspaceActive == workspaces.length)
+		if(monitor.workspaceActive >= workspaces.length)
 			workspaceActive = 0;
 		workspace.show;
 		draw;
 		updateCurrentDesktop;
 		updateDesktopNames;
+		environment["FLATMAN_WORKSPACE"] = workspaceActive.to!string;
+		restack;
 	}
 	
 	void nextWs(){
 		switchWorkspace(workspaceActive+1);
-		dock.show;
 	}
 	
+	void nextWsFilled(){
+		foreach(i; workspaceActive+1..workspaces.length-1){
+			if(workspaces[i].clients.length){
+				switchWorkspace(cast(int)i);
+				return;
+			}
+		}
+	}
+
 	void prevWs(){
 		switchWorkspace(workspaceActive-1);
-		dock.show;
 	}
 	
+	void prevWsFilled(){
+		foreach_reverse(i; 0..workspaceActive){
+			if(workspaces[i].clients.length){
+				switchWorkspace(i);
+				return;
+			}
+		}
+	}
+
 	void moveDown(){
 		auto win = active;
 		if(win){
@@ -71,6 +88,7 @@ class Monitor {
 				workspaces[workspaceActive+1].addClient(win);
 		}
 		switchWorkspace(workspaceActive+1);
+		XSync(dpy, false);
 		win.focus;
 	}
 	
@@ -84,15 +102,24 @@ class Monitor {
 				workspaces[workspaceActive-1].addClient(win);
 		}
 		switchWorkspace(workspaceActive-1);
+		XSync(dpy, false);
 		win.focus;
 	}
 
-	void addGlobal(Client client){
-		globals ~= client;
-	}
-
-	void add(Client client){
-		workspace.addClient(client);
+	void add(Client client, long workspace=-1){
+		if(workspace >= cast(long)workspaces.length)
+			client.global = true;
+		if(!client.global){
+			if(workspace == -1)
+				this.workspace.addClient(client);
+			else
+				workspaces[workspace].addClient(client);
+		}else{
+			globals ~= client;
+			client.moveResize(client.posOld, client.sizeOld);
+		}
+		if(!client.isVisible)
+			client.hide;
 	}
 
 	void move(Client client, int workspace){
@@ -101,42 +128,51 @@ class Monitor {
 	}
 
 	void remove(Client client){
-		foreach(ws; workspaces)
-			ws.remove(client);
+		foreach(ws; workspaces){
+			if(ws.clients.canFind(client))
+				ws.remove(client);
+		}
 		globals = globals.without(client);
+		if(strutClients.canFind(client)){
+			strutClients = strutClients.without(client);
+			resize(size);
+		}
 	}
 
 
 	void draw(){
 		workspace.onDraw;
-		dock.onDraw;
 	}
 
 	void destroy(){
-		dock.destroy;
 		foreach(ws; workspaces)
 			ws.destroy;
 	}
 
-	Client[] allClients(){
+	Client[] clients(){
 		Client[] res;
-		foreach(ws; workspaces)
+		foreach(ws; workspaces.without(workspace))
 			res ~= ws.clients;
+		res ~= workspace.clients;
 		return res ~ globals;
 	}
 
 	void resize(int[2] size){
 		this.size = size;
 		foreach(ws; workspaces){
+			long[4] reserve;
+			foreach(c; strutClients)
+				reserve[] += c.getStrut[];
 			ws.move([cast(int)reserve[0], cast(int)reserve[2]]);
 			ws.resize([cast(int)(size.w-reserve[1]-reserve[0]), cast(int)(size.h-reserve[2]-reserve[3])]);
 		}
-		auto dockWidth = cast(int)(size.w/cast(double)tags.length).lround;
-		dock.update(pos.a+[size.w-dockWidth,0], [dockWidth, size.h]);
+		updateWorkarea;
 	}
 
-	void reserveBorders(long[4] reserve){
-		this.reserve = reserve;
+	void strut(Client client, bool remove=false){
+		strutClients = strutClients.without(client);
+		if(!remove)
+			strutClients ~= client;
 		resize(size);
 	}
 

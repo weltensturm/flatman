@@ -1,0 +1,33 @@
+module dock;
+
+public import
+	core.thread,
+	std.algorithm,
+	std.datetime,
+	std.string,
+	std.math,
+	std.stdio,
+	std.file,
+	std.path,
+	x11.X,
+	x11.Xlib,
+	x11.Xutil,
+	x11.Xproto,
+	x11.Xatom,
+	x11.extensions.Xcomposite,
+	x11.extensions.Xfixes,
+	x11.extensions.XInput,
+	x11.extensions.render,
+	x11.extensions.Xrender,
+	x11.keysymdef,
+	ws.bindings.xft,
+	ws.bindings.fontconfig,
+	ws.gl.gl,
+	ws.wm,
+	ws.gui.base,
+	ws.gui.input,
+	ws.gui.point,
+	dock.draw,
+	dock.dock,
+	dock.proputil;
+	

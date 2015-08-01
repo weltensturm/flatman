@@ -1,6 +1,6 @@
-module flatman.draw;
+module dock.draw;
 
-import flatman;
+import dock;
 
 __gshared:
 
@@ -16,7 +16,7 @@ class Clr {
 	ulong pix;
 	XftColor rgb;
 
-	this(string name){
+	this(string name, int screen){
 		Colormap cmap = DefaultColormap(dpy, screen);
 		Visual* vis = DefaultVisual(dpy, screen);
 		if(!XftColorAllocName(dpy, vis, cmap, name.toStringz, &rgb))
@@ -104,7 +104,7 @@ class Draw {
 	uint w, h;
 	Display* dpy;
 	int screen;
-	Window root;
+	x11.X.Window root;
 	Drawable drawable;
 	XftDraw* xft;
 	GC gc;
@@ -113,7 +113,7 @@ class Draw {
 	size_t fontcount;
 	Font[] fonts;
 
-	this(Display* dpy, int screen, Window root, int w, int h){
+	this(Display* dpy, int screen, x11.X.Window root, int w, int h){
 		this.dpy = dpy;
 		this.screen = screen;
 		this.root = root;
@@ -156,7 +156,7 @@ class Draw {
 
 	void setColor(string name){
 		if(name !in colors)
-			colors[name] = new Clr(name);
+			colors[name] = new Clr(name, screen);
 		color = colors[name];
 	}
 
@@ -171,14 +171,14 @@ class Draw {
 		XftDrawSetClip(xft, null);
 	}
 
-	void rect(int x, int y, uint w, uint h){
+	void rect(int[2] pos, int[2] size){
 		XSetForeground(dpy, gc, color.pix);
-		XFillRectangle(dpy, drawable, gc, x, y, w+1, h+1);
+		XFillRectangle(dpy, drawable, gc, pos.x, h-size.h-pos.y, size.w+1, size.h+1);
 	}
 
 	void rectOutline(int[2] pos, int[2] size){
 		XSetForeground(dpy, gc, color.pix);
-		XDrawRectangle(dpy, drawable, gc, pos.x+1, pos.y+1, size.w-1, size.h-1);
+		XDrawRectangle(dpy, drawable, gc, pos.x+1, h-pos.y+1, size.w-1, size.h-1);
 	}
 
 	void text(string text, int[2] pos, double offset=-0.2){
@@ -189,12 +189,12 @@ class Draw {
 			auto offsetRight = max(0.0,-offset)*fontHeight;
 			auto offsetLeft = max(0.0,offset-1)*fontHeight;
 			auto x = pos.x - min(1,max(0,offset))*width + offsetRight - offsetLeft;
-			auto y = pos.y + fontHeight - (bh-fontHeight)/2.0 - 1;
+			auto y = h - pos.y - 1;
 			XftDrawStringUtf8(xft, &color.rgb, curfont.xfont, cast(int)x.lround, cast(int)y.lround, text.toStringz, cast(int)text.length);
 		}
 	}
 
-	void map(Window win, int x, int y, uint w, uint h){
+	void map(x11.X.Window win, int x, int y, uint w, uint h){
 		XCopyArea(dpy, drawable, win, gc, x, y, w, h, x, y);
 		XSync(dpy, False);
 	}
