@@ -1,11 +1,11 @@
 {
-	"name" : "flatman",
-	"description" : "window manager",
+	"name" : "flatman-volume-icon",
+	"description" : "volume icon for flatman",
 	"targetType": "executable",
 	"sourcePaths": ["src"],
-	"includePaths": ["src"],
 	"dependencies" : {
-		"ws": "~master"
+		"ws": "~master",
+		"gtk-d": "~master"
 	},
 	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
 }

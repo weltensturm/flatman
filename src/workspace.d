@@ -25,6 +25,7 @@ class Workspace: Base {
 	}
 
 	void addClient(Client client){
+		"adding %s isFloating %s".format(client.name, client.isFloating).log;
 		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
 		if(client.isFloating){
 			floating.add(client);

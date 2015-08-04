@@ -125,7 +125,7 @@ Window[] unmanaged;
 
 void log(string s){
 	"/tmp/flatman.log".append(s ~ '\n');
-	spawnProcess(["notify-send", s]);
+	//spawnProcess(["notify-send", s]);
 }
 
 
@@ -150,7 +150,7 @@ void main(string[] args){
 		"run".log;
 		run();
 	}catch(Throwable t){
-		"/tmp/flatman.log".append(t.toString);
+		t.toString.log;
 		throw t;
 	}
 	"cleanup".log;
@@ -532,8 +532,13 @@ void onMapRequest(XEvent *e){
 		return;
 	}
 	if(!wintoclient(ev.window)){
-		XMapWindow(dpy, ev.window);
-		manage(ev.window, &wa);
+		try{
+			XMapWindow(dpy, ev.window);
+			manage(ev.window, &wa);
+		}catch(Throwable t){
+			t.toString.log;
+			XUnmapWindow(dpy, ev.window);
+		}
 	}
 }
 
@@ -701,7 +706,7 @@ void manage(Window w, XWindowAttributes* wa){
 	                cast(ubyte*)&c.win, 1);
 	XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
 	c.setState(NormalState);
-	if(!active || c.isFloating || c.isfullscreen)
+	if(c.isVisible && (!active || c.isFloating || c.isfullscreen))
 		c.focus;
 	else
 		c.requestAttention;
@@ -742,8 +747,11 @@ void scan(){
 				continue;
 			if(XGetTransientForHint(dpy, wins[i], &d1)
 			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)){
-				manage(wins[i], &wa);
-				XMapWindow(dpy, wins[i]);
+				try{
+					manage(wins[i], &wa);
+					XMapWindow(dpy, wins[i]);
+				}catch(Throwable t)
+					t.toString.log;
 			}
 		}
 		if(wins)
@@ -843,7 +851,7 @@ Monitor wintomon(Window w){
 
 void mousemove(){
 	Client c = monitor.active;
-	if(!c)
+	if(!c || !c.isFloating)
 		return;
 	XEvent ev;
 	Time lasttime = 0;
@@ -880,7 +888,7 @@ void mousemove(){
 void mouseresize(){
 	int ocx, ocy, nw, nh;
 	Client c = monitor.active;
-	if(!c)
+	if(!c || !c.isFloating)
 		return;
 	Monitor* m;
 	XEvent ev;

@@ -23,10 +23,15 @@ class Config {
 	}
 
 	void load(){
-		try {
-			loadBlock("~/.config/flatman/config.ws".expandTilde.readText, "");
-		}catch(Exception e){
-			e.toString.log;
+		auto paths = [
+			"~/.config/flatman/config.ws".expandTilde,
+			"%s/config.ws".format(thisExePath),
+		];
+		foreach(path; paths){
+			try
+				loadBlock(path.readText, "");
+			catch(Exception e)
+				e.toString.log;
 		}
 	}
 

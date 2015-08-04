@@ -111,6 +111,8 @@ class Client: Base {
 		Atom[] state = this.getPropList(net.state);
 		if(state.canFind(net.fullscreen))
 			setfullscreen(this, true);
+		if(state.canFind(net.modal))
+			isFloating = true;
 		Atom[] type = this.getPropList(net.windowType);
 		if(type.canFind(net.windowTypeDialog) || type.canFind(net.windowTypeSplash))
 			isFloating = true;
@@ -194,11 +196,16 @@ class Client: Base {
 	int originWorkspace(){
 		string env;
 		try {
+			XSync(dpy, false);
 			env = "/proc/%d/environ".format(win.getprop!CARDINAL(net.pid)).readText;
-			auto match = matchFirst(env, r"FLATMAN_WORKSPACE=([0-9]+)")[1].to!int;
-			match.to!string.log;
-			return match;
-		}catch{}
+			auto match = matchFirst(env, r"FLATMAN_WORKSPACE=([0-9]+)");
+			"origin %s: %s".format(name, match).log;
+			return match[1].to!int;
+		}catch(Exception e)
+			try
+				"pid error: %s".format(win.getprop!CARDINAL(net.pid)).log;
+			catch
+				"no pid for %s".format(name).log;
 		try
 			return cast(int)win.getprop!CARDINAL(net.windowDesktop);
 		catch{}
@@ -210,7 +217,7 @@ class Client: Base {
 	}
 
 	void requestAttention(){
-		if(this == monitor.active || hidden){
+		if(this == monitor.active){
 			isUrgent = false;
 			return;
 		}
@@ -348,7 +355,6 @@ void applyRules(Client c){
 	const(Rule)* r;
 	XClassHint ch = { null, null };
 	/* rule matching */
-	c.isFloating = 0;
 	XGetClassHint(dpy, c.win, &ch);
 	_class    = to!string(ch.res_class ? ch.res_class : broken);
 	instance = to!string(ch.res_name  ? ch.res_name  : broken);

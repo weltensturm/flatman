@@ -40,6 +40,9 @@ class Floating: Container {
 	}
 
 	override Base add(Base c){
+		assert(!c.parent);
+		assert(!flatman.clients.canFind(c));
+		"split adding %s".format((cast(Client)c).name).log;
 		auto client = cast(Client)c;
 		super.add(client);
 		if(!client.isfullscreen && !client.isfixed && !client.pos.x && !client.pos.y)

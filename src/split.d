@@ -190,6 +190,8 @@ class Split: Container {
 
 	override Base add(Base client){
 		assert(!client.parent);
+		assert(!flatman.clients.canFind(client));
+		"split adding %s".format((cast(Client)client).name).log;
 		client.parent = this;
 		client.hidden = false;
 		if(clientActive < children.length){
@@ -199,6 +201,7 @@ class Split: Container {
 			children ~= client;
 			sizes ~= client.size.w;
 		}
+		sizes.to!string.log;
 		rebuild;
 		if(hidden)
 			client.hide;
@@ -206,16 +209,13 @@ class Split: Container {
 	}
 
 	override void remove(Base client){
+		"split removing %s".format((cast(Client)client).name).log;
 		auto i = children.countUntil(client);
 		if(i < 0)
 			return;
-		sizes = sizes[0..i] ~ sizes[i+1..$];
-		foreach(ref s; sizes)
-			s = cast(int)(s*(sizes.length+1.0)/sizes.length);
 		super.remove(client);
-		client.parent = null;
-		if(clientActive >= children.length)
-			clientActive = cast(int)children.length-1;
+		sizes = sizes[0..i] ~ sizes[i+1..$];
+		sizes.to!string.log;
 		rebuild;
 	}
 
@@ -230,6 +230,7 @@ class Split: Container {
 	}
 
 	void normalize(){
+		assert(sizes.length == children.length);
 		double max = size.w-paddingOuter*2-paddingElem*(children.length-1);
 		double cur = sizes.sum;
 		foreach(ref s; sizes)

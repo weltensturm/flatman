@@ -48,8 +48,7 @@ class Monitor {
 		draw;
 		updateCurrentDesktop;
 		updateDesktopNames;
-		environment["FLATMAN_WORKSPACE"] = workspaceActive.to!string;
-		restack;
+		//environment["FLATMAN_WORKSPACE"] = workspaceActive.to!string;
 	}
 	
 	void nextWs(){
@@ -57,7 +56,7 @@ class Monitor {
 	}
 	
 	void nextWsFilled(){
-		foreach(i; workspaceActive+1..workspaces.length-1){
+		foreach(i; workspaceActive+1..workspaces.length){
 			if(workspaces[i].clients.length){
 				switchWorkspace(cast(int)i);
 				return;
@@ -107,8 +106,9 @@ class Monitor {
 	}
 
 	void add(Client client, long workspace=-1){
-		if(workspace >= cast(long)workspaces.length)
+		if(workspace >= cast(long)workspaces.length || workspace < 0)
 			client.global = true;
+		"monitor adding %s to workspace %s global: %s".format(client.name, workspace, client.global).log;
 		if(!client.global){
 			if(workspace == -1)
 				this.workspace.addClient(client);
@@ -118,8 +118,10 @@ class Monitor {
 			globals ~= client;
 			client.moveResize(client.posOld, client.sizeOld);
 		}
-		if(!client.isVisible)
+		if(!client.isVisible){
+			"monitor hiding %s".format(client.name).log;
 			client.hide;
+		}
 	}
 
 	void move(Client client, int workspace){
@@ -150,11 +152,12 @@ class Monitor {
 	}
 
 	Client[] clients(){
-		Client[] res;
-		foreach(ws; workspaces.without(workspace))
-			res ~= ws.clients;
-		res ~= workspace.clients;
-		return res ~ globals;
+		return workspaces
+				.without(workspace)
+				.map!"a.clients"
+				.reduce!"a ~ b"
+			~ workspace.clients
+			~ globals;
 	}
 
 	void resize(int[2] size){

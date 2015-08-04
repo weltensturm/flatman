@@ -15,6 +15,12 @@ class Container: Base {
 		return null;
 	}
 
+	override void remove(Base client){
+		super.remove(client);
+		if(clientActive >= children.length)
+			clientActive = children.length-1;
+	}
+
 	void setFocus(Base client){
 		foreach(i, c; children){
 			if(c == client){
@@ -32,7 +38,7 @@ class Container: Base {
 
 	Client[] clients(){
 		Client[] clients;
-		foreach(c; (hiddenChildren ~ children).without(active))
+		foreach(c; children.without(active))
 			clients ~= cast(Client)c;
 		if(active)
 			clients ~= active;

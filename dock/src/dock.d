@@ -48,7 +48,7 @@ class WorkspaceDock: ws.wm.Window {
 		screenSize = new CardinalListProperty(root, "_NET_DESKTOP_GEOMETRY");
 		currentDesktop = new CardinalProperty(root, "_NET_CURRENT_DESKTOP");
 		desktopCount = new CardinalProperty(root, "_NET_NUMBER_OF_DESKTOPS");
-		clients = new WindowListProperty(root, "_NET_CLIENT_LIST_STACKING");
+		clients = new WindowListProperty(root, "_NET_CLIENT_LIST");
 		auto screen = screenSize.get(2);
 		auto count = desktopCount.get;
 		w = cast(int)(screen.w/count);
