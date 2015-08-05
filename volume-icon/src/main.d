@@ -83,7 +83,7 @@ void spawnMainWindow(GdkRectangle area, int iconSize){
 	w.add(vbox);
 	w.grabFocus;
 	w.addOnFocusOut((GdkEventFocus* c, w){
-		//w.hide;
+		w.hide;
 		return true;
 	});
 	w.showAll;

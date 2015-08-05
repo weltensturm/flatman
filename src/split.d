@@ -201,6 +201,7 @@ class Split: Container {
 			children ~= client;
 			sizes ~= client.size.w;
 		}
+		assert(sizes.length == clients.length, "%s %s".format(clients.map!"a.name", sizes));
 		sizes.to!string.log;
 		rebuild;
 		if(hidden)
@@ -215,6 +216,7 @@ class Split: Container {
 			return;
 		super.remove(client);
 		sizes = sizes[0..i] ~ sizes[i+1..$];
+		assert(sizes.length == clients.length, "%s %s".format(clients.map!"a.name", sizes));
 		sizes.to!string.log;
 		rebuild;
 	}
@@ -230,7 +232,7 @@ class Split: Container {
 	}
 
 	void normalize(){
-		assert(sizes.length == children.length);
+		assert(sizes.length == clients.length, "%s %s".format(clients.map!"a.name", sizes));
 		double max = size.w-paddingOuter*2-paddingElem*(children.length-1);
 		double cur = sizes.sum;
 		foreach(ref s; sizes)

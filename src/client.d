@@ -46,11 +46,11 @@ class Client: Base {
 	}
 
 	override void onHide(){
-		XMoveWindow(dpy, win, monitor.pos.x+monitor.size.w+pos.x, pos.y);
+		XUnmapWindow(dpy, win);
 	}
 
 	override void onShow(){
-		XMoveWindow(dpy, win, pos.x, pos.y);
+		XMapWindow(dpy, win);
 	}
 
 	void raise(){
