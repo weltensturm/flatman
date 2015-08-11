@@ -7,8 +7,10 @@ __gshared:
 
 ulong root;
 
+extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
 
 void main(){
+	xerrorxlib = XSetErrorHandler(&xerror);
 	auto wsdock = new WorkspaceDock(400, 300, "flatman-dock");
 	wm.add(wsdock);
 	while(wm.hasActiveWindows){
@@ -24,9 +26,12 @@ Atom atom(string name){
 	return XInternAtom(dpy, name.toStringz, false);
 }
 
-class WorkspaceDock: ws.wm.Window {
+struct WindowData {
+	x11.X.Window window;
+	int x, y, width, height;
+}
 
-	Draw draw;
+class WorkspaceDock: ws.wm.Window {
 
 	CardinalListProperty screenSize;
 	CardinalProperty currentDesktop;
@@ -39,43 +44,52 @@ class WorkspaceDock: ws.wm.Window {
 	long showTime;
 	bool focus;
 
-	x11.X.Window[][long] desktops;
+	WindowData[][long] desktops;
 
+	Pid launcher;
 
 	this(int w, int h, string title){
 		dpy = XOpenDisplay(null);
-		root = XDefaultRootWindow(dpy);
-		screenSize = new CardinalListProperty(root, "_NET_DESKTOP_GEOMETRY");
-		currentDesktop = new CardinalProperty(root, "_NET_CURRENT_DESKTOP");
-		desktopCount = new CardinalProperty(root, "_NET_NUMBER_OF_DESKTOPS");
-		clients = new WindowListProperty(root, "_NET_CLIENT_LIST");
+		dock.root = XDefaultRootWindow(dpy);
+		screenSize = new CardinalListProperty(dock.root, "_NET_DESKTOP_GEOMETRY");
+		currentDesktop = new CardinalProperty(dock.root, "_NET_CURRENT_DESKTOP");
+		desktopCount = new CardinalProperty(dock.root, "_NET_NUMBER_OF_DESKTOPS");
+		clients = new WindowListProperty(dock.root, "_NET_CLIENT_LIST");
 		auto screen = screenSize.get(2);
 		auto count = desktopCount.get;
 		w = cast(int)(screen.w/count);
 		super(w, cast(int)screen.h, title);
-		draw = new Draw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
-		draw.load_fonts(["Consolas:size=10"]);
+	}
+
+	override void gcInit(){}
+
+	override void show(){
 		windowDesktop = new CardinalProperty(windowHandle, "_NET_WM_DESKTOP");
-		windowDesktop.request([-1,2]);
+		windowDesktop.set(-1);
+		new AtomProperty(windowHandle, "_NET_WM_WINDOW_TYPE").set(atom("_NET_WM_WINDOW_TYPE_DOCK"));
+		super.show;
+	}
+
+	override void drawInit(){
+		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
+		_draw.setFont("Consolas:size=10", 0);
 	}
 
 	override void resize(int[2] size){
 		super.resize(size);
-		if(draw)
-			draw.resize(size.w, size.h);
+		draw.resize(size);
 	}
 
 	override void onDraw(){
-		draw.setColor("#050505");
+		draw.setColor([0.05,0.05,0.05]);
 		draw.rect([0,0], size);
 		super.onDraw;
-		draw.map(windowHandle, 0, 0, size.w, size.h);
+		draw.finishFrame;
 	}
 
 	void tick(){
-		if(visible)
-			update;
 		if(currentDesktop.get != currentDesktopInternal){
+			update;
 			currentDesktopInternal = currentDesktop.get;
 			showTime = Clock.currSystemTick.msecs+500;
 		}
@@ -95,7 +109,9 @@ class WorkspaceDock: ws.wm.Window {
 		XSync(dpy, false);
 		foreach(client; clients.get(-1)){
 			auto ws = new CardinalProperty(client, "_NET_WM_DESKTOP");
-			desktops[ws.get] ~= client;
+			XWindowAttributes wa;
+			XGetWindowAttributes(dpy, client, &wa);
+			desktops[ws.get] ~= WindowData(client, wa.x, wa.y, wa.width, wa.height);
 		}
 		foreach(c; children)
 			remove(c);
@@ -105,17 +121,18 @@ class WorkspaceDock: ws.wm.Window {
 		auto w = cast(int)(screen.w/count);
 		int desktopsHeight;
 		foreach(i; 0..count)
-			desktopsHeight += (count-1-i in desktops ? height : draw.fonts[0].h+20);
+			desktopsHeight += (count-1-i in desktops ? height : draw.fontHeight+20);
 		int y = size.h/2 - desktopsHeight/2;
 		foreach(i; 0..count){
 			auto ws = addNew!WorkspaceView(this, count-1-i);
 			ws.move([0, y]);
-			ws.resize([w, count-1-i in desktops ? height : draw.fonts[0].h+20]);
+			ws.resize([w, count-1-i in desktops ? height : draw.fontHeight+20]);
 			y += ws.size.h-5;
 		}
 	}
 
 	override void onMouseFocus(bool focus){
+		update;
 		this.focus = focus;
 		if(showTime < Clock.currSystemTick.msecs)
 			showTime = Clock.currSystemTick.msecs+100;
@@ -142,6 +159,17 @@ class WorkspaceDock: ws.wm.Window {
 			super.onMouseButton(button, pressed, x, y);
 		}
 	}
+
+	void runLauncher(WorkspaceView view){
+		try
+			if(launcher){
+				launcher.kill;
+				launcher.wait;
+				launcher = null;
+			}
+		catch{}
+		launcher = spawnProcess(["flatman-menu", view.id.to!string, (pos.x-200).to!string, (screenSize.get(2).h-view.pos.y-view.size.h).to!string]);
+	}
 	
 }
 
@@ -155,38 +183,126 @@ class WorkspaceView: Base {
 	this(WorkspaceDock dock, long id){
 		this.dock = dock;
 		this.id = id;
+	}
+
+	override void resize(int[2] size){
+		super.resize(size);
 		update;
 	}
 
 	void update(){
+		foreach(c; children)
+			remove(c);
+		auto scale = (size.w-20) / cast(double)dock.screenSize.get(2).w;
+		if(id in dock.desktops)
+			foreach(w; dock.desktops[id]){
+				auto wv = addNew!WindowIcon;
+				wv.moveLocal([
+					7 + cast(int)(w.x*scale).lround,
+					5 + cast(int)(w.y*scale).lround
+				]);
+				wv.resize([
+					4 + cast(int)(w.width*scale).lround,
+					6 + cast(int)(w.height*scale).lround
+				]);
+			}
 		try{
 			name = "~/.dinu/%s".format(id).expandTilde.readText.baseName;
 		}catch{}
 	}
 
+	override bool canDrop(Base base){
+		return true;
+	}
+
 	override void onDraw(){
-		dock.draw.setColor("#222222");
+		dock.draw.setColor([0.1,0.1,0.1]);
 		dock.draw.rect(pos, size);
-		if(id == dock.currentDesktop.get)
-			dock.draw.setColor("#bbbbbb");
-		else{
-			if(id in dock.desktops)
-				dock.draw.setColor("#444444");
-			else
-				dock.draw.setColor("#222222");
-		}
-		dock.draw.rect(pos.a+[5,5], size.a-[10,10]);
+		auto m = id == dock.currentDesktop.get ? 3 : 1;
 		if(id in dock.desktops)
-			dock.draw.setColor("#ffffff");
+			dock.draw.setColor([0.3*m,0.3*m,0.3*m]);
 		else
-			dock.draw.setColor("#999999");
-		dock.draw.text(name, pos.a+[10,10]);
+			dock.draw.setColor([0.1*m,0.1*m,0.1*m]);
+		dock.draw.rect(pos.a+[5,5], size.a-[10,10]);
+
+		super.onDraw;
+
+		if(id in dock.desktops)
+			dock.draw.setColor([1,1,1]);
+		else
+			dock.draw.setColor([0.6,0.6,0.6]);
+		dock.draw.text(pos.a+[10,10], name);
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.buttonLeft && pressed){
+		if(button == Mouse.buttonLeft && !pressed)
 			dock.currentDesktop.request([id, CurrentTime]);
-		}
+		super.onMouseButton(button, pressed, x, y);
 	}
 
+}
+
+
+class WindowIcon: Base {
+
+	Base dragGhost;
+	int[2] dragOffset;
+
+	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+		writeln("wat");
+		if(button == Mouse.buttonLeft){
+			if(pressed){
+				dragGhost = drag([x,y].a - pos);
+				writeln(dragOffset, ' ', pos, ' ', [x,y]);
+				add(dragGhost);
+				dragGhost.move([x,y].a - dragOffset);
+				dragGhost.resize(size);
+				writeln("dragStart");
+			}else if(dragGhost){
+				writeln(root.canDrop(this));
+				stdout.flush;
+				remove(dragGhost);
+				dragGhost = null;
+			}
+		}
+		super.onMouseButton(button, pressed, x, y);
+	}
+
+	override Base drag(int[2] offset){
+		dragOffset = offset;
+		return new Ghost;
+	}
+
+	override void onMouseMove(int x, int y){
+		if(dragGhost){
+			dragGhost.move([x,y].a - dragOffset);
+		}
+		super.onMouseMove(x, y);
+	}
+
+	override void onDraw(){
+		draw.setColor([0.4,0.4,0.4]);
+		draw.rect(pos, size);
+		draw.setColor([1,0,0]);
+		draw.rect(cursorPos, [5,5]);
+		super.onDraw;
+	}
+
+}
+
+
+class Ghost: Base {
+
+	override void onDraw(){
+		draw.setColor([0.6,0.6,0.6]);
+		draw.rect(pos, size);
+	}
+
+}
+
+
+extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
+	if(ee.error_code == XErrorCode.BadWindow)
+		return 0;
+	return xerrorxlib(dpy, ee); /* may call exit */
 }

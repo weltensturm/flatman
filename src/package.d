@@ -33,6 +33,7 @@ public import
 	x11.keysymdef,
 	ws.gui.base,
 	ws.gui.input,
+	ws.x.draw,
 	ws.decode,
 	ws.bindings.fontconfig,
 	ws.bindings.xft,

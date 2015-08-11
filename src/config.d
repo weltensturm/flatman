@@ -13,6 +13,15 @@ class Config {
 		return values.get(name, "ff9999");
 	}
 
+	float[3] color(string name){
+		auto clr = this[name];
+		return [
+				clr[0..2].to!int(16)/255.0,
+				clr[2..4].to!int(16)/255.0,
+				clr[4..6].to!int(16)/255.0
+		]; 
+	}
+
 	void loadBlock(string block, string namespace){
 		Decode.text(block, (name, value, isBlock){
 			if(isBlock)
@@ -25,12 +34,14 @@ class Config {
 	void load(){
 		auto paths = [
 			"~/.config/flatman/config.ws".expandTilde,
-			"%s/config.ws".format(thisExePath),
+			"%s/config.ws".format(thisExePath.dirName),
 		];
 		foreach(path; paths){
-			try
+			try{
 				loadBlock(path.readText, "");
-			catch(Exception e)
+				"loaded config %s".format(values).log;
+				return;
+			}catch(Exception e)
 				e.toString.log;
 		}
 	}
@@ -47,7 +58,7 @@ shared static this(){
 
 
 enum fonts = [
-    "Trebuchet MS:size=10"
+    "Consolas:size=10"
 ];
 
 enum normbordercolor = "#444444";
@@ -126,6 +137,7 @@ shared static this(){
 
 	[XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9, XK_0].each((size_t i, size_t k){
 		keys ~= Key(MODKEY, k, {monitor.switchWorkspace(cast(int)i);});
+		keys ~= Key(MODKEY|ShiftMask, k, {monitor.moveWorkspace(cast(int)i);});
 	});
 
 	buttons = [

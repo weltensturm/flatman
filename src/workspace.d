@@ -15,7 +15,9 @@ class Workspace: Base {
 		this.pos = pos;
 		this.size = size;
 		split = addNew!Split(pos, size);
+		split.hide;
 		floating = addNew!Floating(pos, size);
+		floating.hide;
 	}
 
 	override void resize(int[2] size){
@@ -27,9 +29,11 @@ class Workspace: Base {
 	void addClient(Client client){
 		"adding %s isFloating %s".format(client.name, client.isFloating).log;
 		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
-		if(client.isFloating){
+		if(client.isFloating || client.isfullscreen){
 			floating.add(client);
 		}else{
+			writeln(split.hidden);
+			split.show;
 			split.add(client);
 		}
 	}
@@ -54,15 +58,19 @@ class Workspace: Base {
 
 	override void remove(Base client){
 		auto refocus = client == active;
+		client.hide;
 		foreach(c; children)
 			c.remove(client);
+		if(!split.children)
+			split.hide;
 		if(refocus)
 			focus(active);
 	}
 
 	override void show(){
 		super.show;
-		split.show;
+		if(split.children.length)
+			split.show;
 		floating.show;
 		focus(active);
 	}

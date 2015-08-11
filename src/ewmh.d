@@ -32,11 +32,11 @@ struct NetAtoms {
 	@("_NET_WM_STATE_FULLSCREEN") Atom fullscreen;
 	@("_NET_WM_STATE_DEMANDS_ATTENTION") Atom attention;
 	@("_NET_WM_STRUT_PARTIAL") Atom strutPartial;
+	@("_NET_WM_WINDOW_TYPE") Atom windowType;
 	@("_NET_WM_WINDOW_TYPE_DIALOG") Atom windowTypeDialog;
 	@("_NET_WM_WINDOW_TYPE_DOCK") Atom windowTypeDock;
 	@("_NET_WM_WINDOW_TYPE_SPLASH") Atom windowTypeSplash;
 	@("_NET_WM_DESKTOP") Atom windowDesktop;
-	@("_NET_WM_WINDOW_TYPE") Atom windowType;
 }
 
 NetAtoms net;

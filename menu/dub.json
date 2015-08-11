@@ -1,0 +1,11 @@
+{
+	"name" : "flatman-menu",
+	"description" : "menu for flatman",
+	"targetType": "executable",
+	"sourcePaths": ["src"],
+	"dependencies" : {
+		"ws": "~master",
+		"dinu": "~master"
+	},
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+}

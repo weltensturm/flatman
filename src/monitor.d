@@ -38,17 +38,24 @@ class Monitor {
 	void switchWorkspace(int pos){
 		if(pos == workspaceActive)
 			return;
+		"hide workspace %s".format(workspaceActive).log;
 		workspace.hide;
 		workspaceActive = pos;
 		if(monitor.workspaceActive < 0)
 			workspaceActive = cast(int)workspaces.length-1;
 		if(monitor.workspaceActive >= workspaces.length)
 			workspaceActive = 0;
+		"show workspace %s".format(workspaceActive).log;
 		workspace.show;
 		draw;
 		updateCurrentDesktop;
 		updateDesktopNames;
 		//environment["FLATMAN_WORKSPACE"] = workspaceActive.to!string;
+	}
+
+	void moveWorkspace(int pos){
+		if(flatman.active)
+			flatman.active.setWorkspace(pos);
 	}
 	
 	void nextWs(){
@@ -78,31 +85,25 @@ class Monitor {
 	}
 
 	void moveDown(){
+		if(workspaceActive == workspaces.length-1)
+			return;
 		auto win = active;
-		if(win){
-			remove(win);
-			if(workspaceActive == workspaces.length-1)
-				workspaces[0].addClient(win);
-			else
-				workspaces[workspaceActive+1].addClient(win);
-		}
+		if(win)
+			win.setWorkspace(workspaceActive+1);
 		switchWorkspace(workspaceActive+1);
-		XSync(dpy, false);
-		win.focus;
+		if(win)
+			win.focus;
 	}
 	
 	void moveUp(){
+		if(workspaceActive == 0)
+			return;
 		auto win = active;
-		if(win){
-			remove(win);
-			if(workspaceActive == 0)
-				workspaces[workspaces.length-1].addClient(win);
-			else
-				workspaces[workspaceActive-1].addClient(win);
-		}
+		if(win)
+			win.setWorkspace(workspaceActive-1);
 		switchWorkspace(workspaceActive-1);
-		XSync(dpy, false);
-		win.focus;
+		if(win)
+			win.focus;
 	}
 
 	void add(Client client, long workspace=-1){
@@ -116,12 +117,12 @@ class Monitor {
 				workspaces[workspace].addClient(client);
 		}else{
 			globals ~= client;
-			client.moveResize(client.posOld, client.sizeOld);
+			client.moveResize(client.posFloating, client.sizeFloating);
 		}
-		if(!client.isVisible){
-			"monitor hiding %s".format(client.name).log;
+		if(client.isVisible)
+			client.show;
+		else
 			client.hide;
-		}
 	}
 
 	void move(Client client, int workspace){
@@ -158,6 +159,10 @@ class Monitor {
 				.reduce!"a ~ b"
 			~ workspace.clients
 			~ globals;
+	}
+
+	Client[] clientsVisible(){
+		return workspace.clients ~ globals;
 	}
 
 	void resize(int[2] size){

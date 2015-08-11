@@ -13,8 +13,8 @@ class Client: Base {
 
 	string name;
 	float mina, maxa;
-	int[2] posOld;
-	int[2] sizeOld;
+	int[2] posFloating;
+	int[2] sizeFloating;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh;
 	int bw, oldbw;
 	bool isUrgent;
@@ -35,9 +35,9 @@ class Client: Base {
 		XWindowAttributes attr;
 		XGetWindowAttributes(dpy, win, &attr);
 		pos = [attr.x, attr.y];
-		posOld = pos;
+		posFloating = pos;
 		size = [attr.width, attr.height];
-		sizeOld = size;
+		sizeFloating = size;
 		updateType;
 		updateSizeHints;
 		updateWmHints;
@@ -45,11 +45,15 @@ class Client: Base {
 		updateStrut;
 	}
 
-	override void onHide(){
+	override void hide(){
+		"hide %s".format(name).log;
+		hidden = true;
 		XUnmapWindow(dpy, win);
 	}
 
-	override void onShow(){
+	override void show(){
+		"show %s".format(name).log;
+		hidden = false;
 		XMapWindow(dpy, win);
 	}
 
@@ -60,8 +64,11 @@ class Client: Base {
 	void setWorkspace(long i){
 		if(i >= 0 && i < monitor.workspaces.length && monitor.workspaces[i].clients.canFind(this))
 			return;
+		"set workspace %s %s".format(name, i).log;
 		monitor.remove(this);
 		monitor.add(this, i < 0 ? tags.length : i);
+		updateWindowDesktop(this, i);
+		"set workspace done".log;
 	}
 
 	void moveResize(int[2] pos, int[2] size){
@@ -89,7 +96,7 @@ class Client: Base {
 	}
 
 	auto isVisible(){
-		return !hidden && (monitor.workspace.clients.canFind(this) || monitor.globals.canFind(this));
+		return (monitor.workspace.clients.canFind(this) || monitor.globals.canFind(this));
 	}
 
 	void configure(){
@@ -292,23 +299,23 @@ void setfocus(Client c){
 
 void setfullscreen(Client c, bool fullscreen){
 	auto proplist = c.getPropList(net.state);
-	if(fullscreen && !c.isfullscreen){
+	if(fullscreen){
 		if(!proplist.canFind(net.fullscreen)){
 			append(c.win, net.state, [net.fullscreen]);
 		}
 		c.isfullscreen = true;
-		c.posOld = c.pos;
-		c.sizeOld = c.size;
+		c.posFloating = c.pos;
+		c.sizeFloating = c.size;
 		c.moveResize(c.monitor.pos, c.monitor.size);
 		XRaiseWindow(dpy, c.win);
-	}else if(c.isfullscreen){
+	}else{
 		if(proplist.canFind(net.fullscreen)){
 			replace(c.win, net.state, c.getPropList(net.state).without(net.fullscreen));
 		}
 		//XChangeProperty(dpy, c.win, net.state, XA_ATOM, 32, PropModeReplace, null, 0);
 		c.isfullscreen = false;
-		c.pos = c.posOld;
-		c.size = c.sizeOld;
+		c.pos = c.posFloating;
+		c.size = c.sizeFloating;
 		c.moveResize(c.pos, c.size);
 	}
 }
@@ -323,11 +330,10 @@ void unfocus(Client c, bool setfocus){
 	}
 }
 
-void unmanage(Client c, bool destroyed){
-	if(destroyed)
+void unmanage(Client c, bool force=false){
+	if(force || !c.hidden)
 		c.monitor.remove(c);
-	/* The server grab construct avoids race conditions. */
-	if(!destroyed){
+	else{
 		XWindowChanges wc;
 		wc.border_width = c.oldbw;
 		XGrabServer(dpy);

@@ -44,6 +44,7 @@ class Split: Container {
 	long[] sizes;
 
 	this(int[2] pos, int[2] size, int mode=horizontal){
+		hidden = true;
 		move(pos);
 		resize(size);
 		this.mode = mode;
@@ -56,13 +57,15 @@ class Split: Container {
 		wa.background_pixmap = ParentRelative;
 		wa.event_mask = PointerMotionMask|ButtonPressMask|ButtonReleaseMask|ExposureMask;
 		window = XCreateWindow(
-				dpy, root, pos.x, pos.y, size.w, size.h,
+				dpy, flatman.root, pos.x, pos.y, size.w, size.h,
 				0, DefaultDepth(dpy, screen), CopyFromParent,
 				DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
 		XDefineCursor(dpy, window, flatman.cursor[CurMove].cursor);
-		//XMapRaised(dpy, window);
+		_draw = new XDraw(dpy, DefaultScreen(dpy), window, size.w, size.h);
+		draw.resize(size);
+		draw.setFont(fonts[0], 0);
 	}
 
 	void sizeInc(){
@@ -113,7 +116,12 @@ class Split: Container {
 		rebuild;
 	}
 
-	override void onShow(){
+	override void show(){
+		if(!hidden)
+			return;
+		XMapWindow(dpy, window);
+		"split show".log;
+		hidden = false;
 		foreach(c; children)
 			c.show;
 		rebuild;
@@ -182,10 +190,14 @@ class Split: Container {
 		}
 	}
 
-	override void onHide(){
+	override void hide(){
+		if(hidden)
+			return;
+		XUnmapWindow(dpy, window);
+		hidden = true;
 		foreach(c; children)
 			c.hide;
-		XUnmapWindow(dpy, window);
+		"hide split".log;
 	}
 
 	override Base add(Base client){
@@ -193,7 +205,6 @@ class Split: Container {
 		assert(!flatman.clients.canFind(client));
 		"split adding %s".format((cast(Client)client).name).log;
 		client.parent = this;
-		client.hidden = false;
 		if(clientActive < children.length){
 			children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
 			sizes = sizes[0..clientActive+1] ~ client.size.w ~ sizes[clientActive+1..$];
@@ -202,10 +213,7 @@ class Split: Container {
 			sizes ~= client.size.w;
 		}
 		assert(sizes.length == clients.length, "%s %s".format(clients.map!"a.name", sizes));
-		sizes.to!string.log;
 		rebuild;
-		if(hidden)
-			client.hide;
 		return client;
 	}
 
@@ -217,7 +225,6 @@ class Split: Container {
 		super.remove(client);
 		sizes = sizes[0..i] ~ sizes[i+1..$];
 		assert(sizes.length == clients.length, "%s %s".format(clients.map!"a.name", sizes));
-		sizes.to!string.log;
 		rebuild;
 	}
 
@@ -228,32 +235,31 @@ class Split: Container {
 
 	override void resize(int[2] size){
 		super.resize(size);
+		if(draw)
+			draw.resize(size);
 		rebuild;
 	}
 
 	void normalize(){
 		assert(sizes.length == clients.length, "%s %s".format(clients.map!"a.name", sizes));
 		double max = size.w-paddingOuter*2-paddingElem*(children.length-1);
+		foreach(ref s; sizes)
+			s = cast(int)s.min(max).max(10);
 		double cur = sizes.sum;
 		foreach(ref s; sizes)
 			s = (s*max/cur).lround;
-		foreach(i, ref s; sizes)
-			s = s.max(10, (cast(Client)children[i]).minw);
+		foreach(i, ref s; sizes){
+			auto minw = (cast(Client)children[i]).minw;
+			s = s.max(minw < max && minw > 10 ? minw : 10);
+		}
 		cur = sizes.sum;
 		foreach(ref s; sizes)
 			s = (s*max/cur).lround;
 	}
 
 	void rebuild(){
-		if(children.length && !hidden){
-			XMapWindow(dpy, window);
-		}else{
-			XUnmapWindow(dpy, window);
-			return;
-		}
 		normalize;
-		XMoveWindow(dpy, window, pos.x, pos.y);
-		XResizeWindow(dpy, window, size.w, size.h);
+		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
 		int offset = paddingOuter;
 		foreach(i, client; children){
 			(cast(Client)client).moveResize([
@@ -270,33 +276,33 @@ class Split: Container {
 	}
 
 	override void onDraw(){
-		draw.setColor("#"~config["split background"]);
-		draw.rect(0, 0, size.w, size.h);
+		if(hidden)
+			return;
+		draw.setColor(config.color("split background"));
+		draw.rect([0,0], size);
 		foreach(c; children){
 			auto client = cast(Client)c;
+			auto cpos = client.pos.a - pos;
+			cpos.y = size.h-cpos.y-client.size.h+1;
 			auto act = (client == monitor.active ? "active" : "normal");
-			draw.setColor("#"~config["split border " ~ act]);
+			draw.setColor(config.color("split border " ~ act));
 			draw.rect(
-					client.pos.x-pos.x-border,
-					client.pos.y-pos.y-border,
-					client.size.w+border+1,
-					client.size.h+border+1
+					cpos.a - [border,border],
+					client.size.a + [border+1,border+1]
 			);
 			if(titleHeight){
-				auto w = cast(int)draw.width(client.name)+border+1;
-				draw.clip(client.pos.a-pos-[border,border+titleHeight], [w, bh]);
+				auto w = cast(int)draw.width(client.name)+(border+1)*4;
+				//draw.clip(cpos.a-pos-[border,border+titleHeight], [w, bh]);
 				draw.rect(
-						client.pos.x-pos.x-border,
-						client.pos.y-pos.y-border-titleHeight,
-						w,
-						bh
+						cpos.a - [border,border-client.size.h],
+						[w,bh]
 				);
-				draw.setColor("#"~config["split title " ~ act]);
-				draw.text(client.name, [c.pos.x-pos.x+border+1, c.pos.y-pos.y-titleHeight]);
-				draw.noclip;
+				draw.setColor(config.color("split title " ~ act));
+				draw.text([cpos.x+border+1, cpos.y+size.h-titleHeight], titleHeight, client.name);
+				//draw.noclip;
 			}
 		}
-		draw.map(window, 0, 0, size.w, size.h);
+		draw.finishFrame;
 	}
 
 	void destroy(){

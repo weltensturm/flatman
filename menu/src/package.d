@@ -2,7 +2,12 @@ module dock;
 
 public import
 	core.thread,
+	core.sync.mutex,
+	std.parallelism,
 	std.process,
+	std.conv,
+	std.array,
+	std.regex,
 	std.algorithm,
 	std.datetime,
 	std.string,
@@ -10,7 +15,6 @@ public import
 	std.stdio,
 	std.file,
 	std.path,
-	std.conv,
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
@@ -28,10 +32,12 @@ public import
 	ws.x.draw,
 	ws.wm,
 	ws.gui.base,
+	ws.gui.tabs,
+	ws.gui.button,
+	ws.gui.list,
 	ws.gui.input,
 	ws.gui.point,
-	dock.draw,
+	desktop,
 	dock.dock,
-	dock.watcher,
 	dock.proputil;
 	

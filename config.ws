@@ -1,21 +1,5 @@
 
 
-$mod Mod1Mask
-
-keys {
-	$mod+d exec dinu -fn Consolas-10 -c ~/.dinu/$wsNum
-	$mod+return exec cd $(cat ~/.dinu/$wsNum) && terminator
-	$mod+j focus left
-	$mod+left focus left
-	$mod+; focus right
-	$mod+right focus right
-	$mod+k workspace down
-	$mod+down workspace down
-	$mod+l workspace up
-	$mod+up workspace up
-}
-
-
 split {
 	background 222222
 	border 2

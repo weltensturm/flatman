@@ -114,7 +114,7 @@ enum handler = [
 ];
 static bool running = true;
 bool restart = false;
-static Cur[CurLast] cursor;
+static ws.x.draw.Cur[CurLast] cursor;
 static Display* dpy;
 static Monitor monitor;
 static Monitor[] monitors;
@@ -122,6 +122,24 @@ static Window root;
 static Draw draw;
 Client previousFocus;
 Window[] unmanaged;
+
+enum handlerNames = [
+	ButtonPress: "ButtonPress",
+	ButtonRelease: "ButtonRelease",
+	ClientMessage: "ClientMessage",
+	ConfigureRequest: "ConfigureRequest",
+	ConfigureNotify: "ConfigureNotify",
+	DestroyNotify: "DestroyNotify",
+	EnterNotify: "EnterNotify",
+	Expose: "Expose",
+	FocusIn: "FocusIn",
+	KeyPress: "KeyPress",
+	MappingNotify: "MappingNotify",
+	MapRequest: "MapRequest",
+	MotionNotify: "MotionNotify",
+	PropertyNotify: "PropertyNotify",
+	UnmapNotify: "UnmapNotify",
+];
 
 void log(string s){
 	"/tmp/flatman.log".append(s ~ '\n');
@@ -131,13 +149,13 @@ void log(string s){
 
 void main(string[] args){
 	try{
-		if(args.length == 2 && args[1] == "-v")
-			throw new Exception(WM_NAME~", © Robert Luger");
-		else if(args.length != 1)
-			throw new Exception("usage: flatman [-v]");
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			writeln("warning: no locale support");
-		dpy = XOpenDisplay(null);
+		if(args.length >= 2)
+			dpy = cast(Display*)(args[$-1].to!long);
+		else
+			dpy = XOpenDisplay(null);
+		"using display %s".format(dpy).log;
 		if(!dpy)
 			throw new Exception("flatman: cannot open display");
 		XSynchronize(dpy, true);
@@ -158,11 +176,17 @@ void main(string[] args){
 		cleanup();
 	catch(Throwable t)
 		"cleanup error %s".format(t).log;
-	XCloseDisplay(dpy);
+	
 	if(restart){
 		"restart".log;
+		XSetCloseDownMode(dpy, CloseDownMode.RetainTemporary);
+		XCloseDisplay(dpy);
+		"created display %s".format(dpy).log;
+		dpy = XOpenDisplay(null);
+		args ~= (cast(long)dpy).to!string;
 		spawnProcess(args);
-	}
+	}else
+		XCloseDisplay(dpy);
 }
 
 
@@ -203,12 +227,12 @@ void setup(){
 	draw.load_fonts(fonts);
 	if (!draw.fonts.length)
 		throw new Exception("No fonts could be loaded.");
-	bh = cast(int)(draw.fonts[0].h*1.2).lround;
+	bh = cast(int)(draw.fonts[0].h*1.4).lround;
 	/* init atoms */
 	/* init cursors */
-	cursor[CurNormal] = new Cur(XC_left_ptr);
-	cursor[CurResize] = new Cur(XC_sizing);
-	cursor[CurMove] = new Cur(XC_fleur);
+	cursor[CurNormal] = new ws.x.draw.Cur(dpy, XC_left_ptr);
+	cursor[CurResize] = new ws.x.draw.Cur(dpy, XC_sizing);
+	cursor[CurMove] = new ws.x.draw.Cur(dpy, XC_fleur);
 
 	fillAtoms(wm);
 	fillAtoms(net);
@@ -247,6 +271,7 @@ void run(){
 	while(running && !XNextEvent(dpy, &ev)){
 		if(ev.type in handler){
 			try{
+				"event %s".format(handlerNames[ev.type]).log;
 				handler[ev.type](&ev);
 			}catch(Throwable t){
 				t.toString.log;
@@ -391,6 +416,9 @@ void onProperty(XEvent *e){
 				if(c == c.monitor.active)
 					c.monitor.draw;
 			},
+			net.state: {
+				c.updateType;
+			},
 			net.windowType: {
 				c.updateType;
 			},
@@ -422,24 +450,26 @@ void onConfigureRequest(XEvent* e){
 	XConfigureRequestEvent* ev = &e.xconfigurerequest;
 	Client c = wintoclient(ev.window);
 	if(c){
-		if(c.isFloating || c.global || c.isfullscreen){
+		if(ev.value_mask & CWWidth)
+			c.sizeFloating.w = c.size.w;
+		if(ev.value_mask & CWHeight)
+			c.sizeFloating.h = c.size.h;
+		if(ev.value_mask & CWX)
+			c.posFloating.x = c.pos.x;
+		if(ev.value_mask & CWY)
+			c.posFloating.y = c.pos.y;
+		if((c.isFloating || c.global) && !c.isfullscreen){
 			Monitor m = c.monitor;
-			if(ev.value_mask & CWWidth){
-				c.sizeOld.w = c.size.w;
+			if(ev.value_mask & CWWidth)
 				c.size.w = ev.width;
-			}
-			if(ev.value_mask & CWHeight){
-				c.sizeOld.h = c.size.h;
+			if(ev.value_mask & CWHeight)
 				c.size.h = ev.height;
-			}
 			if(ev.value_mask & CWX){
-				c.posOld.x = c.pos.x;
 				c.pos.x = m.pos.x + ev.x;
 				if(!c.global)
 					c.pos.x = c.pos.x.min(c.monitor.pos.x+c.monitor.size.w-c.size.w);
 			}
 			if(ev.value_mask & CWY){
-				c.posOld.y = c.pos.y;
 				c.pos.y = m.pos.y + ev.y;
 				if(!c.global)
 					c.pos.y = c.pos.y.min(c.monitor.pos.y+c.monitor.size.h-c.size.h);
@@ -450,8 +480,9 @@ void onConfigureRequest(XEvent* e){
 			}
 			if(c.isVisible)
 				XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
-		}else
+		}else{
 			c.configure;
+		}
 	}else{
 		XWindowChanges wc;
 		wc.x = ev.x;
@@ -533,7 +564,6 @@ void onMapRequest(XEvent *e){
 	}
 	if(!wintoclient(ev.window)){
 		try{
-			XMapWindow(dpy, ev.window);
 			manage(ev.window, &wa);
 		}catch(Throwable t){
 			t.toString.log;
@@ -567,8 +597,12 @@ Client[] clients(){
 	return monitor.clients;
 }
 
+Client[] clientsVisible(){
+	return monitor.clientsVisible;
+}
+
 void restack(){
-	foreach(c; clients)
+	foreach(c; clientsVisible)
 		c.raise;
 	foreach(w; unmanaged)
 		XRaiseWindow(dpy, w);
@@ -683,6 +717,8 @@ void killclient(Client client=null){
 void manage(Window w, XWindowAttributes* wa){
 	if(!w)
 		throw new Exception("No window given");
+	if(wintoclient(w))
+		return;
 	auto c = new Client(w, monitor);
 	Window trans = None;
 	XWindowChanges wc;
@@ -700,8 +736,7 @@ void manage(Window w, XWindowAttributes* wa){
 		c.isFloating = c.oldstate = trans != None || c.isfixed;
 	if(c.monitor == monitor)
 		unfocus(monitor.active, false);
-	if(!clients.canFind(c))
-		c.monitor.add(c, c.originWorkspace);
+	c.monitor.add(c, c.originWorkspace);
 	XChangeProperty(dpy, root, net.clientList, XA_WINDOW, 32, PropModeAppend,
 	                cast(ubyte*)&c.win, 1);
 	XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
@@ -739,7 +774,6 @@ void scan(){
 				continue;
 			if(wa.map_state == IsViewable || getstate(wins[i]) == IconicState){
 				manage(wins[i], &wa);
-				XMapWindow(dpy, wins[i]);
 			}
 		}
 		for(i = 0; i < num; i++){
@@ -749,7 +783,6 @@ void scan(){
 			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)){
 				try{
 					manage(wins[i], &wa);
-					XMapWindow(dpy, wins[i]);
 				}catch(Throwable t)
 					t.toString.log;
 			}
@@ -760,22 +793,20 @@ void scan(){
 }
 
 void togglefloating(){
-	auto client = monitor.active;
+	auto client = active;
 	if(!client)
 		return;
-	//if(client.isfullscreen) /* no support for fullscreen windows */
-	//	return;
 	client.isFloating = !client.isFloating;
 	if(client.isFloating){
-		client.moveResize(client.posOld, client.sizeOld);
+		client.moveResize(client.posFloating, client.sizeFloating);
 	}
 	monitor.remove(client);
-	monitor.add(client);
+	monitor.add(client, monitor.workspaceActive);
 	client.focus;
 }
 
 void togglefullscreen(){
-	auto client = monitor.active;
+	auto client = active;
 	if(!client)
 		return;
 	client.setfullscreen(!client.isfullscreen);
@@ -788,7 +819,7 @@ void onUnmap(XEvent *e){
 		if(ev.send_event)
 			c.setState(WithdrawnState);
 		else
-			unmanage(c, !c.hidden);
+			c.unmanage;
 	}
 }
 
@@ -930,14 +961,14 @@ void cleanup(){
 		foreach(c; ws.clients){
 			if(!restart)
 				killclient(c);
-			unmanage(c, false);
+			c.unmanage(true);
 		}
 		ws.destroy;
 	}
 	monitor.destroy;
 	draw.destroy;
 	foreach(c; cursor)
-		c.destroy;
+		c.destroy(dpy);
 	XSync(dpy, false);
 	XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
 	XDeleteProperty(dpy, root, net.windowActive);
