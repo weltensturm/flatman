@@ -179,6 +179,7 @@ class WorkspaceView: Base {
 	long id;
 	WorkspaceDock dock;
 	string name = "~";
+	bool preview;
 
 	this(WorkspaceDock dock, long id){
 		this.dock = dock;
@@ -193,17 +194,17 @@ class WorkspaceView: Base {
 	void update(){
 		foreach(c; children)
 			remove(c);
-		auto scale = (size.w-20) / cast(double)dock.screenSize.get(2).w;
+		auto scale = (size.w-10) / cast(double)dock.screenSize.get(2).w;
 		if(id in dock.desktops)
 			foreach(w; dock.desktops[id]){
-				auto wv = addNew!WindowIcon;
+				auto wv = addNew!WindowIcon(w, cast(int)id);
 				wv.moveLocal([
-					7 + cast(int)(w.x*scale).lround,
-					5 + cast(int)(w.y*scale).lround
+					5+cast(int)(w.x*scale).lround,
+					5+cast(int)(w.y*scale).lround
 				]);
 				wv.resize([
-					4 + cast(int)(w.width*scale).lround,
-					6 + cast(int)(w.height*scale).lround
+					cast(int)(w.width*scale).lround-5,
+					cast(int)(w.height*scale).lround-5
 				]);
 			}
 		try{
@@ -211,14 +212,28 @@ class WorkspaceView: Base {
 		}catch{}
 	}
 
-	override bool canDrop(Base base){
-		return true;
+	override Base dropTarget(int x, int y, Base draggable){
+		if(typeid(draggable) is typeid(Ghost))
+			return this;
+		return super.dropTarget(x, y, draggable);
+	}
+
+	override void dropPreview(int x, int y, Base draggable, bool start){
+		preview = start;
+	}
+
+	override void drop(int x, int y, Base draggable){
+		auto ghost = cast(Ghost)draggable;
+		writeln("requesting window move to ", id);
+		new CardinalProperty(ghost.window.window, "_NET_WM_DESKTOP").request([id,2]);
+		dock.update;
+		preview = false;
 	}
 
 	override void onDraw(){
 		dock.draw.setColor([0.1,0.1,0.1]);
 		dock.draw.rect(pos, size);
-		auto m = id == dock.currentDesktop.get ? 3 : 1;
+		auto m = (preview || id == dock.currentDesktop.get) ? 3 : 1;
 		if(id in dock.desktops)
 			dock.draw.setColor([0.3*m,0.3*m,0.3*m]);
 		else
@@ -247,21 +262,22 @@ class WindowIcon: Base {
 
 	Base dragGhost;
 	int[2] dragOffset;
+	Base dropTarget;
+
+	WindowData window;
+	int desktop;
+
+	this(WindowData window, int desktop){
+		this.window = window;
+		this.desktop = desktop;
+	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		writeln("wat");
 		if(button == Mouse.buttonLeft){
-			if(pressed){
-				dragGhost = drag([x,y].a - pos);
-				writeln(dragOffset, ' ', pos, ' ', [x,y]);
-				add(dragGhost);
-				dragGhost.move([x,y].a - dragOffset);
-				dragGhost.resize(size);
-				writeln("dragStart");
-			}else if(dragGhost){
-				writeln(root.canDrop(this));
-				stdout.flush;
-				remove(dragGhost);
+			if(!pressed && dragGhost){
+				root.remove(dragGhost);
+				if(dropTarget)
+					dropTarget.drop(x, y, dragGhost);
 				dragGhost = null;
 			}
 		}
@@ -270,21 +286,36 @@ class WindowIcon: Base {
 
 	override Base drag(int[2] offset){
 		dragOffset = offset;
-		return new Ghost;
+		return new Ghost(window, desktop);
 	}
 
 	override void onMouseMove(int x, int y){
+		if(buttons.get(Mouse.buttonLeft, false) && !dragGhost){
+			dragGhost = drag([x,y].a - pos);
+			writeln(dragOffset, ' ', pos, ' ', [x,y]);
+			root.add(dragGhost);
+			root.setTop(dragGhost);
+			dragGhost.resize(size);
+			writeln("dragStart");
+		}
 		if(dragGhost){
 			dragGhost.move([x,y].a - dragOffset);
+			if(root.dropTarget(x, y, dragGhost) != dropTarget){
+				if(dropTarget)
+					dropTarget.dropPreview(x, y, dragGhost, false);
+				dropTarget = root.dropTarget(x, y, dragGhost);
+				if(dropTarget)
+					dropTarget.dropPreview(x, y, dragGhost, true);
+			}
 		}
 		super.onMouseMove(x, y);
 	}
 
 	override void onDraw(){
+		if(dragGhost)
+			return;
 		draw.setColor([0.4,0.4,0.4]);
 		draw.rect(pos, size);
-		draw.setColor([1,0,0]);
-		draw.rect(cursorPos, [5,5]);
 		super.onDraw;
 	}
 
@@ -292,6 +323,14 @@ class WindowIcon: Base {
 
 
 class Ghost: Base {
+
+	WindowData window;
+	int desktopSource;
+
+	this(WindowData window, int desktopSource){
+		this.window = window;
+		this.desktopSource = desktopSource;
+	}
 
 	override void onDraw(){
 		draw.setColor([0.6,0.6,0.6]);

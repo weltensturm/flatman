@@ -72,13 +72,13 @@ class Client: Base {
 	}
 
 	void moveResize(int[2] pos, int[2] size){
-		if(hidden)
-			return;
 		pos.x = pos.x.max(0);
 		pos.y = pos.y.max(0);
 		size.w = size.w.max(1);
 		size.h = size.h.max(1);
 		XWindowChanges wc;
+		if(this.pos == pos && this.size == size)
+			return;
 		this.pos = pos;
 		this.size = size;
 		wc.x = pos.x;

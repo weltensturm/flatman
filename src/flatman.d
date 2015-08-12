@@ -439,6 +439,7 @@ void onConfigure(XEvent *e){
 		sw = ev.width;
 		sh = ev.height;
 		if(updategeom() || dirty){
+			"updating desktop size".log;
 			draw.resize(sw, sh);
 			monitor.resize([sw, sh]);
 			restack;
@@ -730,7 +731,7 @@ void manage(Window w, XWindowAttributes* wa){
 		c.monitor = monitor;
 		c.applyRules;
 	}
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|PointerMotionMask|KeyReleaseMask);
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask);
 	c.grabbuttons(false);
 	if(!c.isFloating)
 		c.isFloating = c.oldstate = trans != None || c.isfixed;
