@@ -49,12 +49,14 @@ class Client: Base {
 		"hide %s".format(name).log;
 		hidden = true;
 		XUnmapWindow(dpy, win);
+		XSync(dpy, false);
 	}
 
 	override void show(){
 		"show %s".format(name).log;
 		hidden = false;
 		XMapWindow(dpy, win);
+		XSync(dpy, false);
 	}
 
 	void raise(){
@@ -174,6 +176,14 @@ class Client: Base {
 			maxa = cast(float)size.max_aspect.x / size.max_aspect.y;
 		}else
 			maxa = mina = 0.0;
+		if(minw > int.max || minw < 0)
+			minw = 0;
+		if(maxw > int.max || maxw < 0)
+			maxw = 0;
+		if(minh > int.max || minh < 0)
+			minh = 0;
+		if(maxh > int.max || maxh < 0)
+			maxh = 0;
 		isfixed = (maxw && minw && maxh && minh && maxw == minw && maxh == minh);
 	}
 
@@ -438,6 +448,9 @@ long[4] getStrut(Client client){
 		assert(count == 12);
 		auto array = (cast(CARDINAL*)data)[0..12];
 		XFree(data);
+		"found strut %s %s".format(client.name, array);
+		if(array.any!"a < 0")
+			return [0,0,0,0];
 		return array[0..4];
 	}
 	return [0,0,0,0];

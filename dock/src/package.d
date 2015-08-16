@@ -4,6 +4,7 @@ public import
 	core.thread,
 	std.process,
 	std.algorithm,
+	std.array,
 	std.datetime,
 	std.string,
 	std.math,

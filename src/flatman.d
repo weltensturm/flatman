@@ -209,9 +209,7 @@ Atom atom(string n){
 }
 
 void setup(){
-	/* clean up any zombies immediately */
 	xerrorfatalxlib = XSetIOErrorHandler(&xerrorfatal);
-	sigchld(0);
 
 	/* init screen */
 	screen = DefaultScreen(dpy);
@@ -475,10 +473,12 @@ void onConfigureRequest(XEvent* e){
 				if(!c.global)
 					c.pos.y = c.pos.y.min(c.monitor.pos.y+c.monitor.size.h-c.size.h);
 			}
+			/+
 			if((ev.value_mask & (CWX|CWY))){
 				if(!(ev.value_mask & (CWWidth|CWHeight)))
 					c.configure;
 			}
+			+/
 			if(c.isVisible)
 				XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
 		}else{

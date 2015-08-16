@@ -9,14 +9,21 @@ ulong root;
 
 extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
 
+
+WorkspaceDock dockWindow;
+
+Composite composite;
+
+
 void main(){
 	xerrorxlib = XSetErrorHandler(&xerror);
-	auto wsdock = new WorkspaceDock(400, 300, "flatman-dock");
-	wm.add(wsdock);
+	dockWindow = new WorkspaceDock(400, 300, "flatman-dock");
+	composite = new Composite;
+	wm.add(dockWindow);
 	while(wm.hasActiveWindows){
 		wm.processEvents;
-		wsdock.onDraw;
-		wsdock.tick;
+		dockWindow.onDraw;
+		dockWindow.tick;
 		Thread.sleep(10.msecs);
 	}
 }
@@ -26,10 +33,118 @@ Atom atom(string name){
 	return XInternAtom(dpy, name.toStringz, false);
 }
 
-struct WindowData {
-	x11.X.Window window;
-	int x, y, width, height;
+
+class CompositeClient: ws.wm.Window {
+	
+	bool hasAlpha;
+	Picture picture;
+	Pixmap pixmap;
+	
+	this(x11.X.Window window, int[2] pos, int[2] size){
+		this.pos = pos;
+		this.size = size;
+		super(window);
+		XSelectInput(wm.displayHandle, windowHandle, StructureNotifyMask);
+		isActive = true;
+		createPicture;
+	}
+	
+	void createPicture(){
+		XWindowAttributes attr;
+		XGetWindowAttributes(dpy, windowHandle, &attr);
+    	XRenderPictFormat *format = XRenderFindVisualFormat(dpy, attr.visual);
+		hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
+		XRenderPictureAttributes pa;
+		pa.subwindow_mode = IncludeInferiors;
+		auto pixmap = XCompositeNameWindowPixmap(dpy, windowHandle);
+		picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
+		auto screen = dockWindow.screenSize.get(2);
+		auto scale = 1.0/(dockWindow.desktopCount.get);
+		// Scaling matrix
+		XTransform xform = {[
+		    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
+		    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed(     0 )],
+		    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
+		]};
+		XRenderSetPictureTransform(dpy, picture, &xform);
+		XRenderSetPictureFilter(dpy, picture, FilterBilinear, null, 0);
+	}
+	
+	override void move(int[2] pos){
+		this.pos = pos;
+	}
+
+	override void resize(int[2] size){
+		this.size = size;
+		XFreePixmap(dpy, pixmap);
+		createPicture;
+	}
+	
+	override void processEvent(Event e){
+		assert(e.xany.window == windowHandle);
+		super.processEvent(e);
+	}
+
+	override void onShow(){
+		createPicture;
+	}
+
 }
+
+
+class Composite {
+
+	this(){
+		foreach(i; 0..ScreenCount(dpy))
+		    XCompositeRedirectSubwindows(dpy, RootWindow(dpy, i), 0);
+    	XWindowAttributes attr;
+		XGetWindowAttributes(dpy, dockWindow.windowHandle, &attr);
+    	XRenderPictFormat *format = XRenderFindVisualFormat(dpy, attr.visual);
+		XRenderPictureAttributes pa;
+		pa.subwindow_mode = IncludeInferiors; // Don't clip child widgets
+		dockWindow.picture = XRenderCreatePicture(dpy, (cast(XDraw)dockWindow._draw).drawable, format, CPSubwindowMode, &pa);
+	}
+
+	void draw(CompositeClient window, int[2] pos, int[2] size){
+		XRenderComposite(
+			dpy,
+			window.hasAlpha ? PictOpOver : PictOpSrc,
+			window.picture,
+			None,
+            dockWindow.picture,
+            0, 0,
+            0, 0,
+            pos.x, dockWindow.size.h-pos.y-size.h,
+            size.w, size.h
+        );
+	}
+
+
+}
+
+
+class Watcher(T) {
+
+	T[] data;
+
+	void check(T[] data){
+		data = data.sort!"a < b".array;
+		if(this.data != data){
+			foreach(delta; data.setDifference(this.data))
+				foreach(event; add)
+					event(delta);
+			foreach(delta; this.data.setDifference(data))
+				foreach(event; remove)
+					event(delta);
+			this.data = data;
+		}
+	}
+
+	void delegate(T)[] add;
+	void delegate(T)[] remove;
+
+}
+
 
 class WorkspaceDock: ws.wm.Window {
 
@@ -44,12 +159,18 @@ class WorkspaceDock: ws.wm.Window {
 	long showTime;
 	bool focus;
 
-	WindowData[][long] desktops;
+	CompositeClient[][long] desktops;
 
 	Pid launcher;
 
+	Watcher!(x11.X.Window) windowWatcher;
+
+	CompositeClient[] windows;
+
+	Picture picture;
+
 	this(int w, int h, string title){
-		dpy = XOpenDisplay(null);
+		dpy = wm.displayHandle;
 		dock.root = XDefaultRootWindow(dpy);
 		screenSize = new CardinalListProperty(dock.root, "_NET_DESKTOP_GEOMETRY");
 		currentDesktop = new CardinalProperty(dock.root, "_NET_CURRENT_DESKTOP");
@@ -59,6 +180,21 @@ class WorkspaceDock: ws.wm.Window {
 		auto count = desktopCount.get;
 		w = cast(int)(screen.w/count);
 		super(w, cast(int)screen.h, title);
+		windowWatcher = new Watcher!(x11.X.Window);
+		windowWatcher.add ~= (window){
+			if(window == windowHandle)
+				return;
+			writeln("found window ", window);
+			XWindowAttributes wa;
+			XGetWindowAttributes(dpy, window, &wa);
+			auto client = new CompositeClient(window, [wa.x,wa.y], [wa.width,wa.height]);
+			windows ~= client;
+			wm.add(client);
+		};
+		windowWatcher.remove ~= (window){
+			auto client = windows.find!((a)=>a.windowHandle==window)[0];
+			windows = windows.filter!((a)=>a != client).array;
+		};
 	}
 
 	override void gcInit(){}
@@ -106,13 +242,10 @@ class WorkspaceDock: ws.wm.Window {
 
 	void update(){
 		desktops = desktops.init;
+		windowWatcher.check(clients.get(-1));
 		XSync(dpy, false);
-		foreach(client; clients.get(-1)){
-			auto ws = new CardinalProperty(client, "_NET_WM_DESKTOP");
-			XWindowAttributes wa;
-			XGetWindowAttributes(dpy, client, &wa);
-			desktops[ws.get] ~= WindowData(client, wa.x, wa.y, wa.width, wa.height);
-		}
+		foreach(window; windows)
+			desktops[new CardinalProperty(window.windowHandle, "_NET_WM_DESKTOP").get] ~= window;
 		foreach(c; children)
 			remove(c);
 		auto count = desktopCount.get;
@@ -160,17 +293,6 @@ class WorkspaceDock: ws.wm.Window {
 		}
 	}
 
-	void runLauncher(WorkspaceView view){
-		try
-			if(launcher){
-				launcher.kill;
-				launcher.wait;
-				launcher = null;
-			}
-		catch{}
-		launcher = spawnProcess(["flatman-menu", view.id.to!string, (pos.x-200).to!string, (screenSize.get(2).h-view.pos.y-view.size.h).to!string]);
-	}
-	
 }
 
 
@@ -194,17 +316,17 @@ class WorkspaceView: Base {
 	void update(){
 		foreach(c; children)
 			remove(c);
-		auto scale = (size.w-10) / cast(double)dock.screenSize.get(2).w;
+		auto scale = (size.w-14) / cast(double)dock.screenSize.get(2).w;
 		if(id in dock.desktops)
 			foreach(w; dock.desktops[id]){
 				auto wv = addNew!WindowIcon(w, cast(int)id);
 				wv.moveLocal([
-					5+cast(int)(w.x*scale).lround,
-					5+cast(int)(w.y*scale).lround
+					7+cast(int)(w.pos.x*scale).lround,
+					5+cast(int)(w.pos.y*scale).lround
 				]);
 				wv.resize([
-					cast(int)(w.width*scale).lround-5,
-					cast(int)(w.height*scale).lround-5
+					cast(int)(w.size.w*scale).lround+1,
+					cast(int)(w.size.h*scale).lround-5
 				]);
 			}
 		try{
@@ -225,7 +347,7 @@ class WorkspaceView: Base {
 	override void drop(int x, int y, Base draggable){
 		auto ghost = cast(Ghost)draggable;
 		writeln("requesting window move to ", id);
-		new CardinalProperty(ghost.window.window, "_NET_WM_DESKTOP").request([id,2]);
+		new CardinalProperty(ghost.window.windowHandle, "_NET_WM_DESKTOP").request([id,2]);
 		dock.update;
 		preview = false;
 	}
@@ -264,10 +386,10 @@ class WindowIcon: Base {
 	int[2] dragOffset;
 	Base dropTarget;
 
-	WindowData window;
+	CompositeClient window;
 	int desktop;
 
-	this(WindowData window, int desktop){
+	this(CompositeClient window, int desktop){
 		this.window = window;
 		this.desktop = desktop;
 	}
@@ -314,8 +436,7 @@ class WindowIcon: Base {
 	override void onDraw(){
 		if(dragGhost)
 			return;
-		draw.setColor([0.4,0.4,0.4]);
-		draw.rect(pos, size);
+		composite.draw(window, pos, size);
 		super.onDraw;
 	}
 
@@ -324,24 +445,21 @@ class WindowIcon: Base {
 
 class Ghost: Base {
 
-	WindowData window;
+	CompositeClient window;
 	int desktopSource;
 
-	this(WindowData window, int desktopSource){
+	this(CompositeClient window, int desktopSource){
 		this.window = window;
 		this.desktopSource = desktopSource;
 	}
 
 	override void onDraw(){
-		draw.setColor([0.6,0.6,0.6]);
-		draw.rect(pos, size);
+		composite.draw(window, pos, size);
 	}
 
 }
 
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
-	if(ee.error_code == XErrorCode.BadWindow)
-		return 0;
-	return xerrorxlib(dpy, ee); /* may call exit */
+	return 0;
 }

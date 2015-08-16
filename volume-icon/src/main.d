@@ -2,6 +2,7 @@ module icon;
 
 import
 	std.algorithm,
+	std.array,
 	std.regex,
 	std.process,
 	std.stdio,
@@ -18,40 +19,47 @@ import
 	gtk.Scale,
 	gtk.Label,
 	gtk.RadioButton,
+	gtk.Table,
+	gtk.Notebook,
 	gtk.DrawingArea,
 	gtk.StatusIcon,
+	gtk.Separator,
 	gtk.IconTheme,
 	gtk.MainWindow;
 
 
 
-class DeviceViewer: VBox {
+class DeviceViewer: Scale {
 
 	Device device;
 
 	this(Device device){
-		super(true, 0);
+		super(GtkOrientation.HORIZONTAL, 0, 100, 1);
 		this.device = device;
-		auto scale = new Scale(GtkOrientation.HORIZONTAL, 0, 100, 1);
-		scale.setValue(cast(long)(device.volume*100));
-		scale.addOnValueChanged((range){
-			device.setVolume(scale.getValue/100.0);
+		setShowFillLevel(false);
+		setValue(cast(long)(device.volume*100));
+		addOnValueChanged((range){
+			device.setVolume(getValue/100.0);
 		});
-		packStart(scale, false, false, 0);
+		setMinSliderSize(100);
 	}
 
 }
 
 
-class DeviceContainer: VBox {
+class DeviceContainer: Table {
 
 	Device[] devices;
+	Device[] apps;
 
-	this(Device[] devices, string label){
-		super(true, 0);
+	this(Device[] devices, Device[] apps){
+		super(cast(uint)(devices.length+apps.length+1), 2, 0);
 		this.devices = devices;
+		this.apps = apps;
+		setBorderWidth(10);
+		setColSpacings(10);
 		RadioButton radio;
-		packStart(new Label(label), false, false, 0);
+		int row;
 		devices.each!((Device device){
 			if(!radio)
 				radio = new RadioButton(cast(ListSG)null, device.name);
@@ -59,28 +67,80 @@ class DeviceContainer: VBox {
 				radio = new RadioButton(radio, device.name);
 			if(device.selected)
 				radio.setActive(true);
-			packStart(radio, false, false, 0);
+			attach(
+				radio,
+				0, 1,
+				row, row+1,
+				GtkAttachOptions.FILL, GtkAttachOptions.SHRINK,
+				0, 0
+			);
 			radio.addOnToggled((self){
 				if(!radio && self.getActive){
 					device.select;
 				}
 			});
-			packStart(new DeviceViewer(device), false, false, 0);
+			auto deviceViewer = new DeviceViewer(device);
+			deviceViewer.setSizeRequest(50, 0);
+			attach(
+				deviceViewer,
+				1, 2,
+				row, row+1,
+				GtkAttachOptions.FILL|GtkAttachOptions.EXPAND, GtkAttachOptions.SHRINK,
+				0, 0
+			);
+			row++;
 		});
 		radio = null;
+		attach(
+			new Separator(GtkOrientation.VERTICAL), 0, 2, row, row+1, 
+			GtkAttachOptions.EXPAND|GtkAttachOptions.FILL, GtkAttachOptions.SHRINK,
+			10, 10
+		);
+		row++;
+		apps.each!((Device device){
+			auto label = new Label(device.name);
+			label.setJustify(GtkJustification.LEFT);
+			attach(
+				label,
+				0, 1,
+				row, row+1,
+				GtkAttachOptions.SHRINK, GtkAttachOptions.SHRINK,
+				0, 0
+			);
+			auto deviceViewer = new DeviceViewer(device);
+			deviceViewer.setSizeRequest(50, 0);
+			attach(
+				deviceViewer,
+				1, 2,
+				row, row+1,
+				GtkAttachOptions.FILL|GtkAttachOptions.EXPAND, GtkAttachOptions.SHRINK,
+				0, 0
+			);
+			row++;
+		});
 	}
 
 }
 
-
 void spawnMainWindow(GdkRectangle area, int iconSize){
 	auto w = new MainWindow("Sound Settings");
 	w.setModal(true);
-	w.setDefaultSize(300, cast(int)(sinks.length+sources.length*40+20));
+	w.setBorderWidth(2);
+	w.setDefaultSize(300, cast(int)(sinks.length+sources.length*40));
+	/+
 	auto vbox = new VBox(true, 0);
 	vbox.packStart(new DeviceContainer(sinks, "Output"), false, false, 0);
 	vbox.packStart(new DeviceContainer(sources, "Input"), false, false, 0);
 	w.add(vbox);
+	+/
+	auto nb = new Notebook;
+	auto sinks = sinks.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
+	auto sources = sources.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
+	auto appsInput = appsInput.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
+	auto appsOutput = appsOutput.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
+	nb.appendPage(new DeviceContainer(sinks.array, appsOutput.array), "Output");
+	nb.appendPage(new DeviceContainer(sources.array, appsInput.array), "Input");
+	w.add(nb);
 	w.grabFocus;
 	w.addOnFocusOut((GdkEventFocus* c, w){
 		w.hide;
@@ -142,9 +202,9 @@ string run(string command){
 
 
 Device[] sinks(){
-	auto p = pipeShell("pactl list sinks");
+	auto p = executeShell("pactl list sinks");
 	Device[] devices;
-	foreach(s; p.stdout.byLine){
+	foreach(s; p.output.splitLines){
 		if(s.canFind("Sink #")){
 			devices ~= new Sink;
 			devices[$-1].index = s.matchFirst(r"Sink #([0-9]+)")[1].to!int;
@@ -162,9 +222,9 @@ Device[] sinks(){
 }
 
 Device[] sources(){
-	auto p = pipeShell("pactl list sources");
+	auto p = executeShell("pactl list sources");
 	Device[] devices;
-	foreach(s; p.stdout.byLine){
+	foreach(s; p.output.splitLines){
 		if(s.canFind("Source #")){
 			devices ~= new Source;
 			devices[$-1].index = s.matchFirst(r"Source #([0-9]+)")[1].to!int;
@@ -175,7 +235,6 @@ Device[] sources(){
 				devices[$-1].name = s.matchFirst(`device.description = "(.*)"`)[1].to!string;
 			}else if(s.canFind("Base Volume: ")){
 				devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
-				writeln(devices[$-1].volume);
 			}
 		}
 	}
@@ -183,8 +242,8 @@ Device[] sources(){
 }
 
 Device selected(Device[] sinks){
-	auto p = pipeShell("pactl info");
-	foreach(s; p.stdout.byLine){
+	auto p = executeShell("pactl info");
+	foreach(s; p.output.splitLines){
 		if(s.canFind("Default Sink:")){
 			auto name = s.matchFirst(r"Default Sink: (.*)")[1];
 			foreach(sink; sinks){
@@ -195,6 +254,43 @@ Device selected(Device[] sinks){
 	}
 	return null;
 }
+
+
+Device[] appsInput(){
+	auto p = executeShell("pactl list source-outputs");
+	Device[] devices;
+	foreach(s; p.output.splitLines){
+		if(s.canFind("Source Output #")){
+			devices ~= new AppOutput;
+			devices[$-1].index = s.matchFirst(r"Source Output #([0-9]+)")[1].to!int;
+			devices[$-1].name = "unknown";
+		}else if(s.canFind("application.name")){
+			devices[$-1].name = s.matchFirst(`application.name = "(.*)"`)[1].to!string;
+		}else if(s.canFind("Volume: ")){
+			devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
+		}
+	}
+	return devices;
+}
+
+
+Device[] appsOutput(){
+	auto p = executeShell("pactl list sink-inputs");
+	Device[] devices;
+	foreach(s; p.output.splitLines){
+		if(s.canFind("Sink Input #")){
+			devices ~= new AppOutput;
+			devices[$-1].index = s.matchFirst(r"Sink Input #([0-9]+)")[1].to!int;
+			devices[$-1].name = "unknown";
+		}else if(s.canFind("application.name")){
+			devices[$-1].name = s.matchFirst(`application.name = "(.*)"`)[1].to!string;
+		}else if(s.canFind("Volume: ")){
+			devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
+		}
+	}
+	return devices;
+}
+
 
 class Device {
 
@@ -215,8 +311,8 @@ class Sink: Device {
 
 	override void select(){
 		"pactl set-default-sink %s".format(systemName).run;
-		auto p = pipeShell("pactl list sink-inputs");
-		foreach(s; p.stdout.byLine){
+		auto p = executeShell("pactl list sink-inputs");
+		foreach(s; p.output.splitLines){
 			if(s.canFind("Sink Input #")){
 				"pactl move-sink-input %s %s".format(s.matchFirst("Sink Input #([0-9]+)")[1], systemName).run;
 			}
@@ -229,8 +325,8 @@ class Sink: Device {
 	}
 
 	override bool selected(){
-		auto p = pipeShell("pactl info");
-		foreach(s; p.stdout.byLine){
+		auto p = executeShell("pactl info");
+		foreach(s; p.output.splitLines){
 			if(s.canFind("Default Sink:")){
 				auto name = s.matchFirst(r"Default Sink: (.*)")[1];
 				return systemName == name;
@@ -245,8 +341,8 @@ class Source: Device {
 
 	override void select(){
 		"pactl set-default-source %s".format(systemName).run;
-		auto p = pipeShell("pactl list source-outputs");
-		foreach(s; p.stdout.byLine){
+		auto p = executeShell("pactl list source-outputs");
+		foreach(s; p.output.splitLines){
 			if(s.canFind("Source Output #")){
 				"pactl move-source-output %s %s".format(s.matchFirst("Source Output #([0-9]+)")[1], systemName).run;
 			}
@@ -262,4 +358,22 @@ class Source: Device {
 		auto p = executeShell("pactl info");
 		return p.output.canFind("Default Source: %s".format(systemName));
 	}
+}
+
+class AppInput: Device {
+
+	override void setVolume(double volume){
+		"pactl set-source-output-volume %s %s%%".format(index, (volume*100).lround).run;
+		this.volume = volume;
+	}
+
+}
+
+class AppOutput: Device {
+
+	override void setVolume(double volume){
+		"pactl set-sink-input-volume %s %s%%".format(index, (volume*100).lround).run;
+		this.volume = volume;
+	}
+
 }

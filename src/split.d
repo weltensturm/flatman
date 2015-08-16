@@ -232,6 +232,9 @@ class Split: Container {
 	}
 
 	override void resize(int[2] size){
+		"split resize %s".format(size).log;
+		if(size.w < 0 || size.h < 0)
+			throw new Exception("workspace size invalid");
 		super.resize(size);
 		if(draw)
 			draw.resize(size);
@@ -240,6 +243,8 @@ class Split: Container {
 
 	void normalize(){
 		long max = size.w-paddingOuter*2-paddingElem*(children.length-1);
+		"split normalizing %s with size %s, max %s".format(sizes, size, max).log;
+		max = max.max(400);
 		foreach(ref s; sizes)
 			s = s.min(max).max(10);
 		double cur = sizes.sum;
@@ -247,12 +252,14 @@ class Split: Container {
 			s = (s*max/cur).lround;
 		foreach(i, ref s; sizes){
 			auto minw = cast(long)(cast(Client)children[i]).minw;
-			if(minw > 10 && minw < max)
+			if(minw > 10 && minw < max && s < minw)
 				s = minw;
 		}
 		cur = sizes.sum;
-		foreach(ref s; sizes)
+		foreach(ref s; sizes){
+			auto old = s;
 			s = (s*max/cur).lround;
+		}
 		"split normalized %s".format(sizes).log;
 	}
 

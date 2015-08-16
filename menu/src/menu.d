@@ -45,6 +45,32 @@ string[] bangSplit(string text){
 CardinalListProperty screenSize;
 CardinalProperty currentDesktop;
 
+
+class Scheduler {
+
+	struct Event {
+		long msecs;
+		void delegate() callback;
+	}
+
+	Event[] events;
+
+	void tick(){
+		foreach(event; events.dup){
+			if(event.msecs <= Clock.currSystemTick.msecs){
+				events = events.without(event);
+				event.callback();
+			}
+		}
+	}
+
+	void queue(long msecs, void delegate() callback){
+		events ~= Event(msecs, callback);
+	}
+
+}
+
+
 class Menu: ws.wm.Window {
 
 	AtomListProperty state;
@@ -60,6 +86,8 @@ class Menu: ws.wm.Window {
 	bool active;
 
 	DesktopEntry[][string] appCategories;
+
+	Scheduler scheduler;
 
 	this(int w, int h, string title){
 		dpy = XOpenDisplay(null);
@@ -89,7 +117,16 @@ class Menu: ws.wm.Window {
 			}
 		}
 
-		writeln("insanity: ", appCategories.length);
+		scheduler = new Scheduler;
+
+		void delegate() keepRaised;
+		keepRaised = {
+			XRaiseWindow(dpy, windowHandle);
+			scheduler.queue(Clock.currSystemTick.msecs + 5000, keepRaised);
+		};
+
+		scheduler.queue(Clock.currSystemTick.msecs + 5000, keepRaised);
+
 
 	}
 
