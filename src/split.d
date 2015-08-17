@@ -243,7 +243,6 @@ class Split: Container {
 
 	void normalize(){
 		long max = size.w-paddingOuter*2-paddingElem*(children.length-1);
-		"split normalizing %s with size %s, max %s".format(sizes, size, max).log;
 		max = max.max(400);
 		foreach(ref s; sizes)
 			s = s.min(max).max(10);

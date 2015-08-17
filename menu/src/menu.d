@@ -132,7 +132,7 @@ class Menu: ws.wm.Window {
 
 	override void drawInit(){
 		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
-		_draw.setFont("Consolas:size=10", 0);
+		_draw.setFont("Ubuntu Mono:size=10", 0);
 	}
 
 	override void gcInit(){}
@@ -174,12 +174,16 @@ class Menu: ws.wm.Window {
 			active = focus;
 			remove(tabs);
 			tabs = addNew!Categories;
-			tabs.addPage("Desktop %d".format(currentDesktop.get), new ListFrequent);
+			auto contextTabButton = new TabButton(context.baseName);
+			tabs.addPage(contextTabButton, new Base);
+			contextTabButton.title.style.fg = [0.6,0.6,0.6,1];
+			tabs.addPage("Files", new ListFiles);
+			tabs.addPage("History", new ListFrequent);
 			foreach(name, apps; appCategories){
 				tabs.addPage(name, new ListDesktop(apps.sort!"a.name[0] < b.name[0]".array));
 			}
 			resize(size);
-			tabs.pages[0].button.leftClick();
+			tabs.pages[1].button.leftClick();
 		}
 		super.onMouseFocus(focus);
 	}
@@ -191,6 +195,7 @@ class Categories: Tabs {
 
 	this(){
 		super(left);
+		font = "Consolas:size=11";
 		offset = 0;
 		style.bg = [0.3, 0.3, 0.3, 1];
 		style.bg.hover = [0.1, 0.1 ,0.1, 1];
@@ -209,7 +214,7 @@ class ListDesktop: List {
 		applications.each!((DesktopEntry app){
 			auto button = addNew!ButtonDesktop([app.name, app.exec].bangJoin);
 		});
-		style.bg = [27/255.0,27/255.0,27/255.0,1];
+		style.bg = [0.3,0.3,0.3,1];
 	}
 
 	override void onDraw(){
@@ -219,6 +224,35 @@ class ListDesktop: List {
 	}
 
 }
+
+class ListFiles: List {
+
+	this(){
+		padding = 3;
+		entryHeight = 25;
+		auto context = "~/.dinu/%s".format(currentDesktop.get).expandTilde.readText;
+		ButtonFile[] buttons;
+		foreach(entry; context.dirEntries(SpanMode.shallow)){
+			auto name = entry.to!string.chompPrefix(context ~ "/");
+			if(name.startsWith(".") || name.baseName.startsWith("."))
+				continue;
+			buttons ~= new ButtonFile(name);
+		}
+		buttons.sort!("a.file.toUpper < b.file.toUpper", SwapStrategy.stable);
+		buttons.sort!("a.isDir && !b.isDir", SwapStrategy.stable);
+		foreach(b; buttons)
+			add(b);
+		style.bg = [0.3,0.3,0.3,1];
+	}
+
+	override void onDraw(){
+		super.onDraw;
+		draw.setColor([0.3,0.3,0.3]);
+		draw.rect(pos, [2, size.h]);
+	}
+
+}
+
 
 
 class ListFrequent: List {
@@ -266,7 +300,7 @@ class ListFrequent: List {
 				add(button);
 			}
 		}
-		style.bg = [27/255.0,27/255.0,27/255.0,1];
+		style.bg = [0.3,0.3,0.3,1];
 	}
 
 	override void onDraw(){
@@ -285,6 +319,7 @@ class ButtonExec: Button {
 
 	this(){
 		super("");
+		font = "Consolas:size=11";
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -303,7 +338,10 @@ class ButtonExec: Button {
 			try{
 				string command = (command.strip ~ ' ' ~ parameter).strip;
 				writeln("running: \"%s\"".format(command));
-				auto userdir = "~/.dinu/%s".format(currentDesktop.get).expandTilde;
+				auto userdir = "~/.dinu/%s".format(currentDesktop.get).expandTilde.readText;
+				"context %s".format(userdir).writeln;
+				if(userdir.isDir)
+					chdir(userdir);
 				auto pipes = pipeShell(command);
 				auto pid = pipes.pid.processID;
 				logExec("%s exec %s!%s!%s".format(pid, type, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));
@@ -339,17 +377,24 @@ class ButtonDesktop: ButtonExec {
 		name = split[0];
 		exec = split[1];
 		type = "desktop";
+		font = "Consolas:size=11";
 	}
 
 	override void onDraw(){
+		draw.setFont(font, fontSize);
+		draw.setColor([27/255.0,27/255.0,27/255.0,1]);
+		draw.rect(pos, size);
 		if(mouseFocus){
-			draw.setColor([0.4, 0.4, 0.4]);
+			draw.setColor([0.2, 0.2, 0.2]);
 			draw.rect(pos, size);
 		}
 		draw.setColor([189/255.0, 221/255.0, 255/255.0]);
 		draw.text(pos.a+[10,0], size.h, name);
-		draw.setColor([0.6,0.6,0.6]);
-		draw.text(pos.a + [draw.width(name)+15,0], size.h, exec);
+		auto textw = draw.width(name) + draw.fontHeight*2;
+		draw.clip(pos.a + [textw,0], size.a - [textw,0]);
+		draw.setColor([0.3,0.3,0.3]);
+		draw.text(pos.a + [size.w,0], size.h, exec, 2);
+		draw.noclip;
 	}
 
 	override string command(){
@@ -369,11 +414,15 @@ class ButtonScript: ButtonExec {
 	this(string data){
 		exec = data;
 		type = "script";
+		font = "Consolas:size=11";
 	}
 
 	override void onDraw(){
+		draw.setFont(font, fontSize);
+		draw.setColor([27/255.0,27/255.0,27/255.0,1]);
+		draw.rect(pos, size);
 		if(mouseFocus){
-			draw.setColor([0.4, 0.4, 0.4]);
+			draw.setColor([0.2, 0.2, 0.2]);
 			draw.rect(pos, size);
 		}
 		draw.setColor([187/255.0,187/255.0,255/255.0]);
@@ -395,21 +444,29 @@ class ButtonScript: ButtonExec {
 class ButtonFile: ButtonExec {
 
 	string file;
+	bool isDir;
 
 	this(string data){
+		chdir(context);
+		try
+			isDir = data.exists && data.isDir;
+		catch{}
 		file = data;
 		type = "file";
 	}
 
 	override void onDraw(){
+		draw.setColor([27/255.0,27/255.0,27/255.0,1]);
+		draw.rect(pos, size);
+		draw.setFont(font, fontSize);
 		if(mouseFocus){
-			draw.setColor([0.4, 0.4, 0.4]);
+			draw.setColor([0.2, 0.2, 0.2]);
 			draw.rect(pos, size);
 		}
 		int x = 10;
 		foreach(i, part; file.split("/")){
 			bool last = i == file.split("/").length-1;
-			if(last)
+			if(last && !isDir)
 				draw.setColor([0.933,0.933,0.933]);
 			else
 				draw.setColor([0.733,0.933,0.733]);
@@ -433,6 +490,12 @@ class ButtonFile: ButtonExec {
 
 }
 
+string context(){
+	auto file = "~/.dinu/%s".format(currentDesktop.get).expandTilde;
+	if(file.exists && file.readText.exists)
+		return file.readText;
+	return "~".expandTilde;
+}
 
 private Mutex logMutex;
 

@@ -230,7 +230,10 @@ class Client: Base {
 	}
 
 	void updateStrut(){
-		monitor.strut(this, this.getPropList(net.strutPartial).length>0);
+		try
+			monitor.strut(this, this.getPropList(net.strutPartial).length>0);
+		catch(Exception e)
+			e.toString.log;
 	}
 
 	void requestAttention(){

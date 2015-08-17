@@ -59,7 +59,7 @@ class CompositeClient: ws.wm.Window {
 		auto pixmap = XCompositeNameWindowPixmap(dpy, windowHandle);
 		picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
 		auto screen = dockWindow.screenSize.get(2);
-		auto scale = 1.0/(dockWindow.desktopCount.get);
+		auto scale = 0.1;
 		// Scaling matrix
 		XTransform xform = {[
 		    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
@@ -67,7 +67,7 @@ class CompositeClient: ws.wm.Window {
 		    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
 		]};
 		XRenderSetPictureTransform(dpy, picture, &xform);
-		XRenderSetPictureFilter(dpy, picture, FilterBilinear, null, 0);
+		XRenderSetPictureFilter(dpy, picture, "best", null, 0);
 	}
 	
 	override void move(int[2] pos){
@@ -177,8 +177,7 @@ class WorkspaceDock: ws.wm.Window {
 		desktopCount = new CardinalProperty(dock.root, "_NET_NUMBER_OF_DESKTOPS");
 		clients = new WindowListProperty(dock.root, "_NET_CLIENT_LIST");
 		auto screen = screenSize.get(2);
-		auto count = desktopCount.get;
-		w = cast(int)(screen.w/count);
+		w = cast(int)(screen.w/10);
 		super(w, cast(int)screen.h, title);
 		windowWatcher = new Watcher!(x11.X.Window);
 		windowWatcher.add ~= (window){
@@ -202,7 +201,11 @@ class WorkspaceDock: ws.wm.Window {
 	override void show(){
 		windowDesktop = new CardinalProperty(windowHandle, "_NET_WM_DESKTOP");
 		windowDesktop.set(-1);
-		new AtomProperty(windowHandle, "_NET_WM_WINDOW_TYPE").set(atom("_NET_WM_WINDOW_TYPE_DOCK"));
+		auto type = [
+			atom("_NET_WM_WINDOW_TYPE_DOCK"),
+			atom("_NET_WM_WINDOW_TYPE_DIALOG"),
+		];
+		new AtomListProperty(windowHandle, "_NET_WM_WINDOW_TYPE").setAtoms(type);
 		super.show;
 	}
 
@@ -250,17 +253,17 @@ class WorkspaceDock: ws.wm.Window {
 			remove(c);
 		auto count = desktopCount.get;
 		auto screen = screenSize.get(2);
-		auto height = cast(int)(screen.h/count);
+		auto height = cast(int)(screen.h/10)+draw.fontHeight+5;
 		auto w = cast(int)(screen.w/count);
 		int desktopsHeight;
 		foreach(i; 0..count)
-			desktopsHeight += (count-1-i in desktops ? height : draw.fontHeight+20);
+			desktopsHeight += (count-1-i in desktops ? height : draw.fontHeight+4);
 		int y = size.h/2 - desktopsHeight/2;
 		foreach(i; 0..count){
 			auto ws = addNew!WorkspaceView(this, count-1-i);
 			ws.move([0, y]);
-			ws.resize([w, count-1-i in desktops ? height : draw.fontHeight+20]);
-			y += ws.size.h-5;
+			ws.resize([w, count-1-i in desktops ? height : draw.fontHeight+4]);
+			y += ws.size.h + 5;
 		}
 	}
 
@@ -316,17 +319,17 @@ class WorkspaceView: Base {
 	void update(){
 		foreach(c; children)
 			remove(c);
-		auto scale = (size.w-14) / cast(double)dock.screenSize.get(2).w;
+		auto scale = (size.w-10) / cast(double)dock.screenSize.get(2).w;
 		if(id in dock.desktops)
 			foreach(w; dock.desktops[id]){
 				auto wv = addNew!WindowIcon(w, cast(int)id);
 				wv.moveLocal([
-					7+cast(int)(w.pos.x*scale).lround,
-					5+cast(int)(w.pos.y*scale).lround
+					5+cast(int)(w.pos.x*scale).lround,
+					3+cast(int)((dock.screenSize.get(2).h-w.pos.y-w.size.h)*scale).lround
 				]);
 				wv.resize([
-					cast(int)(w.size.w*scale).lround+1,
-					cast(int)(w.size.h*scale).lround-5
+					cast(int)(w.size.w*scale).lround,
+					cast(int)(w.size.h*scale).lround
 				]);
 			}
 		try{
@@ -344,6 +347,10 @@ class WorkspaceView: Base {
 		preview = start;
 	}
 
+	override void onMouseFocus(bool focus){
+		preview = focus;
+	}
+
 	override void drop(int x, int y, Base draggable){
 		auto ghost = cast(Ghost)draggable;
 		writeln("requesting window move to ", id);
@@ -353,22 +360,25 @@ class WorkspaceView: Base {
 	}
 
 	override void onDraw(){
-		dock.draw.setColor([0.1,0.1,0.1]);
-		dock.draw.rect(pos, size);
-		auto m = (preview || id == dock.currentDesktop.get) ? 3 : 1;
-		if(id in dock.desktops)
-			dock.draw.setColor([0.3*m,0.3*m,0.3*m]);
-		else
-			dock.draw.setColor([0.1*m,0.1*m,0.1*m]);
-		dock.draw.rect(pos.a+[5,5], size.a-[10,10]);
+		if(id in dock.desktops){
+			if(id == dock.currentDesktop.get)
+				draw.setColor([0.867,0.514,0]);
+			else if(preview)
+				draw.setColor([0.6,0.6,0.6]);
+			else
+				draw.setColor([0.3,0.3,0.3]);
+			dock.draw.rect(pos.a+[3,2], [size.w-7, size.h-draw.fontHeight-7]);
+			draw.setColor([0.3,0.3,0.3]);
+			draw.rect(pos.a+[5,4], [size.w-11,size.h-draw.fontHeight-11]);
+		}
 
 		super.onDraw;
 
-		if(id in dock.desktops)
+		if(id == dock.currentDesktop.get || preview)
 			dock.draw.setColor([1,1,1]);
 		else
 			dock.draw.setColor([0.6,0.6,0.6]);
-		dock.draw.text(pos.a+[10,10], name);
+		dock.draw.text(pos.a+[7,size.h-draw.fontHeight-1], name, 0);
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -414,7 +424,6 @@ class WindowIcon: Base {
 	override void onMouseMove(int x, int y){
 		if(buttons.get(Mouse.buttonLeft, false) && !dragGhost){
 			dragGhost = drag([x,y].a - pos);
-			writeln(dragOffset, ' ', pos, ' ', [x,y]);
 			root.add(dragGhost);
 			root.setTop(dragGhost);
 			dragGhost.resize(size);
@@ -437,6 +446,10 @@ class WindowIcon: Base {
 		if(dragGhost)
 			return;
 		composite.draw(window, pos, size);
+		if(hasMouseFocus){
+			draw.setColor([0.8,0.8,0.8]);
+			draw.rectOutline(pos, size);
+		}
 		super.onDraw;
 	}
 
@@ -455,6 +468,8 @@ class Ghost: Base {
 
 	override void onDraw(){
 		composite.draw(window, pos, size);
+		draw.setColor([0.8,0.8,0.8]);
+		draw.rectOutline(pos, size);
 	}
 
 }

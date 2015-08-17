@@ -59,7 +59,11 @@ class Property {
 	}
 
 	void set(CARDINAL data){
-		XChangeProperty(dpy, window, property, XA_CARDINAL, 32, PropModeReplace, cast(ubyte*)&data, 1);
+		XChangeProperty(dpy, window, property, format, 32, PropModeReplace, cast(ubyte*)&data, 1);
+	}
+
+	void setAtoms(Atom[] data){
+		XChangeProperty(dpy, window, property, format, 32, PropModeReplace, cast(ubyte*)data.ptr, cast(int)data.length);
 	}
 
 }

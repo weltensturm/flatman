@@ -178,6 +178,7 @@ class Monitor {
 	}
 
 	void strut(Client client, bool remove=false){
+		XSync(dpy, false);
 		strutClients = strutClients.without(client);
 		if(!remove)
 			strutClients ~= client;
