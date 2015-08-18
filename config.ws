@@ -2,15 +2,15 @@
 
 split {
 	background 222222
-	border 2
-	paddingElem 10
-	paddingOuter 0
+	border 0 0 2 0
+	paddingElem 4
+	paddingOuter 0 0 2 0
 	border {
 		normal 444444
 		active dd8300
 	}
 	title {
-		height 1
+		show 0
 		normal cccccc
 		active ffffff
 	}

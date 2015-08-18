@@ -1,6 +1,6 @@
-module dock.dock;
+module menu.menu;
 
-import dock;
+import menu;
 
 __gshared:
 
@@ -8,16 +8,16 @@ __gshared:
 ulong root;
 
 
-Menu menu;
+Menu menuWindow;
 
 void main(string[] args){
 	XInitThreads();
-	menu = new Menu(600, 30*13+5, "flatman-menu");
-	wm.add(menu);
+	menuWindow = new Menu(600, 30*13+5, "flatman-menu");
+	wm.add(menuWindow);
 	while(wm.hasActiveWindows){
 		wm.processEvents;
-		menu.onDraw;
-		menu.tick;
+		menuWindow.onDraw;
+		menuWindow.tick;
 		Thread.sleep(10.msecs);
 	}
 }
@@ -158,12 +158,16 @@ class Menu: ws.wm.Window {
 
 	override void resize(int[2] size){
 		super.resize(size);
-		tabs.resize(size);
+		tabs.resize(size.a-[2,2]);
+		tabs.move([0,2]);
 	}
 
 	override void onDraw(){
-		draw.setColor([0.1,0.1,0.1]);
+		//draw.setColor([0.1,0.1,0.1]);
+		draw.setColor([0.867,0.514,0]);
 		draw.rect(pos, size);
+		draw.setColor([0.1,0.1,0.1]);
+		draw.rect(pos.a+[0,2], size.a-[2,2]);
 		super.onDraw;
 		draw.finishFrame;
 	}
@@ -205,290 +209,6 @@ class Categories: Tabs {
 
 }
 
-
-class ListDesktop: List {
-
-	this(DesktopEntry[] applications){
-		padding = 3;
-		entryHeight = 25;
-		applications.each!((DesktopEntry app){
-			auto button = addNew!ButtonDesktop([app.name, app.exec].bangJoin);
-		});
-		style.bg = [0.3,0.3,0.3,1];
-	}
-
-	override void onDraw(){
-		super.onDraw;
-		draw.setColor([0.3,0.3,0.3]);
-		draw.rect(pos, [2, size.h]);
-	}
-
-}
-
-class ListFiles: List {
-
-	this(){
-		padding = 3;
-		entryHeight = 25;
-		auto context = "~/.dinu/%s".format(currentDesktop.get).expandTilde.readText;
-		ButtonFile[] buttons;
-		foreach(entry; context.dirEntries(SpanMode.shallow)){
-			auto name = entry.to!string.chompPrefix(context ~ "/");
-			if(name.startsWith(".") || name.baseName.startsWith("."))
-				continue;
-			buttons ~= new ButtonFile(name);
-		}
-		buttons.sort!("a.file.toUpper < b.file.toUpper", SwapStrategy.stable);
-		buttons.sort!("a.isDir && !b.isDir", SwapStrategy.stable);
-		foreach(b; buttons)
-			add(b);
-		style.bg = [0.3,0.3,0.3,1];
-	}
-
-	override void onDraw(){
-		super.onDraw;
-		draw.setColor([0.3,0.3,0.3]);
-		draw.rect(pos, [2, size.h]);
-	}
-
-}
-
-
-
-class ListFrequent: List {
-
-	Entry[] history;
-
-	this(){
-		padding = 3;
-		entryHeight = 25;
-		auto historyFile = "~/.dinu/%s.exec".expandTilde.format(currentDesktop.get);
-		writeln(historyFile);
-		Entry[string] tmp;
-		history = [];
-		if(historyFile.exists){
-			foreach(line; historyFile.readText.splitLines){
-				auto m = line.matchAll(`([0-9]+) (\S+)(?: (.*))?`);
-				if(m.captures[3] !in tmp){
-					auto e = new Entry;
-					e.text = m.captures[3];
-					tmp[e.text] = e;
-					history ~= e;
-				}
-				tmp[m.captures[3]].count++;
-			}
-			history.sort!"a.count > b.count";
-		}
-		foreach(entry; history){
-			auto split = entry.text.bangSplit;
-			ButtonExec button;
-			switch(split[0]){
-				case "desktop":
-					button = new ButtonDesktop(split[1]);
-					break;
-				case "script":
-					button = new ButtonScript(split[1]);
-					break;
-				case "file":
-					button = new ButtonFile(split[1]);
-					break;
-				default:
-					writeln("unknown type: ", split[0]);
-			}
-			if(button){
-				button.parameter = split[2];
-				add(button);
-			}
-		}
-		style.bg = [0.3,0.3,0.3,1];
-	}
-
-	override void onDraw(){
-		super.onDraw;
-		draw.setColor([0.3,0.3,0.3]);
-		draw.rect(pos, [2, size.h]);
-	}
-
-}
-
-
-class ButtonExec: Button {
-
-	string parameter;
-	string type;
-
-	this(){
-		super("");
-		font = "Consolas:size=11";
-	}
-
-	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.buttonLeft && !pressed){
-			spawnCommand;
-			menu.onMouseFocus(false);
-		}
-	}
-
-	string command(){assert(0);}
-
-	string serialize(){assert(0);}
-
-	void spawnCommand(){
-		auto dg = {
-			try{
-				string command = (command.strip ~ ' ' ~ parameter).strip;
-				writeln("running: \"%s\"".format(command));
-				auto userdir = "~/.dinu/%s".format(currentDesktop.get).expandTilde.readText;
-				"context %s".format(userdir).writeln;
-				if(userdir.isDir)
-					chdir(userdir);
-				auto pipes = pipeShell(command);
-				auto pid = pipes.pid.processID;
-				logExec("%s exec %s!%s!%s".format(pid, type, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));
-				auto reader = task({
-					foreach(line; pipes.stdout.byLine){
-						if(line.length)
-							log("%s stdout %s".format(pid, line));
-					}
-				});
-				reader.executeInNewThread;
-				foreach(line; pipes.stderr.byLine){
-					if(line.length)
-						log("%s stderr %s".format(pid, line));
-				}
-				reader.yieldForce;
-				auto res = pipes.pid.wait;
-				log("%s exit %s".format(pid, res));
-			}catch(Throwable t)
-				writeln(t);
-		};
-		task(dg).executeInNewThread;
-	}
-
-}
-
-class ButtonDesktop: ButtonExec {
-
-	string name;
-	string exec;
-
-	this(string data){
-		auto split = data.bangSplit;
-		name = split[0];
-		exec = split[1];
-		type = "desktop";
-		font = "Consolas:size=11";
-	}
-
-	override void onDraw(){
-		draw.setFont(font, fontSize);
-		draw.setColor([27/255.0,27/255.0,27/255.0,1]);
-		draw.rect(pos, size);
-		if(mouseFocus){
-			draw.setColor([0.2, 0.2, 0.2]);
-			draw.rect(pos, size);
-		}
-		draw.setColor([189/255.0, 221/255.0, 255/255.0]);
-		draw.text(pos.a+[10,0], size.h, name);
-		auto textw = draw.width(name) + draw.fontHeight*2;
-		draw.clip(pos.a + [textw,0], size.a - [textw,0]);
-		draw.setColor([0.3,0.3,0.3]);
-		draw.text(pos.a + [size.w,0], size.h, exec, 2);
-		draw.noclip;
-	}
-
-	override string command(){
-		return exec.replace("%U", parameter).replace("%F", parameter);
-	}
-
-	override string serialize(){
-		return [name, exec].bangJoin;
-	}
-
-}
-
-class ButtonScript: ButtonExec {
-
-	string exec;
-
-	this(string data){
-		exec = data;
-		type = "script";
-		font = "Consolas:size=11";
-	}
-
-	override void onDraw(){
-		draw.setFont(font, fontSize);
-		draw.setColor([27/255.0,27/255.0,27/255.0,1]);
-		draw.rect(pos, size);
-		if(mouseFocus){
-			draw.setColor([0.2, 0.2, 0.2]);
-			draw.rect(pos, size);
-		}
-		draw.setColor([187/255.0,187/255.0,255/255.0]);
-		draw.text(pos.a+[10,0], size.h, exec);
-		draw.setColor([0.6,0.6,0.6]);
-		draw.text(pos.a + [draw.width(exec)+15,0], size.h, parameter);
-	}
-
-	override string command(){
-		return "%s %s".format(exec.strip, parameter.strip).strip;
-	}
-
-	override string serialize(){
-		return exec;
-	}
-
-}
-
-class ButtonFile: ButtonExec {
-
-	string file;
-	bool isDir;
-
-	this(string data){
-		chdir(context);
-		try
-			isDir = data.exists && data.isDir;
-		catch{}
-		file = data;
-		type = "file";
-	}
-
-	override void onDraw(){
-		draw.setColor([27/255.0,27/255.0,27/255.0,1]);
-		draw.rect(pos, size);
-		draw.setFont(font, fontSize);
-		if(mouseFocus){
-			draw.setColor([0.2, 0.2, 0.2]);
-			draw.rect(pos, size);
-		}
-		int x = 10;
-		foreach(i, part; file.split("/")){
-			bool last = i == file.split("/").length-1;
-			if(last && !isDir)
-				draw.setColor([0.933,0.933,0.933]);
-			else
-				draw.setColor([0.733,0.933,0.733]);
-			draw.text(pos.a + [x,0], size.h, part);
-			x += draw.width(part);
-			draw.setColor([0.6,0.6,0.6]);
-			if(!last){
-				draw.text(pos.a + [x,0], size.h, "/");
-				x += draw.width("/");
-			}
-		}
-	}
-
-	override string command(){
-		return "exo-open %s || xdg-open %s".format(file.strip, file.strip).strip;
-	}
-
-	override string serialize(){
-		return file;
-	}
-
-}
 
 string context(){
 	auto file = "~/.dinu/%s".format(currentDesktop.get).expandTilde;

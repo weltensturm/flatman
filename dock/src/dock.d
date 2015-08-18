@@ -191,8 +191,7 @@ class WorkspaceDock: ws.wm.Window {
 			wm.add(client);
 		};
 		windowWatcher.remove ~= (window){
-			auto client = windows.find!((a)=>a.windowHandle==window)[0];
-			windows = windows.filter!((a)=>a != client).array;
+			windows = windows.filter!((a)=>a.windowHandle != window).array;
 		};
 	}
 
@@ -325,7 +324,7 @@ class WorkspaceView: Base {
 				auto wv = addNew!WindowIcon(w, cast(int)id);
 				wv.moveLocal([
 					5+cast(int)(w.pos.x*scale).lround,
-					3+cast(int)((dock.screenSize.get(2).h-w.pos.y-w.size.h)*scale).lround
+					4+cast(int)((dock.screenSize.get(2).h-w.pos.y-w.size.h)*scale).lround
 				]);
 				wv.resize([
 					cast(int)(w.size.w*scale).lround,
@@ -347,16 +346,16 @@ class WorkspaceView: Base {
 		preview = start;
 	}
 
-	override void onMouseFocus(bool focus){
-		preview = focus;
-	}
-
 	override void drop(int x, int y, Base draggable){
 		auto ghost = cast(Ghost)draggable;
 		writeln("requesting window move to ", id);
 		new CardinalProperty(ghost.window.windowHandle, "_NET_WM_DESKTOP").request([id,2]);
 		dock.update;
 		preview = false;
+	}
+
+	override void onMouseFocus(bool focus){
+		preview = focus;
 	}
 
 	override void onDraw(){
@@ -367,17 +366,21 @@ class WorkspaceView: Base {
 				draw.setColor([0.6,0.6,0.6]);
 			else
 				draw.setColor([0.3,0.3,0.3]);
-			dock.draw.rect(pos.a+[3,2], [size.w-7, size.h-draw.fontHeight-7]);
+			dock.draw.rect(pos.a+[3,2], [size.w-6, size.h-draw.fontHeight-6]);
 			draw.setColor([0.3,0.3,0.3]);
-			draw.rect(pos.a+[5,4], [size.w-11,size.h-draw.fontHeight-11]);
+			draw.rect(pos.a+[5,5], [size.w-11,size.h-draw.fontHeight-11]);
 		}
 
 		super.onDraw;
 
-		if(id == dock.currentDesktop.get || preview)
+		if(id == dock.currentDesktop.get || preview){
+			if(id !in dock.desktops){
+				draw.setColor([0.4,0.4,0.4]);
+				draw.rect(pos, size);
+			}
 			dock.draw.setColor([1,1,1]);
-		else
-			dock.draw.setColor([0.6,0.6,0.6]);
+		}else
+			dock.draw.setColor([0.4,0.4,0.4]);
 		dock.draw.text(pos.a+[7,size.h-draw.fontHeight-1], name, 0);
 	}
 
@@ -446,10 +449,12 @@ class WindowIcon: Base {
 		if(dragGhost)
 			return;
 		composite.draw(window, pos, size);
+		/+
 		if(hasMouseFocus){
-			draw.setColor([0.8,0.8,0.8]);
-			draw.rectOutline(pos, size);
+			draw.setColor([0.6,0.6,0.6]);
+			draw.rectOutline(pos.a+[1,1], size.a-[2,2]);
 		}
+		+/
 		super.onDraw;
 	}
 

@@ -136,6 +136,7 @@ class Monitor {
 				ws.remove(client);
 		}
 		globals = globals.without(client);
+		XSync(dpy, false);
 		if(strutClients.canFind(client)){
 			strutClients = strutClients.without(client);
 			resize(size);
@@ -169,8 +170,11 @@ class Monitor {
 		this.size = size;
 		foreach(ws; workspaces){
 			long[4] reserve;
-			foreach(c; strutClients)
-				reserve[] += c.getStrut[];
+			foreach(c; strutClients){
+				auto s = c.getStrut;
+				"monitor using strut %s %s".format(c.name, s).log;
+				reserve[] += s[];
+			}
 			ws.move([cast(int)reserve[0], cast(int)reserve[2]]);
 			ws.resize([cast(int)(size.w-reserve[1]-reserve[0]), cast(int)(size.h-reserve[2]-reserve[3])]);
 		}
@@ -179,10 +183,17 @@ class Monitor {
 
 	void strut(Client client, bool remove=false){
 		XSync(dpy, false);
-		strutClients = strutClients.without(client);
-		if(!remove)
+		if(strutClients.canFind(client)){
+			if(remove){
+				"monitor remove strut %s".format(client).log;
+				strutClients = strutClients.without(client);
+				resize(size);
+			}
+		}else if(!remove && client.getStrut[0..4].any){
+			"monitor add strut %s %s".format(client.name, client.getStrut).log;
 			strutClients ~= client;
-		resize(size);
+			resize(size);
+		}
 	}
 
 }

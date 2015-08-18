@@ -793,16 +793,17 @@ void scan(){
 	}
 }
 
-void togglefloating(){
-	auto client = active;
+void togglefloating(Client client = null){
+	if(!client)
+		client = active;
 	if(!client)
 		return;
 	client.isFloating = !client.isFloating;
+	monitor.remove(client);
+	monitor.add(client, monitor.workspaceActive);
 	if(client.isFloating){
 		client.moveResize(client.posFloating, client.sizeFloating);
 	}
-	monitor.remove(client);
-	monitor.add(client, monitor.workspaceActive);
 	client.focus;
 }
 
@@ -910,6 +911,10 @@ void mousemove(){
 				int nx = ocx + (ev.xmotion.x - x);
 				int ny = ocy + (ev.xmotion.y - y);
 				c.moveResize([nx, ny], c.size);
+				if(ev.xmotion.y < monitor.workspace.split.pos.y+bh && c.isFloating){
+					togglefloating;
+					ev.type = ButtonRelease;
+				}
 				break;
 			default: break;
 		}

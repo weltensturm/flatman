@@ -1,4 +1,4 @@
-module dock;
+module menu;
 
 public import
 	core.thread,
@@ -38,6 +38,8 @@ public import
 	ws.gui.input,
 	ws.gui.point,
 	desktop,
-	dock.dock,
-	dock.proputil;
+	menu.menu,
+	menu.lists,
+	menu.buttons,
+	menu.proputil;
 	

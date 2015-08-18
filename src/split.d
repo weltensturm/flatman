@@ -25,8 +25,8 @@ class Split: Container {
 
 	int mode;
 	int paddingElem;
-	int paddingOuter;
-	int border;
+	int[4] paddingOuter;
+	int[4] border;
 	int titleHeight;
 
 	class DragInfo {
@@ -48,10 +48,10 @@ class Split: Container {
 		move(pos);
 		resize(size);
 		this.mode = mode;
-		titleHeight = cast(int)(config["split title height"].to!double*bh).lround;
-		border = config["split border"].to!int;
+		titleHeight = config["split title show"].to!int*bh;
+		border = config["split border"].split.to!(int[4]);
 		paddingElem = config["split paddingElem"].to!int;
-		paddingOuter = config["split paddingOuter"].to!int;
+		paddingOuter = config["split paddingOuter"].split.to!(int[4]);
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
 		wa.background_pixmap = ParentRelative;
@@ -130,7 +130,7 @@ class Split: Container {
 	void onButton(XButtonPressedEvent* ev){
 		if(ev.button == Mouse.buttonLeft){
 			foreach(i, c; children){
-				if(i+1 < children.length && ev.x > c.pos.x+c.size.w && ev.x < children[i+1].pos.x){
+				if(i+1 < children.length && ev.x > c.pos.x+c.size.w-1 && ev.x < children[i+1].pos.x+1){
 					dragInfo = new DragInfo;
 					dragInfo.sizeIdx = i;
 					dragInfo.sizeLeft = sizes[i];
@@ -186,6 +186,15 @@ class Split: Container {
 					moveDir(-1);
 					dragWindow--;
 				}
+			}else if(ev.y > pos.y+bh*2){
+				auto client = cast(Client)c;
+				client.focus;
+				dragInfo = null;
+				dragWindow = -1;
+				double ratio = (ev.x-c.pos.x)/cast(double)c.size.w;
+				client.posFloating.x = ev.x-cast(int)(client.sizeFloating.w*ratio);
+				togglefloating;
+				mousemove;
 			}
 		}
 	}
@@ -242,7 +251,7 @@ class Split: Container {
 	}
 
 	void normalize(){
-		long max = size.w-paddingOuter*2-paddingElem*(children.length-1);
+		long max = size.w-paddingOuter[0]-paddingOuter[1]-paddingElem*(children.length-1);
 		max = max.max(400);
 		foreach(ref s; sizes)
 			s = s.min(max).max(10);
@@ -265,15 +274,15 @@ class Split: Container {
 	void rebuild(){
 		normalize;
 		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
-		int offset = paddingOuter;
+		int offset = paddingOuter[mode==horizontal ? 0 : 2];
 		foreach(i, client; children){
 			(cast(Client)client).moveResize([
-					(mode==horizontal ? offset : paddingOuter) + pos.x,
-					(mode==vertical ? offset : paddingOuter) + pos.y + titleHeight
+					(mode==horizontal ? offset : paddingOuter[0]) + pos.x,
+					(mode==vertical ? offset : paddingOuter[2]) + pos.y + titleHeight
 			],
 			[
-					mode==horizontal ? cast(int)sizes[i] : size.w-paddingOuter*2,
-					(mode==vertical ? cast(int)sizes[i] : size.h-paddingOuter*2) - titleHeight
+					mode==horizontal ? cast(int)sizes[i] : size.w-paddingOuter[0]-paddingOuter[1],
+					(mode==vertical ? cast(int)sizes[i] : size.h-paddingOuter[2]-paddingOuter[3]) - titleHeight
 			]);
 			offset += cast(int)sizes[i]+paddingElem;
 		}
@@ -288,23 +297,24 @@ class Split: Container {
 		foreach(c; children){
 			auto client = cast(Client)c;
 			auto cpos = client.pos.a - pos;
-			cpos.y = size.h-cpos.y-client.size.h+1;
+			cpos.y = size.h-cpos.y-client.size.h;
 			auto act = (client == monitor.active ? "active" : "normal");
 			draw.setColor(config.color("split border " ~ act));
 			draw.rect(
-					cpos.a - [border,border],
-					client.size.a + [border+1,border+1]
+					cpos.a - [border[0],border[3]],
+					client.size.a + [border[1],border[2]]
 			);
 			if(titleHeight){
-				auto w = cast(int)draw.width(client.name)+(border+1)*4;
+				draw.clip([cpos.x,0], [c.size.w, size.h]);
+				auto w = cast(int)draw.width(client.name)+(border[0]+titleHeight/4)*4;
 				//draw.clip(cpos.a-pos-[border,border+titleHeight], [w, bh]);
 				draw.rect(
-						cpos.a - [border,border-client.size.h],
-						[w,bh]
+						cpos.a - [border[0],border[2]-client.size.h],
+						[w,bh+paddingOuter[2]]
 				);
 				draw.setColor(config.color("split title " ~ act));
-				draw.text([cpos.x+border+1, cpos.y+size.h-titleHeight], titleHeight, client.name);
-				//draw.noclip;
+				draw.text([cpos.x+border[0]+1, cpos.y+size.h-titleHeight], titleHeight, client.name);
+				draw.noclip;
 			}
 		}
 		draw.finishFrame;

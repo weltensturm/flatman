@@ -1,6 +1,6 @@
-module dock.proputil;
+module menu.proputil;
 
-import dock;
+import menu;
 
 __gshared:
 

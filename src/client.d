@@ -317,18 +317,12 @@ void setfullscreen(Client c, bool fullscreen){
 			append(c.win, net.state, [net.fullscreen]);
 		}
 		c.isfullscreen = true;
-		c.posFloating = c.pos;
-		c.sizeFloating = c.size;
-		c.moveResize(c.monitor.pos, c.monitor.size);
+		XMoveResizeWindow(dpy, c.win, c.monitor.pos.x, c.monitor.pos.y, c.monitor.size.w, c.monitor.size.h);
 		XRaiseWindow(dpy, c.win);
 	}else{
-		if(proplist.canFind(net.fullscreen)){
+		if(proplist.canFind(net.fullscreen))
 			replace(c.win, net.state, c.getPropList(net.state).without(net.fullscreen));
-		}
-		//XChangeProperty(dpy, c.win, net.state, XA_ATOM, 32, PropModeReplace, null, 0);
 		c.isfullscreen = false;
-		c.pos = c.posFloating;
-		c.size = c.sizeFloating;
 		c.moveResize(c.pos, c.size);
 	}
 }

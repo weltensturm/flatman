@@ -57,7 +57,7 @@ class Workspace: Base {
 
 	override void remove(Base client){
 		auto refocus = client == active;
-		client.hide;
+		//client.hide;
 		foreach(c; children)
 			c.remove(client);
 		if(!split.children)
