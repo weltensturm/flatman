@@ -90,7 +90,11 @@ class ButtonDesktop: ButtonExec {
 	}
 
 	override string command(){
-		return exec.replace("%U", parameter).replace("%F", parameter);
+		if(parameter.length)
+			parameter = "\"" ~ parameter ~ "\"";
+		foreach(n; "uUfF")
+			exec = exec.replace("%" ~ n, parameter);
+		return exec;
 	}
 
 	override string serialize(){
@@ -222,7 +226,7 @@ class ButtonFile: ButtonExec {
 
 
 	override void onMouseMove(int x, int y){
-		if(buttons.get(Mouse.buttonLeft, false) && !dragGhost){
+		if(!isDir && buttons.get(Mouse.buttonLeft, false) && !dragGhost){
 			dragGhost = drag([x,y].a - pos);
 			root.add(dragGhost);
 			root.setTop(dragGhost);
@@ -277,7 +281,7 @@ class ButtonFile: ButtonExec {
 	override string command(){
 		if(isDir)
 			return "";
-		return "exo-open %s || xdg-open %s".format(file.strip, file.strip).strip;
+		return "exo-open \"%s\" || xdg-open \"%s\"".format(file.strip, file.strip).strip;
 	}
 
 	override string serialize(){

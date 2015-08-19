@@ -793,20 +793,6 @@ void scan(){
 	}
 }
 
-void togglefloating(Client client = null){
-	if(!client)
-		client = active;
-	if(!client)
-		return;
-	client.isFloating = !client.isFloating;
-	monitor.remove(client);
-	monitor.add(client, monitor.workspaceActive);
-	if(client.isFloating){
-		client.moveResize(client.posFloating, client.sizeFloating);
-	}
-	client.focus;
-}
-
 void togglefullscreen(){
 	auto client = active;
 	if(!client)

@@ -23,6 +23,7 @@ class Monitor {
 		foreach(t; tags){
 			workspaces ~= new Workspace(pos, size);
 		}
+		workspace.show;
 		//auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
 		//dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
 	}

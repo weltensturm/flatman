@@ -310,6 +310,24 @@ void setfocus(Client c){
 	sendevent(c, wm.takeFocus);
 }
 
+void togglefloating(Client client = null){
+	if(!client)
+		client = active;
+	if(!client)
+		return;
+	if(client.isFloating){
+		client.posFloating = client.pos;
+		client.sizeFloating = client.size;
+	}
+	client.isFloating = !client.isFloating;
+	monitor.remove(client);
+	monitor.add(client, monitor.workspaceActive);
+	if(client.isFloating){
+		client.moveResize(client.posFloating, client.sizeFloating);
+	}
+	client.focus;
+}
+
 void setfullscreen(Client c, bool fullscreen){
 	auto proplist = c.getPropList(net.state);
 	if(fullscreen){

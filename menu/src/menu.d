@@ -7,12 +7,22 @@ __gshared:
 
 ulong root;
 
-
 Menu menuWindow;
+
+CardinalListProperty screenSize;
+CardinalProperty currentDesktop;
+
+
+enum categories = [
+	"AudioVideo", "Audio", "Video", "Graphics",
+	"Development", "Education", "Game", "Network",
+	"Office", "Utility", "System", "Settings"
+];
+
 
 void main(string[] args){
 	XInitThreads();
-	menuWindow = new Menu(600, 30*13+5, "flatman-menu");
+	menuWindow = new Menu(600, 500, "flatman-menu");
 	wm.add(menuWindow);
 	while(wm.hasActiveWindows){
 		wm.processEvents;
@@ -41,9 +51,6 @@ string bangJoin(string[] parts){
 string[] bangSplit(string text){
 	return text.split(regex(`(?<!\\)\!`)).map!`a.replace("\\!", "!")`.array;
 }
-
-CardinalListProperty screenSize;
-CardinalProperty currentDesktop;
 
 
 class Scheduler {
@@ -102,12 +109,6 @@ class Menu: ws.wm.Window {
 		super(w, h, title);
 
 		auto applications = getAll;
-
-		auto categories = [
-			"AudioVideo", "Audio", "Video", "Development",
-			"Education", "Game", "Graphics", "Network",
-			"Office", "Settings", "System", "Utility"
-		];
 
 		foreach(app; applications){
 			foreach(category; categories){
@@ -183,8 +184,10 @@ class Menu: ws.wm.Window {
 			contextTabButton.title.style.fg = [0.6,0.6,0.6,1];
 			tabs.addPage("Files", new ListFiles);
 			tabs.addPage("History", new ListFrequent);
-			foreach(name, apps; appCategories){
-				tabs.addPage(name, new ListDesktop(apps.sort!"a.name[0] < b.name[0]".array));
+			foreach(name; categories){
+				if(name !in appCategories)
+					continue;
+				tabs.addPage(name, new ListDesktop(appCategories[name].sort!"a.name[0].toLower < b.name[0].toLower".array));
 			}
 			resize(size);
 			tabs.pages[1].button.leftClick();

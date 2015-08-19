@@ -32,7 +32,8 @@ class Workspace: Base {
 		if(client.isFloating || client.isfullscreen){
 			floating.add(client);
 		}else{
-			split.show;
+			if(monitor.workspace == this)
+				split.show;
 			split.add(client);
 		}
 	}

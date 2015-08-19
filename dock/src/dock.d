@@ -39,6 +39,7 @@ class CompositeClient: ws.wm.Window {
 	bool hasAlpha;
 	Picture picture;
 	Pixmap pixmap;
+	CardinalProperty desktop;
 	
 	this(x11.X.Window window, int[2] pos, int[2] size){
 		this.pos = pos;
@@ -47,6 +48,7 @@ class CompositeClient: ws.wm.Window {
 		XSelectInput(wm.displayHandle, windowHandle, StructureNotifyMask);
 		isActive = true;
 		createPicture;
+		desktop = new CardinalProperty(windowHandle, "_NET_WM_DESKTOP");
 	}
 	
 	void createPicture(){
@@ -136,12 +138,15 @@ class Watcher(T) {
 			foreach(delta; this.data.setDifference(data))
 				foreach(event; remove)
 					event(delta);
+			foreach(event; update)
+				event();
 			this.data = data;
 		}
 	}
 
 	void delegate(T)[] add;
 	void delegate(T)[] remove;
+	void delegate()[] update;
 
 }
 
@@ -164,6 +169,7 @@ class WorkspaceDock: ws.wm.Window {
 	Pid launcher;
 
 	Watcher!(x11.X.Window) windowWatcher;
+	Watcher!string windowWorkspaceWatcher;
 
 	CompositeClient[] windows;
 
@@ -178,7 +184,9 @@ class WorkspaceDock: ws.wm.Window {
 		clients = new WindowListProperty(dock.root, "_NET_CLIENT_LIST");
 		auto screen = screenSize.get(2);
 		w = cast(int)(screen.w/10);
+
 		super(w, cast(int)screen.h, title);
+
 		windowWatcher = new Watcher!(x11.X.Window);
 		windowWatcher.add ~= (window){
 			if(window == windowHandle)
@@ -193,6 +201,9 @@ class WorkspaceDock: ws.wm.Window {
 		windowWatcher.remove ~= (window){
 			windows = windows.filter!((a)=>a.windowHandle != window).array;
 		};
+
+		windowWorkspaceWatcher = new Watcher!string;
+		windowWorkspaceWatcher.update ~= &update;
 	}
 
 	override void gcInit(){}
@@ -226,6 +237,7 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	void tick(){
+		windowWorkspaceWatcher.check(windows.map!`"%s:%d".format(cast(void*)a, a.desktop.get)`.array);
 		if(currentDesktop.get != currentDesktopInternal){
 			update;
 			currentDesktopInternal = currentDesktop.get;
@@ -247,7 +259,7 @@ class WorkspaceDock: ws.wm.Window {
 		windowWatcher.check(clients.get(-1));
 		XSync(dpy, false);
 		foreach(window; windows)
-			desktops[new CardinalProperty(window.windowHandle, "_NET_WM_DESKTOP").get] ~= window;
+			desktops[window.desktop.get] ~= window;
 		foreach(c; children)
 			remove(c);
 		auto count = desktopCount.get;
@@ -376,7 +388,7 @@ class WorkspaceView: Base {
 		if(id == dock.currentDesktop.get || preview){
 			if(id !in dock.desktops){
 				draw.setColor([0.4,0.4,0.4]);
-				draw.rect(pos, size);
+				draw.rect(pos.a+[2,2], size.a-[4,4]);
 			}
 			dock.draw.setColor([1,1,1]);
 		}else

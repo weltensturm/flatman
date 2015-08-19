@@ -150,6 +150,10 @@ class Split: Container {
 					killclient;
 				}
 			}
+		}else if(ev.button == Mouse.wheelDown){
+			sizeDec;
+		}else if(ev.button == Mouse.wheelUp){
+			sizeInc;
 		}
 	}
 
@@ -162,6 +166,14 @@ class Split: Container {
 
 	Time lasttime;
 	void onMotion(XMotionEvent* ev){
+		if(ev.y < pos.y+titleHeight+paddingOuter[2]){
+			foreach(i, c; children){
+				if(ev.x > c.pos.x && ev.x < c.pos.x+c.size.w){
+					if(active != c)
+						(cast(Client)c).focus;
+				}
+			}
+		}
 		if(dragInfo){
 			if((ev.time - lasttime) <= (1000 / 60))
 				return;
@@ -193,6 +205,7 @@ class Split: Container {
 				dragWindow = -1;
 				double ratio = (ev.x-c.pos.x)/cast(double)c.size.w;
 				client.posFloating.x = ev.x-cast(int)(client.sizeFloating.w*ratio);
+				client.posFloating.y = ev.y;
 				togglefloating;
 				mousemove;
 			}
