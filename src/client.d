@@ -78,6 +78,10 @@ class Client: Base {
 		pos.y = pos.y.max(0);
 		size.w = size.w.max(1);
 		size.h = size.h.max(1);
+		if(isFloating && !isfullscreen){
+			posFloating = pos;
+			sizeFloating = size;
+		}
 		XWindowChanges wc;
 		if(this.pos == pos && this.size == size)
 			return;
@@ -331,17 +335,19 @@ void togglefloating(Client client = null){
 void setfullscreen(Client c, bool fullscreen){
 	auto proplist = c.getPropList(net.state);
 	if(fullscreen){
-		if(!proplist.canFind(net.fullscreen)){
+		if(!proplist.canFind(net.fullscreen))
 			append(c.win, net.state, [net.fullscreen]);
-		}
 		c.isfullscreen = true;
-		XMoveResizeWindow(dpy, c.win, c.monitor.pos.x, c.monitor.pos.y, c.monitor.size.w, c.monitor.size.h);
+		c.moveResize(c.monitor.pos, c.monitor.size);
 		XRaiseWindow(dpy, c.win);
 	}else{
 		if(proplist.canFind(net.fullscreen))
 			replace(c.win, net.state, c.getPropList(net.state).without(net.fullscreen));
 		c.isfullscreen = false;
-		c.moveResize(c.pos, c.size);
+		if(!c.isFloating)
+			monitor.workspace.split.rebuild;
+		else
+			c.moveResize(c.posFloating, c.sizeFloating);
 	}
 }
 

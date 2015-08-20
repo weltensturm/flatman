@@ -43,6 +43,8 @@ class Property {
 	T _get_one(T)(){
 		ulong n=1;
 		auto p = _rawget(n);
+		if(!p)
+			return T.init;
 		auto d = *(cast(T*)p);
 		XFree(p);
 		return d;

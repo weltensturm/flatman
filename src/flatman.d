@@ -738,6 +738,8 @@ void manage(Window w, XWindowAttributes* wa){
 	if(c.monitor == monitor)
 		unfocus(monitor.active, false);
 	c.monitor.add(c, c.originWorkspace);
+	if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
+		c.pos = c.monitor.size.a/2 - c.size.a/2;
 	XChangeProperty(dpy, root, net.clientList, XA_WINDOW, 32, PropModeAppend,
 	                cast(ubyte*)&c.win, 1);
 	XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
@@ -898,7 +900,13 @@ void mousemove(){
 				int ny = ocy + (ev.xmotion.y - y);
 				c.moveResize([nx, ny], c.size);
 				if(ev.xmotion.y < monitor.workspace.split.pos.y+bh && c.isFloating){
+					monitor.workspace.split.dragWindow = monitor.workspace.split.children.length;
 					togglefloating;
+					XEvent button;
+					button.xbutton.button = Mouse.buttonLeft;
+					button.xbutton.x = ev.xmotion.x;
+					button.xbutton.y = monitor.workspace.split.pos.y+1;
+					XSendEvent(dpy, monitor.workspace.split.window, false, PointerMotionMask, &button);
 					ev.type = ButtonRelease;
 				}
 				break;

@@ -30,10 +30,9 @@ class ButtonExec: Button {
 			try{
 				string command = (command.strip ~ ' ' ~ parameter).strip;
 				writeln("running: \"%s\"".format(command));
-				auto userdir = "~/.dinu/%s".format(currentDesktop.get).expandTilde.readText;
-				"context %s".format(userdir).writeln;
-				if(userdir.isDir)
-					chdir(userdir);
+				"context %s".format(context).writeln;
+				if(context.isDir)
+					chdir(context);
 				auto pipes = pipeShell(command);
 				auto pid = pipes.pid.processID;
 				logExec("%s exec %s!%s!%s".format(pid, type, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));

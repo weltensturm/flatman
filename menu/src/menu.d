@@ -180,7 +180,15 @@ class Menu: ws.wm.Window {
 			remove(tabs);
 			tabs = addNew!Categories;
 			auto contextTabButton = new TabButton(context.baseName);
-			tabs.addPage(contextTabButton, new Base);
+			auto contextScroller = new Scroller;
+			auto contextTree = new Tree("Test");
+			contextScroller.add(contextTree);
+			foreach(i; 0..30){
+				auto b = new Button("%s".format(i));
+				b.resize([10, 25]);
+				contextTree.add(b);
+			}
+			tabs.addPage(contextTabButton, contextScroller);
 			contextTabButton.title.style.fg = [0.6,0.6,0.6,1];
 			tabs.addPage("Files", new ListFiles);
 			tabs.addPage("History", new ListFrequent);

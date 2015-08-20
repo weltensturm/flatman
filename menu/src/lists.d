@@ -27,7 +27,6 @@ class ListFiles: List {
 	this(){
 		padding = 3;
 		entryHeight = 25;
-		auto context = "~/.dinu/%s".format(currentDesktop.get).expandTilde.readText;
 		ButtonFile[] buttons;
 		foreach(entry; context.dirEntries(SpanMode.shallow)){
 			auto name = entry.to!string.chompPrefix(context ~ "/");

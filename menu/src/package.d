@@ -35,6 +35,8 @@ public import
 	ws.gui.tabs,
 	ws.gui.button,
 	ws.gui.list,
+	ws.gui.scroller,
+	ws.gui.tree,
 	ws.gui.input,
 	ws.gui.point,
 	desktop,
