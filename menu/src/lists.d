@@ -3,15 +3,16 @@ module menu.lists;
 import menu;
 
 
-class ListDesktop: List {
+class ListDesktop: DynamicList {
 
 	this(DesktopEntry[] applications){
 		padding = 3;
-		entryHeight = 25;
 		applications.each!((DesktopEntry app){
-			auto button = addNew!ButtonDesktop([app.name, app.exec].bangJoin);
+			auto button = new ButtonDesktop([app.name, app.exec].bangJoin);
+			button.resize([5,25]);
+			add(button);
 		});
-		style.bg = [0.3,0.3,0.3,1];
+		style.bg = [0.1,0.1,0.1,1];
 	}
 
 	override void onDraw(){
@@ -22,28 +23,59 @@ class ListDesktop: List {
 
 }
 
-class ListFiles: List {
+void sortDir(ref string[] dirs){
+	dirs.sort!("a.toUpper < b.toUpper", SwapStrategy.stable);
+	dirs.sort!("!a.startsWith(\".\") && b.startsWith(\".\")", SwapStrategy.stable);
+}
+
+void loadAddDir(string directory, Base container){
+	writeln(directory);
+	string[] dirs;
+	string[] files;
+	directory = directory.chomp("/") ~ "/";
+	foreach(string entry; directory.dirEntries(SpanMode.shallow)){
+		if(entry.isDir)
+			dirs ~= entry.chompPrefix(directory);
+		else
+			files ~= entry.chompPrefix(directory);
+	}
+	dirs.sortDir;
+	files.sortDir;
+	dirs.each!(delegate(string dir){
+		auto button = new ButtonFile(directory ~ dir);
+		button.resize([5,25]);
+		auto tree = new Tree(button);
+		tree.padding = 0;
+		bool once;
+		button.leftClick ~= {
+			if(!once)
+				loadAddDir(directory ~ dir, tree);
+			once = true;
+		};
+		container.add(tree);
+		tree.update;
+	});
+	foreach(file; files){
+		auto button = new ButtonFile(directory ~ file);
+		button.resize([5,25]);
+		container.add(button);
+	}
+}
+
+class ListFiles: Scroller {
+
+	DynamicList list;
 
 	this(){
-		padding = 3;
-		entryHeight = 25;
-		ButtonFile[] buttons;
-		foreach(entry; context.dirEntries(SpanMode.shallow)){
-			auto name = entry.to!string.chompPrefix(context ~ "/");
-			if(name.startsWith(".") || name.baseName.startsWith("."))
-				continue;
-			buttons ~= new ButtonFile(name);
-		}
-		buttons.sort!("a.file.toUpper < b.file.toUpper", SwapStrategy.stable);
-		buttons.sort!("!a.file.startsWith(\".\") && b.file.startsWith(\".\")", SwapStrategy.stable);
-		buttons.sort!("a.isDir && !b.isDir", SwapStrategy.stable);
-		buttons ~= new ButtonFile(".");
-		foreach(b; buttons)
-			add(b);
-		style.bg = [0.3,0.3,0.3,1];
+		list = addNew!DynamicList;
+		list.padding = 0;
+		list.style.bg = [0.1,0.1,0.1,1];
+		loadAddDir(context, list);
 	}
 
 	override void onDraw(){
+		draw.setColor([0.1,0.1,0.1]);
+		draw.rect(pos, size);
 		super.onDraw;
 		draw.setColor([0.3,0.3,0.3]);
 		draw.rect(pos, [2, size.h]);
@@ -54,13 +86,12 @@ class ListFiles: List {
 
 
 
-class ListFrequent: List {
+class ListFrequent: DynamicList {
 
 	Entry[] history;
 
 	this(){
 		padding = 3;
-		entryHeight = 25;
 		auto historyFile = "~/.dinu/%s.exec".expandTilde.format(currentDesktop.get);
 		writeln(historyFile);
 		Entry[string] tmp;
@@ -95,11 +126,12 @@ class ListFrequent: List {
 					writeln("unknown type: ", split[0]);
 			}
 			if(button){
+				button.resize([5,25]);
 				button.parameter = split[2];
 				add(button);
 			}
 		}
-		style.bg = [0.3,0.3,0.3,1];
+		style.bg = [0.1,0.1,0.1,1];
 	}
 
 	override void onDraw(){

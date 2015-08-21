@@ -10,14 +10,13 @@ class ButtonExec: Button {
 
 	this(){
 		super("");
-		font = "Consolas:size=11";
+		font = "Consolas:size=9";
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
 		super.onMouseButton(button, pressed, x, y);
 		if(button == Mouse.buttonLeft && !pressed){
 			spawnCommand;
-			menuWindow.onMouseFocus(false);
 		}
 	}
 
@@ -26,6 +25,7 @@ class ButtonExec: Button {
 	string serialize(){assert(0);}
 
 	void spawnCommand(){
+		menuWindow.onMouseFocus(false);
 		auto dg = {
 			try{
 				string command = (command.strip ~ ' ' ~ parameter).strip;
@@ -68,7 +68,7 @@ class ButtonDesktop: ButtonExec {
 		name = split[0];
 		exec = split[1];
 		type = "desktop";
-		font = "Consolas:size=11";
+		font = "Consolas:size=9";
 	}
 
 	override void onDraw(){
@@ -109,7 +109,7 @@ class ButtonScript: ButtonExec {
 	this(string data){
 		exec = data;
 		type = "script";
-		font = "Consolas:size=11";
+		font = "Consolas:size=9";
 	}
 
 	override void onDraw(){
@@ -161,6 +161,12 @@ class ButtonFile: ButtonExec {
 		this.parentDir = parentDir;
 	}
 
+	override void spawnCommand(){
+		if(isDir)
+			return;
+		super.spawnCommand;
+	}
+
 	override void onDraw(){
 		//draw.setColor([27/255.0,27/255.0,27/255.0,1]);
 		//draw.rect(pos, size);
@@ -170,7 +176,7 @@ class ButtonFile: ButtonExec {
 			draw.rect(pos, size);
 		}
 		int x = 10+cast(int)parentDir.count("/")*20;
-		auto text = file.chompPrefix(parentDir).split("/");
+		auto text = [file.baseName];
 		if(file == ".")
 			return;
 		foreach(i, part; text){
@@ -191,27 +197,7 @@ class ButtonFile: ButtonExec {
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
 		Base.onMouseButton(button, pressed, x, y);
-		if(isDir){
-			if(dirExpanded || button != Mouse.buttonLeft || pressed)
-				return;
-			dirExpanded = true;
-			chdir(context);
-			ButtonFile[] buttons;
-			foreach(entry; file.dirEntries(SpanMode.shallow)){
-				auto name = entry.to!string.chompPrefix(context ~ "/");
-				if(name.startsWith(".") || name.baseName.startsWith("."))
-					continue;
-				buttons ~= new ButtonFile(name, file);
-			}
-			buttons.sort!("a.file.toUpper < b.file.toUpper", SwapStrategy.stable);
-			buttons.sort!("a.isDir && !b.isDir", SwapStrategy.stable);
-			auto start = parent.children.countUntil(this);
-			foreach(i, b; buttons){
-				b.parent = parent;
-				parent.children = parent.children[0..start+i+1] ~ b ~ parent.children[start+i+1..$];
-			}
-			parent.resize(parent.size);
-		}else if(!dragGhost)
+		if(!dragGhost)
 			super.onMouseButton(button, pressed, x, y);
 		if(button == Mouse.buttonLeft){
 			if(!pressed && dragGhost){

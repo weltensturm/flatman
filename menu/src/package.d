@@ -33,6 +33,7 @@ public import
 	ws.wm,
 	ws.gui.base,
 	ws.gui.tabs,
+	ws.gui.textSimple,
 	ws.gui.button,
 	ws.gui.list,
 	ws.gui.scroller,

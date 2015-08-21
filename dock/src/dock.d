@@ -49,8 +49,16 @@ class CompositeClient: ws.wm.Window {
 		isActive = true;
 		createPicture;
 		desktop = new CardinalProperty(windowHandle, "_NET_WM_DESKTOP");
+		wm.handler[windowHandle][PropertyNotify] ~= &onProperty;
+		XSelectInput(wm.displayHandle, windowHandle, wm.eventMask | PropertyChangeMask);
 	}
 	
+	void onProperty(XEvent* e){
+		if(e.xproperty.atom == desktop.property){
+			dockWindow.update;
+		}
+	}
+
 	void createPicture(){
 		XWindowAttributes attr;
 		XGetWindowAttributes(dpy, windowHandle, &attr);
@@ -58,7 +66,9 @@ class CompositeClient: ws.wm.Window {
 		hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
 		XRenderPictureAttributes pa;
 		pa.subwindow_mode = IncludeInferiors;
-		auto pixmap = XCompositeNameWindowPixmap(dpy, windowHandle);
+		if(pixmap)
+			XFreePixmap(dpy, pixmap);
+		pixmap = XCompositeNameWindowPixmap(dpy, windowHandle);
 		picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
 		auto screen = dockWindow.screenSize.get(2);
 		auto scale = 0.1;
@@ -78,13 +88,7 @@ class CompositeClient: ws.wm.Window {
 
 	override void resize(int[2] size){
 		this.size = size;
-		XFreePixmap(dpy, pixmap);
 		createPicture;
-	}
-	
-	override void processEvent(Event e){
-		assert(e.xany.window == windowHandle);
-		super.processEvent(e);
 	}
 
 	override void onShow(){
@@ -169,7 +173,6 @@ class WorkspaceDock: ws.wm.Window {
 	Pid launcher;
 
 	Watcher!(x11.X.Window) windowWatcher;
-	Watcher!string windowWorkspaceWatcher;
 
 	CompositeClient[] windows;
 
@@ -202,8 +205,16 @@ class WorkspaceDock: ws.wm.Window {
 			windows = windows.filter!((a)=>a.windowHandle != window).array;
 		};
 
-		windowWorkspaceWatcher = new Watcher!string;
-		windowWorkspaceWatcher.update ~= &update;
+		wm.handler[dock.root][PropertyNotify] ~= &onProperty;
+		XSelectInput(wm.displayHandle, dock.root, PropertyChangeMask);
+	}
+
+	void onProperty(XEvent* e){
+		if(e.xproperty.atom == currentDesktop.property){
+			update;
+			currentDesktopInternal = currentDesktop.get;
+			showTime = Clock.currSystemTick.msecs+500;
+		}
 	}
 
 	override void gcInit(){}
@@ -230,6 +241,8 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	override void onDraw(){
+		if(!visible)
+			return;
 		draw.setColor([0.05,0.05,0.05]);
 		draw.rect([0,0], size);
 		super.onDraw;
@@ -237,12 +250,6 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	void tick(){
-		windowWorkspaceWatcher.check(windows.map!`"%s:%d".format(cast(void*)a, a.desktop.get)`.array);
-		if(currentDesktop.get != currentDesktopInternal){
-			update;
-			currentDesktopInternal = currentDesktop.get;
-			showTime = Clock.currSystemTick.msecs+500;
-		}
 		int targetX = cast(int)screenSize.get(2).w-(visible ? size.w : 1);
 		if(pos.x != targetX){
 			XMoveWindow(dpy, windowHandle, pos.x - cast(int)((pos.x-targetX)/1.5).lround, 0);
@@ -255,6 +262,7 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	void update(){
+		writeln("updating dock");
 		desktops = desktops.init;
 		windowWatcher.check(clients.get(-1));
 		XSync(dpy, false);
