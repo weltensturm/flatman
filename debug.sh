@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 dub build --build=debug
 echo STARTING XEPHYR
 Xephyr -ac -br -noreset -screen 1280x720 :1 &

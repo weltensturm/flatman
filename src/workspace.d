@@ -5,7 +5,7 @@ import flatman;
 __gshared:
 
 
-class Workspace: Base {
+class Workspace: Container {
 
 	Split split;
 	Floating floating;
@@ -26,7 +26,9 @@ class Workspace: Base {
 			c.resize(size);
 	}
 
-	void addClient(Client client){
+	alias add = Base.add;
+
+	override void add(Client client){
 		"adding %s isFloating %s".format(client.name, client.isFloating).log;
 		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
 		if(client.isFloating || client.isfullscreen){
@@ -38,29 +40,38 @@ class Workspace: Base {
 		}
 	}
 
-	void focus(Client client){
-		foreach(c; children){
-			if(c.children.canFind(client)){
-				(cast(Container)c).focus(client);
+	@property
+	override Client active(){
+		if(focusFloating)
+			return floating.active;
+		return split.active;
+	}
+
+	@property
+	override void active(Client client){
+		foreach(c; children.map!(to!Container).array){
+			if(c.clients.canFind(client)){
 				focusFloating = (c == floating);
+				c.active = client;
 			}
 		}
 	}
 
-	void setFocus(Client client){
-		foreach(c; children){
-			if(c.children.canFind(client)){
-				(cast(Container)c).setFocus(client);
-				focusFloating = (c == floating);
-			}
-		}
+	void focusDir(int dir){
+		if(focusFloating)
+			floating.focusDir(dir);
+		else
+			split.focusDir(dir);
 	}
 
-	override void remove(Base client){
+	alias remove = Base.remove;
+
+	override void remove(Client client){
+		"workspace removing %s".format(client.name).log;
 		auto refocus = client == active;
 		//client.hide;
 		foreach(c; children)
-			c.remove(client);
+			c.to!Container.remove(client);
 		if(!split.children)
 			split.hide;
 		if(refocus)
@@ -81,13 +92,7 @@ class Workspace: Base {
 		floating.hide;
 	}
 
-	Client active(){
-		if(focusFloating)
-			return floating.active;
-		return split.active;
-	}
-
-	Client[] clients(){
+	override Client[] clients(){
 		return split.clients ~ floating.clients;
 	}
 

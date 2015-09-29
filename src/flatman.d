@@ -86,6 +86,13 @@ struct Rule {
 	int monitor;
 }
 
+static ws.x.draw.Cur[CurLast] cursor;
+static Display* dpy;
+static Monitor monitor;
+static Monitor[] monitors;
+static Window root;
+static Draw draw;
+
 /* variables */
 enum broken = "broken";
 static string statusText;
@@ -95,9 +102,9 @@ static int bh, blw = 0;      /* bar geometry */
 extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
 extern(C) nothrow int function(Display*) xerrorfatalxlib;
 static uint numlockmask = 0;
+
 enum handler = [
 	ButtonPress: &onButton,
-	ButtonRelease: &onButtonRelease,
 	ClientMessage: &onClientMessage,
 	ConfigureRequest: &onConfigureRequest,
 	ConfigureNotify: &onConfigure,
@@ -112,16 +119,6 @@ enum handler = [
 	PropertyNotify: &onProperty,
 	UnmapNotify: &onUnmap
 ];
-static bool running = true;
-bool restart = false;
-static ws.x.draw.Cur[CurLast] cursor;
-static Display* dpy;
-static Monitor monitor;
-static Monitor[] monitors;
-static Window root;
-static Draw draw;
-Client previousFocus;
-Window[] unmanaged;
 
 enum handlerNames = [
 	ButtonPress: "ButtonPress",
@@ -141,14 +138,24 @@ enum handlerNames = [
 	UnmapNotify: "UnmapNotify",
 ];
 
+void delegate(XEvent*)[int][Window] customHandler;
+
+static bool running = true;
+bool restart = false;
+Client previousFocus;
+Window[] unmanaged;
+
 void log(string s){
 	"/tmp/flatman.log".append(s ~ '\n');
+	s.writeln;
+	stdout.flush;
 	//spawnProcess(["notify-send", s]);
 }
 
 
 void main(string[] args){
 	try{
+		environment["_JAVA_AWT_WM_NONREPARENTING"] = "1";
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			writeln("warning: no locale support");
 		if(args.length >= 2)
@@ -225,7 +232,7 @@ void setup(){
 	draw.load_fonts(fonts);
 	if (!draw.fonts.length)
 		throw new Exception("No fonts could be loaded.");
-	bh = cast(int)(draw.fonts[0].h*1.4).lround;
+	bh = cast(int)(draw.fonts[0].h*1.5).lround;
 	/* init atoms */
 	/* init cursors */
 	cursor[CurNormal] = new ws.x.draw.Cur(dpy, XC_left_ptr);
@@ -254,28 +261,64 @@ void setup(){
 			|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
+
+	registerFunctions;
+	registerConfigKeys;
+
 	grabkeys();
-	focus(null);
+	//focus(null);
+	updateWorkarea;
 
 	try
 		"~/.autostart.sh".expandTilde.spawnProcess;
 	catch{}
 }
 
+
 void run(){
 	XEvent ev;
 	/* main event loop */
 	XSync(dpy, false);
 	while(running && !XNextEvent(dpy, &ev)){
+		if(ev.xany.window in customHandler && ev.type in customHandler[ev.xany.window])
+			customHandler[ev.xany.window][ev.type](&ev);
 		if(ev.type in handler){
 			try{
-				"event %s".format(handlerNames[ev.type]).log;
+				//if(![MotionNotify, PropertyNotify].canFind(ev.type))
+				//	"event %s".format(handlerNames[ev.type]).log;
 				handler[ev.type](&ev);
 			}catch(Throwable t){
 				t.toString.log;
 			}
 		}
 	}
+}
+
+struct EventMaskMapping {
+	int mask;
+	int type;
+}
+
+enum eventMaskMap = [
+	EventMaskMapping(ExposureMask, Expose),
+	EventMaskMapping(EnterWindowMask, EnterNotify),
+	EventMaskMapping(LeaveWindowMask, LeaveNotify),
+	EventMaskMapping(ButtonPressMask, ButtonPress),
+	EventMaskMapping(ButtonReleaseMask, ButtonRelease),
+	EventMaskMapping(PointerMotionMask, MotionNotify)
+];
+
+
+void register(Window window, void delegate(XEvent*)[int] handler){
+	int mask;
+	foreach(ev, dg; handler){
+		foreach(mapping; eventMaskMap){
+			if(mapping.type == ev)
+				mask |= mapping.mask;
+		}
+		customHandler[window][ev] = dg;
+	}
+	XSelectInput(dpy, window, mask);
 }
 
 
@@ -290,25 +333,15 @@ void onButton(XEvent* e){
 	if(m && m != monitor){
 		unfocus(monitor.active, true);
 		monitor = m;
-		focus(null);
+		//focus(null);
 	}
-	//if(ev.window == monitor.bar.window){
-	//	monitor.bar.onButton(e);
-	if(ev.window == monitor.workspace.split.window){
-		monitor.workspace.split.onButton(ev);
-	}else if(c){
+	if(c){
 		c.focus;
 		for(i = 0; i < buttons.length; i++)
 			if(buttons[i].button == ev.button
 			&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev.state))
 				buttons[i].func();
 	}
-}
-
-void onButtonRelease(XEvent* e){
-	XButtonReleasedEvent* ev = &e.xbutton;
-	if(ev.window == monitor.workspace.split.window)
-		monitor.workspace.split.onButtonRelease(ev);
 }
 
 void onClientMessage(XEvent *e){
@@ -440,6 +473,7 @@ void onConfigure(XEvent *e){
 			"updating desktop size".log;
 			draw.resize(sw, sh);
 			monitor.resize([sw, sh]);
+			updateWorkarea;
 			restack;
 		}
 	}
@@ -519,7 +553,7 @@ void onEnter(XEvent* e){
 		monitor = m;
 	}else if(!c || c.win == curFocus)
 		return;
-	c.focus;
+	focus(c);
 }
 
 void onExpose(XEvent *e){
@@ -577,14 +611,12 @@ void onMotion(XEvent* e){
 	static Monitor mon = null;
 	Monitor m;
 	XMotionEvent* ev = &e.xmotion;
-	if(ev.window == monitor.workspace.split.window)
-		monitor.workspace.split.onMotion(ev);
 	if(ev.window != root)
 		return;
 	if((m = recttomon(ev.x_root, ev.y_root, 1, 1)) != mon && mon){
 		unfocus(monitor.active, true);
 		monitor = m;
-		focus(null);
+		//focus(null);
 	}
 	mon = m;
 }
@@ -603,10 +635,11 @@ Client[] clientsVisible(){
 }
 
 void restack(){
-	foreach(c; clientsVisible)
-		c.raise;
-	foreach(w; unmanaged)
-		XRaiseWindow(dpy, w);
+	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
+		XLowerWindow(dpy, tabs.window);
+	foreach_reverse(c; clientsVisible)
+		c.lower;
+	XLowerWindow(dpy, monitor.workspace.split.window);
 	XSync(dpy, false);
 	XEvent ev;
 	while(XCheckMaskEvent(dpy, EnterWindowMask, &ev)){}
@@ -625,12 +658,7 @@ void focusmon(int arg){
 	unfocus(monitor.active, false); /* s/true/false/ fixes input focus issues
 					in gedit and anjuta */
 	monitor = m;
-	focus(null);
-}
-
-void focusstack(int arg){
-	monitor.workspace.split.focusDir(arg);
-	monitor.draw;
+	//focus(null);
 }
 
 void sizeInc(){
@@ -900,7 +928,7 @@ void mousemove(){
 				int ny = ocy + (ev.xmotion.y - y);
 				c.moveResize([nx, ny], c.size);
 				if(ev.xmotion.y < monitor.workspace.split.pos.y+bh && c.isFloating){
-					monitor.workspace.split.dragWindow = monitor.workspace.split.children.length;
+					//monitor.workspace.split.dragWindow = monitor.workspace.split.children.length;
 					togglefloating;
 					XEvent button;
 					button.xbutton.button = Mouse.buttonLeft;

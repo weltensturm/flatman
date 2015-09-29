@@ -17,6 +17,8 @@ class Monitor {
 
 	int workspaceActive;
 
+	bool peekTitles;
+
 	this(int[2] pos, int[2] size){
 		this.pos = pos;
 		this.size = size;
@@ -113,9 +115,9 @@ class Monitor {
 		"monitor adding %s to workspace %s global: %s".format(client.name, workspace, client.global).log;
 		if(!client.global){
 			if(workspace == -1)
-				this.workspace.addClient(client);
+				this.workspace.add(client);
 			else
-				workspaces[workspace].addClient(client);
+				workspaces[workspace].add(client);
 		}else{
 			globals ~= client;
 			client.moveResize(client.posFloating, client.sizeFloating);
@@ -128,10 +130,11 @@ class Monitor {
 
 	void move(Client client, int workspace){
 		this.workspace.remove(client);
-		workspaces[workspace].addClient(client);
+		workspaces[workspace].add(client);
 	}
 
 	void remove(Client client){
+		"removing client %s".format(client.name).log;
 		foreach(ws; workspaces){
 			if(ws.clients.canFind(client))
 				ws.remove(client);
@@ -143,7 +146,6 @@ class Monitor {
 			resize(size);
 		}
 	}
-
 
 	void draw(){
 		workspace.onDraw;
@@ -179,7 +181,6 @@ class Monitor {
 			ws.move([cast(int)reserve[0], cast(int)reserve[2]]);
 			ws.resize([cast(int)(size.w-reserve[1]-reserve[0]), cast(int)(size.h-reserve[2]-reserve[3])]);
 		}
-		updateWorkarea;
 	}
 
 	void strut(Client client, bool remove=false){

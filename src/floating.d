@@ -23,36 +23,53 @@ class Floating: Container {
 		resize(size);
 	}
 
-	override void onShow(){
+	override void show(){
+		if(!hidden)
+			return;
 		foreach(c; hiddenChildren){
 			c.show;
 			updateClient(c);
 		}
+		hidden = false;
 	}
 
-	override void onHide(){
+	override void hide(){
+		if(hidden)
+			return;
 		foreach(c; children)
 			c.hide;
+		hidden = true;
 	}
 
 	void updateClient(Base client){
 		XRaiseWindow(dpy, (cast(Client)client).win);
 	}
 
-	override Base add(Base c){
-		assert(!c.parent);
-		assert(!flatman.clients.canFind(c));
-		"split adding %s".format((cast(Client)c).name).log;
-		auto client = cast(Client)c;
-		super.add(client);
+	alias add = Base.add;
+
+	override void add(Client client){
+		"split adding %s".format(client.name).log;
+		add(cast(Base)client);
 		if(!client.isfullscreen && !client.isfixed && !client.pos.x && !client.pos.y)
 			client.moveResize([pos.x/2-client.size.w/2, size.h-client.size.h], client.size);
-		return client;
+	}
+
+	override Client[] clients(){
+		return children.map!(a=>cast(Client)a).array;
 	}
 
 	void destroy(){
 		foreach(c; children)
 			unmanage(cast(Client)c, false);
+	}
+
+	void focusDir(int dir){
+		auto newActive = clientActive+dir;
+		if(newActive >= children.length)
+			newActive = 0;
+		else if(newActive < 0)
+			newActive = children.length-1;
+		focus(children[newActive].to!Client);
 	}
 
 }

@@ -63,6 +63,10 @@ class Client: Base {
 		XRaiseWindow(dpy, win);
 	}
 
+	void lower(){
+		XLowerWindow(dpy, win);
+	}
+
 	void setWorkspace(long i){
 		if(i >= 0 && i < monitor.workspaces.length && monitor.workspaces[i].clients.canFind(this))
 			return;
@@ -445,7 +449,7 @@ void focus(Client c){
 		foreach(w; ws.clients){
 			if(w == c){
 				monitor.workspaceActive = cast(int)si;
-				ws.setFocus(w);
+				ws.active = w;
 			}
 		}
 	}

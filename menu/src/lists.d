@@ -3,19 +3,25 @@ module menu.lists;
 import menu;
 
 
-class ListDesktop: DynamicList {
+class ListDesktop: Scroller {
+
+	DynamicList list;
 
 	this(DesktopEntry[] applications){
-		padding = 3;
+		list = new DynamicList;
+		list.padding = 3;
+		list.style.bg = [0.1,0.1,0.1,1];
+		add(list);
 		applications.each!((DesktopEntry app){
 			auto button = new ButtonDesktop([app.name, app.exec].bangJoin);
 			button.resize([5,25]);
-			add(button);
+			list.add(button);
 		});
-		style.bg = [0.1,0.1,0.1,1];
 	}
 
 	override void onDraw(){
+		draw.setColor([0.1,0.1,0.1]);
+		draw.rect(pos, size);
 		super.onDraw;
 		draw.setColor([0.3,0.3,0.3]);
 		draw.rect(pos, [2, size.h]);
@@ -31,17 +37,30 @@ void sortDir(ref string[] dirs){
 void loadAddDir(string directory, Base container){
 	writeln(directory);
 	string[] dirs;
+	string[] dirsHidden;
 	string[] files;
+	string[] filesHidden;
 	directory = directory.chomp("/") ~ "/";
-	foreach(string entry; directory.dirEntries(SpanMode.shallow)){
-		if(entry.isDir)
-			dirs ~= entry.chompPrefix(directory);
-		else
-			files ~= entry.chompPrefix(directory);
+	foreach(DirEntry entry; directory.dirEntries(SpanMode.shallow)){
+		auto name = entry.name.chompPrefix(directory);
+		if(entry.isDir){
+			if(!name.startsWith("."))
+				dirs ~= name;
+			else
+				dirsHidden ~= name;
+		}else{
+			if(!name.startsWith("."))
+				files ~= name;
+			else
+				filesHidden ~= name;
+		}
 	}
 	dirs.sortDir;
+	dirs = ".." ~ dirs;
+	dirsHidden.sortDir;
 	files.sortDir;
-	dirs.each!(delegate(string dir){
+	filesHidden.sortDir;
+	auto spawnDir = (string dir){
 		auto button = new ButtonFile(directory ~ dir);
 		button.resize([5,25]);
 		auto tree = new Tree(button);
@@ -54,12 +73,16 @@ void loadAddDir(string directory, Base container){
 		};
 		container.add(tree);
 		tree.update;
-	});
-	foreach(file; files){
+	};
+	auto spawnFile = (string file){
 		auto button = new ButtonFile(directory ~ file);
 		button.resize([5,25]);
 		container.add(button);
-	}
+	};
+	dirs.each!spawnDir;
+	files.each!spawnFile;
+	dirsHidden.each!spawnDir;
+	filesHidden.each!spawnFile;
 }
 
 class ListFiles: Scroller {

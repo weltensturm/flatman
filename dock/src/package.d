@@ -23,6 +23,7 @@ public import
 	x11.extensions.render,
 	x11.extensions.Xrender,
 	x11.keysymdef,
+	gtk.Widget,
 	ws.bindings.xft,
 	ws.bindings.fontconfig,
 	ws.gl.gl,

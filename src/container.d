@@ -9,31 +9,40 @@ class Container: Base {
 
 	long clientActive;
 	
+	@property
 	Client active(){
 		if(clientActive < children.length && clientActive >= 0)
-			return cast(Client)children[clientActive];
+			return children[clientActive].to!Client;
 		return null;
 	}
 
-	override void remove(Base client){
-		super.remove(client);
+	@property
+	void active(Client client){
+		foreach(i, c; children)
+			if(c == client){
+				clientActive = i;
+				onDraw;
+			}
+	}
+
+	alias add = Base.add;
+
+	abstract void add(Client client);
+
+	alias remove = Base.remove;
+
+	void remove(Client client){
+		remove(cast(Base)client);
 		if(clientActive >= children.length)
 			clientActive = children.length-1;
 	}
 
-	void setFocus(Base client){
-		foreach(i, c; children){
-			if(c == client){
-				clientActive = i;
-				return;
-			}
-		}
+	override void show(){
+		hidden = true;
 	}
 
-	void focus(Base client){
-		setFocus(client);
-		if(active)
-			active.focus;
+	override void hide(){
+		hidden = false;
 	}
 
 	Client[] clients(){
@@ -46,3 +55,4 @@ class Container: Base {
 	}
 
 }
+

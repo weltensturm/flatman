@@ -20,40 +20,8 @@ class ButtonExec: Button {
 		}
 	}
 
-	string command(){assert(0);}
-
-	string serialize(){assert(0);}
-
 	void spawnCommand(){
 		menuWindow.onMouseFocus(false);
-		auto dg = {
-			try{
-				string command = (command.strip ~ ' ' ~ parameter).strip;
-				writeln("running: \"%s\"".format(command));
-				"context %s".format(context).writeln;
-				if(context.isDir)
-					chdir(context);
-				auto pipes = pipeShell(command);
-				auto pid = pipes.pid.processID;
-				logExec("%s exec %s!%s!%s".format(pid, type, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));
-				auto reader = task({
-					foreach(line; pipes.stdout.byLine){
-						if(line.length)
-							log("%s stdout %s".format(pid, line));
-					}
-				});
-				reader.executeInNewThread;
-				foreach(line; pipes.stderr.byLine){
-					if(line.length)
-						log("%s stderr %s".format(pid, line));
-				}
-				reader.yieldForce;
-				auto res = pipes.pid.wait;
-				log("%s exit %s".format(pid, res));
-			}catch(Throwable t)
-				writeln(t);
-		};
-		task(dg).executeInNewThread;
 	}
 
 }
@@ -88,16 +56,12 @@ class ButtonDesktop: ButtonExec {
 		draw.noclip;
 	}
 
-	override string command(){
+	override void spawnCommand(){
 		if(parameter.length)
 			parameter = "\"" ~ parameter ~ "\"";
 		foreach(n; "uUfF")
 			exec = exec.replace("%" ~ n, parameter);
-		return exec;
-	}
-
-	override string serialize(){
-		return [name, exec].bangJoin;
+		execute(exec, "desktop", parameter, [name,exec].bangJoin);
 	}
 
 }
@@ -126,15 +90,12 @@ class ButtonScript: ButtonExec {
 		draw.text(pos.a + [draw.width(exec)+15,0], size.h, parameter);
 	}
 
-	override string command(){
-		return "%s %s".format(exec.strip, parameter.strip).strip;
-	}
-
-	override string serialize(){
-		return exec;
+	override void spawnCommand(){
+		execute(exec, parameter);
 	}
 
 }
+
 
 class ButtonFile: ButtonExec {
 
@@ -154,6 +115,17 @@ class ButtonFile: ButtonExec {
 		try
 			isDir = data.exists && data.isDir;
 		catch{}
+		if(isDir){
+			auto enter = new Button("→");
+			enter.font = "Consolas:size=9";
+			enter.style.bg.hover = [0.5,0.5,0.5,1];
+			enter.leftClick ~= {
+				setContext(data);
+				menuWindow.onMouseFocus(false);
+				menuWindow.onMouseFocus(true);
+			};
+			add(enter);
+		}
 		file = data;
 		type = "file";
 		if(parentDir.length)
@@ -161,38 +133,41 @@ class ButtonFile: ButtonExec {
 		this.parentDir = parentDir;
 	}
 
-	override void spawnCommand(){
-		if(isDir)
-			return;
-		super.spawnCommand;
+	override void resize(int[2] size){
+		super.resize(size);
+		foreach(i, c; children){
+			c.move(pos.a + [size.w - 2 - size.h*i.to!int, 2]);
+			c.resize([size.h-4,size.h-4]);
+		}
 	}
 
 	override void onDraw(){
-		//draw.setColor([27/255.0,27/255.0,27/255.0,1]);
-		//draw.rect(pos, size);
 		draw.setFont(font, fontSize);
 		if(mouseFocus || previewDrop){
 			draw.setColor([0.2, 0.2, 0.2]);
 			draw.rect(pos, size);
 		}
 		int x = 10+cast(int)parentDir.count("/")*20;
-		auto text = [file.baseName];
 		if(file == ".")
 			return;
-		foreach(i, part; text){
-			bool last = i == text.length-1;
-			if(last && !isDir)
-				draw.setColor([0.933,0.933,0.933]);
+		auto text = file.baseName;
+		if(isDir){
+			if(text.startsWith("."))
+				draw.setColor([0.4,0.5,0.4]);
 			else
 				draw.setColor([0.733,0.933,0.733]);
-			draw.text(pos.a + [x,0], size.h, part);
-			x += draw.width(part);
-			draw.setColor([0.6,0.6,0.6]);
-			if(!last){
-				draw.text(pos.a + [x,0], size.h, "/");
-				x += draw.width("/");
-			}
+		}else{
+			if(text.startsWith("."))
+				draw.setColor([0.4,0.4,0.4]);
+			else
+				draw.setColor([0.933,0.933,0.933]);
 		}
+		draw.text(pos.a + [x,0], size.h, text);
+		x += draw.width(text);
+		draw.setColor([0.6,0.6,0.6]);
+		if(hasMouseFocus)
+			foreach(c; children)
+				c.onDraw;
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -263,14 +238,10 @@ class ButtonFile: ButtonExec {
 	}
 
 
-	override string command(){
+	override void spawnCommand(){
 		if(isDir)
-			return "";
-		return "exo-open \"%s\" || xdg-open \"%s\"".format(file.strip, file.strip).strip;
-	}
-
-	override string serialize(){
-		return file;
+			return;
+		openFile(file.buildNormalizedPath);
 	}
 
 }

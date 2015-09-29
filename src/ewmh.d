@@ -76,6 +76,7 @@ void updateWorkarea(){
 		data ~= [ws.split.pos.x, ws.split.pos.y, ws.split.size.w, ws.split.size.h];
 	net.workArea.replace(data);
 	net.viewport.replace([0L,0L]);
+	"RESIZE %s".format(monitor.size.to!(long[])).log;
 	net.geometry.replace(monitor.size.to!(long[]));
 }
 

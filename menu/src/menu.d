@@ -105,8 +105,7 @@ class Menu: ws.wm.Window {
 		auto screen = screenSize.get(2);
 
 		path = addNew!PathChooser;
-		path.text.font = "Consolas:size=9";
-		path.text.text = context.nice;
+		path.text = context.nice;
 
 		tabs = addNew!Categories;
 		tabs.addPage("Frequent", new ListFrequent);
@@ -161,9 +160,9 @@ class Menu: ws.wm.Window {
 
 	override void resize(int[2] size){
 		super.resize(size);
-		path.move([0, size.h-25]);
+		path.move([0, 2]);
 		path.resize([size.w-2, 25]);
-		tabs.move([0,2]);
+		tabs.move([0, 27]);
 		tabs.resize(size.a-[2,2+25]);
 	}
 
@@ -181,6 +180,7 @@ class Menu: ws.wm.Window {
 
 	override void onMouseFocus(bool focus){
 		if(active != focus && !active){
+			path.text = context.nice;
 			remove(tabs);
 			tabs = addNew!Categories;
 			tabs.addPage("Files", new ListFiles);
@@ -217,6 +217,35 @@ class Categories: Tabs {
 }
 
 
+class PathChooser: Base {
+
+	string text;
+
+	override void onDraw(){
+		draw.setColor([0.1,0.1,0.1]);
+		draw.rect(pos, size);
+		draw.setColor([0.867,0.514,0]);
+		draw.rect(pos, [size.w, 1]);
+		draw.setColor([1,1,1]);
+		draw.setFont("Consolas:size=9", 0);
+		int x = size.w/2 - draw.width(text)/2;
+		foreach(i, part; text.split("/")){
+			bool last = i == text.length-1;
+			draw.setColor([0.733,0.933,0.733]);
+			draw.text(pos.a + [x,0], size.h, part);
+			x += draw.width(part);
+			draw.setColor([0.6,0.6,0.6]);
+			if(!last){
+				draw.text(pos.a + [x,0], size.h, "/");
+				x += draw.width("/");
+			}
+		}
+		super.onDraw;
+	}
+
+}
+
+
 string context(){
 	auto file = "~/.dinu/%s".format(currentDesktop.get).expandTilde;
 	if(file.exists && file.readText.exists)
@@ -224,9 +253,48 @@ string context(){
 	return "~".expandTilde;
 }
 
+void setContext(string context){
+	auto file = "~/.dinu/%s".format(currentDesktop.get).expandTilde;
+	std.file.write(file, context.expandTilde.buildNormalizedPath);
+}
+
 string nice(string path){
 	return path.replace("~".expandTilde, "~");
 }
+
+
+void execute(string command, string type, string parameter="", string serialized=""){
+	auto dg = {
+		try{
+			string command = (command.strip ~ ' ' ~ parameter).strip;
+			if(!serialized.length)
+				serialized = command;
+			writeln("running: \"%s\"".format(command));
+			"context %s".format(context).writeln;
+			chdir(context);
+			auto pipes = pipeShell(command);
+			auto pid = pipes.pid.processID;
+			logExec(pid, type, serialized.replace("!", "\\!"), parameter);
+			auto reader = task({
+				foreach(line; pipes.stdout.byLine){
+					if(line.length)
+						log("%s stdout %s".format(pid, line));
+				}
+			});
+			reader.executeInNewThread;
+			foreach(line; pipes.stderr.byLine){
+				if(line.length)
+					log("%s stderr %s".format(pid, line));
+			}
+			reader.yieldForce;
+			auto res = pipes.pid.wait;
+			log("%s exit %s".format(pid, res));
+		}catch(Throwable t)
+			writeln(t);
+	};
+	task(dg).executeInNewThread;
+}
+
 
 private Mutex logMutex;
 
@@ -245,7 +313,8 @@ void log(string text){
 	}
 }
 
-void logExec(string text){
+void logExec(int pid, string type, string serialized, string parameter){
+	string text = "%s exec %s!%s!%s".format(pid, type, serialized, parameter);
 	log(text);
 	synchronized(logMutex){
 		auto path = "~/.dinu/%s.exec".format(currentDesktop.get).expandTilde;
@@ -254,37 +323,4 @@ void logExec(string text){
 		else
 			std.file.write(path, text ~ '\n');
 	}
-}
-
-
-class PathChooser: Base {
-
-	Text text;
-	Button up;
-	Button open;
-
-	this(){
-		text = addNew!Text;
-		up = addNew!Button("⇧");
-		open = addNew!Button("⇨");
-	}
-
-	override void resize(int[2] size){
-		text.resize(size);
-
-		up.resize([size.h-4, size.h-4]);
-		up.moveLocal([size.w-size.h*2, 2]);
-		writeln(up.pos, ' ', up.size);
-
-		open.resize([size.h-4, size.h-4]);
-		open.moveLocal([size.w-size.h, 2]);
-		super.resize(size);
-	}
-
-	override void onDraw(){
-		draw.setColor([0.35,0.35,0.35]);
-		draw.rect(pos, size);
-		super.onDraw;
-	}
-
 }
