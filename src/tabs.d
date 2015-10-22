@@ -78,7 +78,6 @@ class Tabs: Container {
 		if(!hidden)
 			return;
 		XMapWindow(dpy, window);
-		XLowerWindow(dpy, window);
 		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
 		if(active)
 			active.show;
@@ -109,9 +108,11 @@ class Tabs: Container {
 	override void remove(Client client){
 		"tabs removing %s".format(client.name).log;
 		super.remove(client);
+		XSync(dpy, false);
 		auto n = any;
 		if(n)
-			flatman.focus(n);
+			active = n;
+		writeln(n);
 		onDraw;
 	}
 
@@ -125,6 +126,22 @@ class Tabs: Container {
 		if(!children.length || clientActive == 0)
 			return null;
 		return children[clientActive-1].to!Client;
+	}
+
+	void moveLeft(){
+		if(clientActive <= 0)
+			return;
+		swap(children[clientActive], children[clientActive-1]);
+		clientActive--;
+		onDraw;
+	}
+
+	void moveRight(){
+		if(clientActive >= children.length-1)
+			return;
+		swap(children[clientActive], children[clientActive+1]);
+		clientActive++;
+		onDraw;
 	}
 
 	Client any(){
@@ -167,11 +184,16 @@ class Tabs: Container {
 			return;
 		int offset = 0;
 		bool containerFocused = clients.canFind(flatman.active);
-		foreach(i, c; children.map!(a=>a.to!Client).array){
+		foreach(i, c; children.to!(Client[])){
 			auto gap = config["split paddingElem"].to!int;
+			auto leaf = (
+					c.isUrgent ? "urgent"
+					: flatman.active == c ? "active"
+					: c.isfullscreen ? "fullscreen"
+					: "normal");
 			auto color = config.color("split border "
 					~ (insertTab ? "insert " : "")
-					~ (flatman.active == c ? "active" : "normal"));
+					~ leaf);
 			draw.clip([offset,0], [size.w/cast(int)children.length,size.h]);
 			draw.setColor(color);
 			draw.rect([offset,0], [size.w/cast(int)children.length,size.h]);
@@ -182,7 +204,7 @@ class Tabs: Container {
 				}
 				color = config.color("split title "
 						~ (insertTab ? "insert " : "")
-						~ (flatman.active == c ? "active" : "normal"));
+						~ leaf);
 				draw.setColor(color);
 				draw.setFont("Consolas:size=10", 0);
 				draw.text([offset + size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2, size.h-bh], bh+2, c.name);

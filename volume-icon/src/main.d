@@ -92,7 +92,7 @@ class DeviceContainer: Table {
 		});
 		radio = null;
 		attach(
-			new Separator(GtkOrientation.VERTICAL), 0, 2, row, row+1, 
+			new Separator(GtkOrientation.VERTICAL), 0, 2, row, row+1,
 			GtkAttachOptions.EXPAND|GtkAttachOptions.FILL, GtkAttachOptions.SHRINK,
 			10, 10
 		);

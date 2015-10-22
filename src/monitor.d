@@ -87,6 +87,14 @@ class Monitor {
 		}
 	}
 
+	void moveLeft(){
+		workspace.split.moveLeft;
+	}
+
+	void moveRight(){
+		workspace.split.moveRight;
+	}
+
 	void moveDown(){
 		if(workspaceActive == workspaces.length-1)
 			return;
@@ -166,7 +174,7 @@ class Monitor {
 	}
 
 	Client[] clientsVisible(){
-		return workspace.clients ~ globals;
+		return (workspace.clients ~ globals).filter!(a=>a.isVisible).array;
 	}
 
 	void resize(int[2] size){

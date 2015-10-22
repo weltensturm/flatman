@@ -109,12 +109,16 @@ class ListFiles: Scroller {
 
 
 
-class ListFrequent: DynamicList {
+class ListFrequent: Scroller {
+
+	DynamicList list;
 
 	Entry[] history;
 
 	this(){
-		padding = 3;
+		list = addNew!DynamicList;
+		list.padding = 0;
+		list.style.bg = [0.1,0.1,0.1,1];
 		auto historyFile = "~/.dinu/%s.exec".expandTilde.format(currentDesktop.get);
 		writeln(historyFile);
 		Entry[string] tmp;
@@ -151,7 +155,7 @@ class ListFrequent: DynamicList {
 			if(button){
 				button.resize([5,25]);
 				button.parameter = split[2];
-				add(button);
+				list.add(button);
 			}
 		}
 		style.bg = [0.1,0.1,0.1,1];

@@ -76,8 +76,10 @@ void resize(string what){
 void move(string what){
 	final switch(what){
 		case "+":
+			monitor.moveRight;
 			break;
 		case "-":
+			monitor.moveLeft;
 			break;
 		case "up":
 			monitor.moveUp;

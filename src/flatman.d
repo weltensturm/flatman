@@ -430,8 +430,7 @@ void onProperty(XEvent *e){
 				if(del)
 					return;
 				c.updateWmHints;
-				foreach(m; monitors)
-					m.draw;
+				monitor.draw;
 			},
 			XA_WM_NAME: {
 				if(del)
@@ -638,7 +637,8 @@ void restack(){
 	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
 		XLowerWindow(dpy, tabs.window);
 	foreach_reverse(c; clientsVisible)
-		c.lower;
+		if(!c.global && (!c.isfullscreen || active != c))
+			c.lower;
 	XLowerWindow(dpy, monitor.workspace.split.window);
 	XSync(dpy, false);
 	XEvent ev;
@@ -698,11 +698,11 @@ bool gettextprop(Window w, Atom atom, ref string text){
 	XGetTextProperty(dpy, w, &name, atom);
 	if(!name.nitems)
 		return false;
-	if(name.encoding == XA_STRING)
-		text = to!string(name.value);
-	else {
+	if(name.encoding == XA_STRING){
+		text = to!string(*name.value);
+	}else{
 		if(XmbTextPropertyToTextList(dpy, &name, &list, &n) >= Success && n > 0 && *list){
-			text = to!string(*list);
+			text = (*list).to!string;
 			XFreeStringList(list);
 		}
 	}

@@ -363,6 +363,12 @@ void unfocus(Client c, bool setfocus){
 		XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
 		XDeleteProperty(dpy, root, net.windowActive);
 	}
+	if(c.isfullscreen){
+		if(!c.isFloating)
+			monitor.workspace.split.rebuild;
+		else
+			c.moveResize(c.posFloating, c.sizeFloating);
+	}
 }
 
 void unmanage(Client c, bool force=false){
@@ -386,8 +392,7 @@ void unmanage(Client c, bool force=false){
 void updatetitle(Client c){
 	if(!gettextprop(c.win, net.name, c.name))
 		gettextprop(c.win, XA_WM_NAME, c.name);
-	if(!c.name.length)
-		c.name = broken;
+	monitor.draw;
 }
 
 void applyRules(Client c){
@@ -453,9 +458,9 @@ void focus(Client c){
 			}
 		}
 	}
-	restack;
 	if(c.isfullscreen)
-		c.raise;
+		c.moveResize(c.monitor.pos, c.monitor.size);
+	restack;
 	foreach(m; monitors)
 		m.draw;
 	XSync(dpy, false);

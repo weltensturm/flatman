@@ -16,6 +16,13 @@ long find(T)(T[] array, T what){
 }
 
 
+void swap(T)(ref T[] array, size_t i1, size_t i2){
+	T copy = array[i1];
+	array[i1] = array[i2];
+	array[i2] = copy;
+}
+
+
 class Split: Container {
 
 	enum {
@@ -98,16 +105,23 @@ class Split: Container {
 	alias add = Base.add;
 
 	override void add(Client client){
-		"split adding %s".format((cast(Client)client).name).log;
+		add(client, long.max);
+	}
+
+	void add(Client client, long position=long.max){
+		XSync(dpy, false);
+		if(position == long.max)
+			position = clientActive;
+		"split adding %s at %s".format(client.to!Client.name, position).log;
 		Tabs tab;
-		if(children.length && (cast(Tabs)children[clientActive]).insertTab){
-			tab = cast(Tabs)children[clientActive];
+		if(position >= 0 && position < children.length && children[position].to!Tabs.insertTab){
+			tab = children[position].to!Tabs;
 		}else{
 			tab = new Tabs;
 			tab.parent = this;
-			if(clientActive < children.length){
-				children = children[0..clientActive+1] ~ tab ~ children[clientActive+1..$];
-				sizes = sizes[0..clientActive+1] ~ client.size.w ~ sizes[clientActive+1..$];
+			if(position < children.length.to!long){
+				children = children[0..position+1] ~ tab ~ children[position+1..$];
+				sizes = sizes[0..position+1] ~ client.size.w ~ sizes[position+1..$];
 			}else{
 				children ~= tab;
 				sizes ~= client.size.w;
@@ -118,7 +132,59 @@ class Split: Container {
 		rebuild;
 	}
 
-	alias remove = Base.remove;
+	void moveLeft(){
+		if(clientActive >= 0 && clientActive < children.length){
+			auto tabs = children[clientActive].to!Tabs;
+			Tabs tabsLeft;
+			if(clientActive > 0 && clientActive < children.length)
+				tabsLeft = children[clientActive-1].to!Tabs;
+			if(tabs.prev){
+				tabs.moveLeft;
+			}else if(tabsLeft && tabsLeft.insertTab){
+				Client client = tabs.active;
+				remove(client);
+				tabsLeft.add(client);
+				rebuild;
+			}else if(clientActive == 0){
+				Client client = tabs.active;
+				remove(client);
+				add(client, clientActive-1);
+				flatman.focus(client);
+			}else if(clientActive > 0){
+				children.swap(clientActive, clientActive-1);
+				sizes.swap(clientActive, clientActive-1);
+				clientActive--;
+			}
+			resize(size);
+		}
+	}
+
+	void moveRight(){
+		if(clientActive >= 0 && clientActive < children.length){
+			auto tabs = children[clientActive].to!Tabs;
+			Tabs tabsRight;
+			if(clientActive >= 0 && clientActive < children.length-1)
+				tabsRight = children[clientActive+1].to!Tabs;
+			if(tabs.next){
+				tabs.moveRight;
+			}else if(tabsRight && tabsRight.insertTab){
+				Client client = tabs.active;
+				remove(client);
+				tabsRight.add(client);
+				rebuild;
+			}else if(clientActive == children.length-1){
+				Client client = tabs.active;
+				remove(client);
+				add(client, clientActive+1);
+				flatman.focus(client);
+			}else if(clientActive < children.length-1){
+				children.swap(clientActive, clientActive+1);
+				sizes.swap(clientActive, clientActive+1);
+				clientActive++;
+			}
+			resize(size);
+		}
+	}
 
 	override void onDraw(){
 		draw.setColor(config.color("split background"));
@@ -127,14 +193,19 @@ class Split: Container {
 		super.onDraw;
 	}
 
+	override void remove(Base base){
+		Base.remove(base);
+		rebuild;
+	}
+
 	override void remove(Client client){
-		"split removing %s".format((cast(Client)client).name).log;
-		foreach(i, c; children){
-			if(c.children.canFind(client)){
-				c.remove(client);
-				if(!c.children.length){
-					c.hide;
-					remove(c);
+		"split removing %s".format(client.name).log;
+		foreach(i, container; children.to!(Tabs[])){
+			if(container.children.canFind(client)){
+				container.remove(client);
+				if(!container.children.length){
+					container.hide;
+					remove(container);
 					sizes = sizes[0..i] ~ sizes[i+1..$];
 					if(clientActive >= children.length)
 						clientActive = cast(int)children.length-1;
@@ -201,6 +272,7 @@ class Split: Container {
 		int offset = 0;
 		foreach(i, c; children){
 			c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
+			XSync(dpy, false);
 			c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);
 			offset += cast(int)sizes[i]+padding;
 		}
