@@ -1,0 +1,12 @@
+{
+	"name" : "flatman-input",
+	"description" : "input menu for flatman",
+	"targetType": "executable",
+	"sourcePaths": ["src"],
+	"dependencies" : {
+		"ws": "~master",
+		"dinu": "~master",
+		"gtk-d": "~master"
+	},
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xi"]
+}

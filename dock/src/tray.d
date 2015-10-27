@@ -30,6 +30,9 @@ import dock;
  * Copyright (C) 2003-2006 Vincent Untz */
 
 
+/+
+
+
 /* Standards reference:  http://standards.freedesktop.org/systemtray-spec/ */
 
 /* Protocol constants. */
@@ -52,36 +55,30 @@ struct BalloonMessage {
 }
 
 /* Representative of a tray client. */
-struct TrayClient {
-    TrayClient* client_flink;		/* Forward link to next task in X window ID order */
-    TrayPlugin* tr;			/* Back pointer to tray plugin */
+class TrayClient {
+    TrayPlugin tray;			/* Back pointer to tray plugin */
     x11.X.Window window;				/* X window ID */
-    GtkWidget* socket;				/* Socket */
+    Widget socket;				/* Socket */
 }
 
 /* Private context for system tray plugin. */
-struct TrayPlugin {
+class TrayPlugin {
 
-    GtkWidget* plugin;				/* Back pointer to Plugin */
-    LXPanel* panel;
-    TrayClient* client_list;			/* List of tray clients */
-    BalloonMessage* incomplete_messages;	/* List of balloon messages for which we are awaiting data */
-    BalloonMessage* messages;			/* List of balloon messages actively being displayed or waiting to be displayed */
-    GtkWidget* balloon_message_popup;		/* Popup showing balloon message */
+    Widget plugin;				/* Back pointer to Plugin */
+    TrayClient[] clients;			/* List of tray clients */
+    BalloonMessage[] incomplete_messages;	/* List of balloon messages for which we are awaiting data */
+    BalloonMessage[] messages;			/* List of balloon messages actively being displayed or waiting to be displayed */
+    Widget balloon_message_popup;		/* Popup showing balloon message */
     uint balloon_message_timer;		/* Timer controlling balloon message */
-    GtkWidget* invisible;			/* Invisible window that holds manager selection */
+    Widget invisible;			/* Invisible window that holds manager selection */
     x11.X.Window invisible_window;			/* X window ID of invisible window */
     GdkAtom selection_atom;			/* Atom for _NET_SYSTEM_TRAY_S%d */
 
     /* Look up a client in the client list. */
-    TrayClient* client_lookup(x11.X.Window window){
-        TrayClient* tc;
-        for(tc = tr.client_list; tc != null; tc = tc.client_flink){
-            if (tc.window == window)
-                return tc;
-            if (tc.window > window)
-                break;
-            }
+    TrayClient client_lookup(x11.X.Window window){
+        foreach(client; clients)
+        	if(client.window == window)
+        		return client;
         return null;
     }
 
@@ -101,30 +98,15 @@ struct TrayPlugin {
     }
 
     /* Delete a client. */
-    void client_delete(TrayClient* tc, bool unlink, bool remove){
-        if(unlink){
-            if (tr.client_list == tc)
-                tr.client_list = tc.client_flink;
-            else{
-                /* Locate the task and its predecessor in the list and then remove it.  For safety, ensure it is found. */
-                TrayClient* tc_pred = null;
-                TrayClient* tc_cursor;
-                for (
-                  tc_cursor = tr.client_list;
-                  ((tc_cursor != null) && (tc_cursor != tc));
-                  tc_pred = tc_cursor, tc_cursor = tc_cursor.client_flink){}
-                if (tc_cursor == tc)
-                    tc_pred.client_flink = tc.client_flink;
-            }
-        }
+    void client_delete(TrayClient client, bool remove, bool destroy){
+        if(remove)
+        	clients = clients.without(client);
         /* Clear out any balloon messages. */
-        balloon_incomplete_message_remove(tr, tc.window, TRUE, 0);
-        balloon_message_remove(tr, tc.window, TRUE, 0);
+        balloon_incomplete_message_remove(client.window, true, 0);
+        balloon_message_remove(client.window, true, 0);
         /* Remove the socket from the icon grid. */
-        if (remove)
-            gtk_widget_destroy(tc.socket);
-        /* Deallocate the client structure. */
-        g_free(tc);
+        if(destroy)
+            gtk_widget_destroy(client.socket);
     }
 
     /*** Balloon message display ***/
@@ -140,69 +122,69 @@ struct TrayPlugin {
      * This is used in three scenarios: balloon clicked, timeout expired, destructor. */
     void balloon_message_advance(bool destroy_timer, bool display_next){
         /* Remove the message from the queue. */
-        BalloonMessage* msg = tr.messages;
-        tr.messages = msg.flink;
+        BalloonMessage msg = messages[0];
+        messages = messages.without(msg);
         /* Cancel the timer, if set.  This is not done when the timer has expired. */
-        if ((destroy_timer) && (tr.balloon_message_timer != 0))
-            g_source_remove(tr.balloon_message_timer);
-        tr.balloon_message_timer = 0;
+        if ((destroy_timer) && (balloon_message_timer != 0))
+            g_source_remove(balloon_message_timer);
+        balloon_message_timer = 0;
         /* Destroy the widget. */
-        if (tr.balloon_message_popup != null)
-            gtk_widget_destroy(tr.balloon_message_popup);
-        tr.balloon_message_popup = null;
+        if (balloon_message_popup != null)
+            gtk_widget_destroy(balloon_message_popup);
+        balloon_message_popup = null;
         /* Free the message. */
         balloon_message_free(msg);
         /* If there is another message waiting in the queue, display it.  This is not done in the destructor. */
-        if ((display_next) && (tr.messages != null))
-            balloon_message_display(tr, tr.messages);
+        if ((display_next) && (messages != null))
+            balloon_message_display(messages);
     }
 
     /* Handler for "button-press-event" from balloon message popup menu item. */
-    static bool balloon_message_activate_event(GtkWidget * widget, GdkEventButton * event, TrayPlugin* tr){
-        balloon_message_advance(tr, TRUE, TRUE);
-        return TRUE;
+    static bool balloon_message_activate_event(Widget * widget, GdkEventButton * event, TrayPlugin* tr){
+        balloon_message_advance(true, true);
+        return true;
     }
 
     /* Timer expiration for balloon message. */
     static bool balloon_message_timeout(TrayPlugin* tr){
         if (!g_source_is_destroyed(g_main_current_source()))
-            balloon_message_advance(tr, FALSE, TRUE);
-        return FALSE;
+            balloon_message_advance(false, true);
+        return false;
     }
 
     /* Create the graphic elements to display a balloon message. */
     void balloon_message_display(BalloonMessage* msg){
         /* Create a window and an item containing the text. */
-        tr.balloon_message_popup = gtk_window_new(GTK_WINDOW_POPUP);
-        GtkWidget * balloon_text = gtk_label_new(msg.string);
-        gtk_label_set_line_wrap(GTK_LABEL(balloon_text), TRUE);
+        balloon_message_popup = gtk_window_new(GTK_WINDOW_POPUP);
+        Widget * balloon_text = gtk_label_new(msg.string);
+        gtk_label_set_line_wrap(GTK_LABEL(balloon_text), true);
         gtk_misc_set_alignment(GTK_MISC(balloon_text), 0.5, 0.5);
-        gtk_container_add(GTK_CONTAINER(tr.balloon_message_popup), balloon_text);
+        gtk_container_add(GTK_CONTAINER(balloon_message_popup), balloon_text);
         gtk_widget_show(balloon_text);
-        gtk_container_set_border_width(GTK_CONTAINER(tr.balloon_message_popup), 4);
+        gtk_container_set_border_width(GTK_CONTAINER(balloon_message_popup), 4);
         /* Connect signals.  Clicking the popup dismisses it and displays the next message, if any. */
-        gtk_widget_add_events(tr.balloon_message_popup, GDK_BUTTON_PRESS_MASK);
-        g_signal_connect(tr.balloon_message_popup, "button-press-event", G_CALLBACK(balloon_message_activate_event), cast(void*)tr);
+        gtk_widget_add_events(balloon_message_popup, GDK_BUTTON_PRESS_MASK);
+        g_signal_connect(balloon_message_popup, "button-press-event", G_CALLBACK(balloon_message_activate_event), cast(void*)tr);
         /* Compute the desired position in screen coordinates near the tray plugin. */
         int x;
         int y;
-        lxpanel_plugin_popup_set_position_helper(tr.panel, tr.plugin, tr.balloon_message_popup, &x, &y);
+        lxpanel_plugin_popup_set_position_helper(panel, plugin, balloon_message_popup, &x, &y);
         /* Show the popup. */
-        gtk_window_move(GTK_WINDOW(tr.balloon_message_popup), x, y);
-        gtk_widget_show(tr.balloon_message_popup);
+        gtk_window_move(GTK_WINDOW(balloon_message_popup), x, y);
+        gtk_widget_show(balloon_message_popup);
         /* Set a timer, if the client specified one.  Both are in units of milliseconds. */
         if (msg.timeout != 0)
-            tr.balloon_message_timer = g_timeout_add(msg.timeout, cast(GSourceFunc) balloon_message_timeout, tr);
+            balloon_message_timer = g_timeout_add(msg.timeout, cast(GSourceFunc) balloon_message_timeout, tr);
     }
 
     /* Add a balloon message to the tail of the message queue.  If it is the only element, display it immediately. */
     void balloon_message_queue(BalloonMessage* msg){
-        if (tr.messages == null){
-            tr.messages = msg;
-            balloon_message_display(tr, msg);
+        if (messages == null){
+            messages = msg;
+            balloon_message_display(msg);
         }else{
             BalloonMessage* msg_pred;
-            for (msg_pred = tr.messages; ((msg_pred != null) && (msg_pred.flink != null)); msg_pred = msg_pred.flink){}
+            for (msg_pred = messages; ((msg_pred != null) && (msg_pred.flink != null)); msg_pred = msg_pred.flink){}
             if (msg_pred != null)
                 msg_pred.flink = msg;
         }
@@ -212,14 +194,14 @@ struct TrayPlugin {
      * Used in two scenarios: client issues CANCEL (ID significant), client plug removed (ID don't care). */
     void balloon_incomplete_message_remove(x11.X.Window window, bool all_ids, long id){
         BalloonMessage* msg_pred = null;
-        BalloonMessage* msg = tr.incomplete_messages;
+        BalloonMessage* msg = incomplete_messages;
         while (msg != null){
             /* Establish successor in case of deletion. */
             BalloonMessage* msg_succ = msg.flink;
             if ((msg.window == window) && ((all_ids) || (msg.id == id))){
                 /* Found a message matching the criteria.  Unlink and free it. */
                 if (msg_pred == null)
-                    tr.incomplete_messages = msg.flink;
+                    incomplete_messages = msg.flink;
                 else
                     msg_pred.flink = msg.flink;
                 balloon_message_free(msg);
@@ -234,7 +216,7 @@ struct TrayPlugin {
      * Used in two scenarios: client issues CANCEL (ID significant), client plug removed (ID don't care). */
     void balloon_message_remove(x11.X.Window window, bool all_ids, long id){
         BalloonMessage* msg_pred = null;
-        BalloonMessage* msg_head = tr.messages;
+        BalloonMessage* msg_head = messages;
         BalloonMessage* msg = msg_head;
         while (msg != null){
             /* Establish successor in case of deletion. */
@@ -243,14 +225,14 @@ struct TrayPlugin {
                 /* Found a message matching the criteria. */
                 if (msg_pred == null){
                     /* The message is at the queue head, so is being displayed.  Stop the display. */
-                    tr.messages = msg.flink;
-                    if (tr.balloon_message_timer != 0){
-                        g_source_remove(tr.balloon_message_timer);
-                        tr.balloon_message_timer = 0;
+                    messages = msg.flink;
+                    if (balloon_message_timer != 0){
+                        g_source_remove(balloon_message_timer);
+                        balloon_message_timer = 0;
                     }
-                    if (tr.balloon_message_popup != null){
-                        gtk_widget_destroy(tr.balloon_message_popup);
-                        tr.balloon_message_popup = null;
+                    if (balloon_message_popup != null){
+                        gtk_widget_destroy(balloon_message_popup);
+                        balloon_message_popup = null;
                     }
                 }else
                     msg_pred.flink = msg.flink;
@@ -263,18 +245,18 @@ struct TrayPlugin {
             msg = msg_succ;
         }
         /* If there is a new message head, display it now. */
-        if ((tr.messages != msg_head) && (tr.messages != null))
-            balloon_message_display(tr, tr.messages);
+        if ((messages != msg_head) && (messages != null))
+            balloon_message_display(messages);
     }
 
     /*** Event interfaces ***/
 
     /* Handle a balloon message SYSTEM_TRAY_BEGIN_MESSAGE event. */
     void balloon_message_begin_event(XClientMessageEvent* xevent){
-        TrayClient* client = client_lookup(tr, xevent.window);
+        TrayClient* client = client_lookup(xevent.window);
         if (client != null){
             /* Check if the message ID already exists. */
-            balloon_incomplete_message_remove(tr, xevent.window, FALSE, xevent.data.l[4]);
+            balloon_incomplete_message_remove(xevent.window, false, xevent.data.l[4]);
 
             /* Allocate a BalloonMessage structure describing the message. */
             BalloonMessage* msg = g_new0(BalloonMessage, 1);
@@ -286,11 +268,11 @@ struct TrayPlugin {
             msg.string = g_new0!char(msg.length + 1);
             /* Message length of 0 indicates that no follow-on messages will be sent. */
             if(msg.length == 0)
-                balloon_message_queue(tr, msg);
+                balloon_message_queue(msg);
             else{
                 /* Add the new message to the queue to await its message text. */
-                msg.flink = tr.incomplete_messages;
-                tr.incomplete_messages = msg;
+                msg.flink = incomplete_messages;
+                incomplete_messages = msg;
             }
         }
     }
@@ -298,11 +280,11 @@ struct TrayPlugin {
     /* Handle a balloon message SYSTEM_TRAY_CANCEL_MESSAGE event. */
     void balloon_message_cancel_event(XClientMessageEvent * xevent){
         /* Remove any incomplete messages on this window with the specified ID. */
-        balloon_incomplete_message_remove(tr, xevent.window, TRUE, 0);
+        balloon_incomplete_message_remove(xevent.window, true, 0);
         /* Remove any displaying or waiting messages on this window with the specified ID. */
-        TrayClient* client = client_lookup(tr, xevent.window);
+        TrayClient* client = client_lookup(xevent.window);
         if (client != null)
-            balloon_message_remove(tr, xevent.window, FALSE, xevent.data.l[2]);
+            balloon_message_remove(xevent.window, false, xevent.data.l[2]);
     }
 
     /* Handle a balloon message _NET_SYSTEM_TRAY_MESSAGE_DATA event. */
@@ -310,7 +292,7 @@ struct TrayPlugin {
         /* Look up the pending message in the list. */
         BalloonMessage* msg_pred = null;
         BalloonMessage* msg;
-        for (msg = tr.incomplete_messages; msg != null; msg_pred = msg, msg = msg.flink){
+        for (msg = incomplete_messages; msg != null; msg_pred = msg, msg = msg.flink){
             if (xevent.window == msg.window){
                 /* Append the message segment to the message. */
                 int length = MIN(msg.remaining_length, 20);
@@ -320,13 +302,13 @@ struct TrayPlugin {
                 if (msg.remaining_length == 0){
                     /* Unlink the message from the structure. */
                     if (msg_pred == null)
-                        tr.incomplete_messages = msg.flink;
+                        incomplete_messages = msg.flink;
                     else
                         msg_pred.flink = msg.flink;
                     /* If the client window is valid, queue the message.  Otherwise discard it. */
-                    TrayClient* client = client_lookup(tr, msg.window);
+                    TrayClient* client = client_lookup(msg.window);
                     if(client != null)
-                        balloon_message_queue(tr, msg);
+                        balloon_message_queue(msg);
                     else
                         balloon_message_free(msg);
                 }
@@ -340,7 +322,7 @@ struct TrayPlugin {
         /* Search for the window in the client list.  Set up context to do an insert right away if needed. */
         TrayClient* tc_pred = null;
         TrayClient* tc_cursor;
-        for (tc_cursor = tr.client_list; tc_cursor != null; tc_pred = tc_cursor, tc_cursor = tc_cursor.client_flink){
+        for (tc_cursor = client_list; tc_cursor != null; tc_pred = tc_cursor, tc_cursor = tc_cursor.client_flink){
             if (tc_cursor.window == cast(x11.X.Window)xevent.data.l[2])
                 return;     /* We already got this notification earlier, ignore this one. */
             if (tc_cursor.window > cast(x11.X.Window)xevent.data.l[2])
@@ -356,7 +338,7 @@ struct TrayPlugin {
         tc.socket = gtk_socket_new();
 
         /* Add the socket to the icon grid. */
-        gtk_container_add(GTK_CONTAINER(tr.plugin), tc.socket);
+        gtk_container_add(GTK_CONTAINER(plugin), tc.socket);
         gtk_widget_show(tc.socket);
 
         /* Connect the socket to the plug.  This can only be done after the socket is realized. */
@@ -374,8 +356,8 @@ struct TrayPlugin {
         /* Link the client structure into the client list. */
         if (tc_pred == null)
         {
-            tc.client_flink = tr.client_list;
-            tr.client_list = tc;
+            tc.client_flink = client_list;
+            client_list = tc;
         }
         else
         {
@@ -392,9 +374,9 @@ struct TrayPlugin {
              * of plug_removed events is observed to be unreliable if the client
              * disconnects within less than 10 ms. */
             XDestroyx11.X.WindowEvent * xev_destroy = cast(XDestroyx11.X.WindowEvent *) xev;
-            TrayClient* tc = client_lookup(tr, xev_destroy.window);
+            TrayClient* tc = client_lookup(xev_destroy.window);
             if (tc != null)
-                client_delete(tr, tc, TRUE, TRUE);
+                client_delete(tc, true, true);
         }else if (xev.type == ClientMessage){
             if (xev.xclient.message_type == a_NET_SYSTEM_TRAY_OPCODE){
                 /* Client message of type _NET_SYSTEM_TRAY_OPCODE.
@@ -402,27 +384,27 @@ struct TrayPlugin {
                 switch (xev.xclient.data.l[1]){
                     case SYSTEM_TRAY_REQUEST_DOCK:
                         /* If a Request Dock event on the invisible window, which is holding the manager selection, execute it. */
-                        if (xev.xclient.window == tr.invisible_window){
-                            trayclient_request_dock(tr, cast(XClientMessageEvent *) xev);
+                        if (xev.xclient.window == invisible_window){
+                            trayclient_request_dock(cast(XClientMessageEvent *) xev);
                             return GDK_FILTER_REMOVE;
                         }
                         break;
                     case SYSTEM_TRAY_BEGIN_MESSAGE:
                         /* If a Begin Message event. look up the tray icon and execute it. */
-                        balloon_message_begin_event(tr, cast(XClientMessageEvent *) xev);
+                        balloon_message_begin_event(cast(XClientMessageEvent *) xev);
                         return GDK_FILTER_REMOVE;
                     case SYSTEM_TRAY_CANCEL_MESSAGE:
                         /* If a Cancel Message event. look up the tray icon and execute it. */
-                        balloon_message_cancel_event(tr, cast(XClientMessageEvent *) xev);
+                        balloon_message_cancel_event(cast(XClientMessageEvent *) xev);
                         return GDK_FILTER_REMOVE;
                 }
             }else if (xev.xclient.message_type == a_NET_SYSTEM_TRAY_MESSAGE_DATA){
                 /* Client message of type _NET_SYSTEM_TRAY_MESSAGE_DATA.
                  * Look up the tray icon and execute it. */
-                balloon_message_data_event(tr, cast(XClientMessageEvent *) xev);
+                balloon_message_data_event(cast(XClientMessageEvent *) xev);
                 return GDK_FILTER_REMOVE;
             }
-        }else if(xev.type == SelectionClear && xev.xclient.window == tr.invisible_window){
+        }else if(xev.type == SelectionClear && xev.xclient.window == invisible_window){
             /* Look for SelectionClear events on the invisible window, which is holding the manager selection.
              * This should not happen. */
             tray_unmanage_selection(tr);
@@ -432,30 +414,30 @@ struct TrayPlugin {
 
     /* Delete the selection on the invisible window. */
     void tray_unmanage_selection(TrayPlugin* tr){
-        if (tr.invisible != null){
-            GtkWidget* invisible = tr.invisible;
+        if (invisible != null){
+            Widget* invisible = invisible;
             GdkDisplay* display = gtk_widget_get_display(invisible);
-            if (gdk_selection_owner_get_for_display(display, tr.selection_atom) == gtk_widget_get_window(invisible)){
+            if (gdk_selection_owner_get_for_display(display, selection_atom) == gtk_widget_get_window(invisible)){
                 uint32 timestamp = gdk_x11_get_server_time(gtk_widget_get_window(invisible));
                 gdk_selection_owner_set_for_display(
                     display,
                     null,
-                    tr.selection_atom,
+                    selection_atom,
                     timestamp,
-                    TRUE);
+                    true);
             }
 
             /* Destroy the invisible window. */
-            tr.invisible = null;
-            tr.invisible_window = None;
+            invisible = null;
+            invisible_window = None;
             gtk_widget_destroy(invisible);
             g_object_unref(G_OBJECT(invisible));
         }
     }
 
     /* Plugin constructor. */
-    this(LXPanel* panel, config_setting_t* settings){
-        GtkWidget *p;
+    this(){
+        Widget *p;
         /* Get the screen and display. */
         GdkScreen * screen = gtk_widget_get_screen(GTK_WIDGET(panel));
         Screen * xscreen = GDK_SCREEN_XSCREEN(screen);
@@ -463,7 +445,7 @@ struct TrayPlugin {
         /* Create the selection atom.  This has the screen number in it, so cannot be done ahead of time. */
         char* selection_atom_name = g_strdup_printf("_NET_SYSTEM_TRAY_S%d", gdk_screen_get_number(screen));
         Atom selection_atom = gdk_x11_get_xatom_by_name_for_display(display, selection_atom_name);
-        GdkAtom gdk_selection_atom = gdk_atom_intern(selection_atom_name, FALSE);
+        GdkAtom gdk_selection_atom = gdk_atom_intern(selection_atom_name, false);
         g_free(selection_atom_name);
         /* If the selection is already owned, there is another tray running. */
         if (XGetSelectionOwner(GDK_DISPLAY_XDISPLAY(display), selection_atom) != None){
@@ -471,7 +453,7 @@ struct TrayPlugin {
             return null;
         }
         /* Create an invisible window to hold the selection. */
-        GtkWidget * invisible = gtk_invisible_new_for_screen(screen);
+        Widget * invisible = gtk_invisible_new_for_screen(screen);
         gtk_widget_realize(invisible);
         gtk_widget_add_events(invisible, GDK_PROPERTY_CHANGE_MASK | GDK_STRUCTURE_MASK);
         /* Try to claim the _NET_SYSTEM_TRAY_Sn selection. */
@@ -481,7 +463,7 @@ struct TrayPlugin {
             gtk_widget_get_window(invisible),
             gdk_selection_atom,
             timestamp,
-            TRUE))
+            true))
         {
             /* Send MANAGER client event (ICCCM). */
             XClientMessageEvent xev;
@@ -494,7 +476,7 @@ struct TrayPlugin {
             xev.data.l[2] = GDK_WINDOW_XID(gtk_widget_get_window(invisible));
             xev.data.l[3] = 0;    /* manager specific data */
             xev.data.l[4] = 0;    /* manager specific data */
-            XSendEvent(GDK_DISPLAY_XDISPLAY(display), Rootx11.X.WindowOfScreen(xscreen), False, StructureNotifyMask, cast(XEvent*) &xev);
+            XSendEvent(GDK_DISPLAY_XDISPLAY(display), Rootx11.X.WindowOfScreen(xscreen), false, StructureNotifyMask, cast(XEvent*) &xev);
             /* Set the orientation property.
              * We always set "horizontal" since even vertical panels are designed to use a lot of width. */
             gulong data = SYSTEM_TRAY_ORIENTATION_HORZ;
@@ -513,22 +495,21 @@ struct TrayPlugin {
 
         /* Allocate plugin context and set into Plugin private data pointer and static variable. */
         TrayPlugin* tr = g_new0(TrayPlugin, 1);
-        tr.panel = panel;
-        tr.selection_atom = gdk_selection_atom;
+        selection_atom = gdk_selection_atom;
         /* Add GDK event filter. */
         gdk_window_add_filter(null, cast(GdkFilterFunc) tray_event_filter, tr);
         /* Reference the window since it is never added to a container. */
-        tr.invisible = g_object_ref_sink(G_OBJECT(invisible));
-        tr.invisible_window = GDK_WINDOW_XID(gtk_widget_get_window(invisible));
+        invisible = g_object_ref_sink(G_OBJECT(invisible));
+        invisible_window = GDK_WINDOW_XID(gtk_widget_get_window(invisible));
 
         /* Allocate top level widget and set into Plugin widget pointer. */
-        tr.plugin = p = panel_icon_grid_new(panel_get_orientation(panel),
+        plugin = p = panel_icon_grid_new(panel_get_orientation(panel),
                                              panel_get_icon_size(panel),
                                              panel_get_icon_size(panel),
                                              3, 0, panel_get_height(panel));
-        lxpanel_plugin_set_data(p, tr, tray_destructor);
+        lxpanel_plugin_set_data(p, tray_destructor);
         gtk_widget_set_name(p, "tray");
-        panel_icon_grid_set_aspect_width(PANEL_ICON_GRID(p), TRUE);
+        panel_icon_grid_set_aspect_width(PANEL_ICON_GRID(p), true);
 
         return p;
     }
@@ -541,23 +522,23 @@ struct TrayPlugin {
         /* Make sure we drop the manager selection. */
         tray_unmanage_selection(tr);
         /* Deallocate incomplete messages. */
-        while (tr.incomplete_messages != null){
-            BalloonMessage* msg_succ = tr.incomplete_messages.flink;
-            balloon_message_free(tr.incomplete_messages);
-            tr.incomplete_messages = msg_succ;
+        while (incomplete_messages != null){
+            BalloonMessage* msg_succ = incomplete_messages.flink;
+            balloon_message_free(incomplete_messages);
+            incomplete_messages = msg_succ;
         }
         /* Terminate message display and deallocate messages. */
-        while (tr.messages != null)
-            balloon_message_advance(tr, TRUE, FALSE);
+        while (messages != null)
+            balloon_message_advance(true, false);
         /* Deallocate client list - widgets are already destroyed. */
-        while (tr.client_list != null)
-            client_delete(tr, tr.client_list, TRUE, FALSE);
+        while (client_list != null)
+            client_delete(client_list, true, false);
         g_free(tr);
     }
 
     /+
     /* Callback when panel  changes. */
-    void tray_panel_configuration_changed(LXPanel *panel, GtkWidget *p){
+    void tray_panel_configuration_changed(LXPanel *panel, Widget *p){
         /* Set orientation into the icongrid. */
         panel_icon_grid_set_geometry(PANEL_ICON_GRID(p), panel_get_orientation(panel),                                      panel_get_icon_size(panel),
                                      panel_get_icon_size(panel),
@@ -572,7 +553,7 @@ struct TrayPlugin {
         .description = N_("System tray"),
 
     /* Set a flag to identify the system tray.  It is special in that only one per system can exist. */
-    .one_per_system = TRUE,
+    .one_per_system = true,
 
     .new_instance = tray_constructor,
     .reconfigure = tray_panel_configuration_changed
@@ -581,3 +562,4 @@ struct TrayPlugin {
 
 }
 
++/

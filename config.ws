@@ -1,8 +1,8 @@
 
 
 keys {
-	alt+d				exec "dinu -fn UbuntuMono-9 -c ~/.dinu/$(cws)"
-	alt+Return			exec "cd $(cat ~/.dinu/$(cws)) && terminator"
+	alt+d				exec dinu Monospace-fn -9 -c "~/.dinu/$(cws)"
+	alt+Return			exec cd "$(cat ~/.dinu/$(cws))" && terminator
 	alt+shift+w			exec i3lock && systemctl suspend
 	alt+j				focus -
 	alt+Left			focus -
@@ -40,20 +40,28 @@ split {
 	paddingElem 4
 	paddingOuter 0 0 2 0
 	border {
-		normal 444444
+		normal 222222
 		active dd8300
+		urgent ffff00
+		fullscreen 005588
 		insert {
-			normal 444444
+			normal 222222
 			active dd8300
+			urgent ffff00
+			fullscreen 005588
 		}
 	}
 	title {
 		show 0
 		normal cccccc
 		active ffffff
+		urgent 000000
+		fullscreen ffffff
 		insert {
 			normal ffffff
 			active ffffff
+			urgent 000000
+			fullscreen ffffff
 		}
 	}
 }
@@ -68,7 +76,7 @@ dock {
 	window {
 		text ffffff
 		background {
-			normal 444444
+			normal 222222
 			active dd8300
 			urgent ffff00
 		}
