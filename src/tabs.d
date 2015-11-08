@@ -9,7 +9,8 @@ class Tabs: Container {
 
 	Window window;
 
-	bool insertTab;
+	bool showTabs = true;
+	bool mouseFocus;
 
 	this(){
 		size = [10,10];
@@ -37,9 +38,7 @@ class Tabs: Container {
 	}
 
 	void mouse(bool focus){
-		//showTitles = focus;
-		//if(active)
-		//	this.focus(active);
+		mouseFocus = focus;
 		monitor.peekTitles = focus;
 		foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
 			tabs.resize(tabs.size);
@@ -50,6 +49,8 @@ class Tabs: Container {
 
 	void mouse(int[2] pos){
 		cursorPos = pos;
+		mouseFocus = true;
+		onDraw;
 	}
 
 	void mouse(Mouse.button button, bool pressed){
@@ -101,6 +102,7 @@ class Tabs: Container {
 		add(client.to!Base);
 		active = client;
 		resize(size);
+		XSync(dpy, false);
 	}
 
 	alias remove = Base.remove;
@@ -170,11 +172,11 @@ class Tabs: Container {
 		auto padding = config["split paddingOuter"].split.to!(int[4]);
 		if(active)
 			active.moveResize(
-				pos.a + [padding[0], insertTab ? bh : padding[2]],
-				size.a - [padding[0]+padding[1], (insertTab ? bh : padding[2])+padding[3]]
+				pos.a + [padding[0], showTabs ? bh : padding[2]],
+				size.a - [padding[0]+padding[1], (showTabs ? bh : padding[2])+padding[3]]
 			);
 		//XRaiseWindow(dpy, window);
-		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, (monitor.peekTitles || insertTab) ? bh : padding[2]);
+		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, (monitor.peekTitles || showTabs) ? bh : padding[2]);
 		draw.resize(size);
 		onDraw;
 	}
@@ -186,28 +188,34 @@ class Tabs: Container {
 		bool containerFocused = clients.canFind(flatman.active);
 		foreach(i, c; children.to!(Client[])){
 			auto gap = config["split paddingElem"].to!int;
-			auto leaf = (
-					c.isUrgent ? "urgent"
+			bool hover = mouseFocus && cursorPos.x > offset && cursorPos.x < offset+size.w/cast(int)children.length;
+			auto state = (
+					hover ? "hover"
+					: c.isUrgent ? "urgent"
 					: flatman.active == c ? "active"
 					: c.isfullscreen ? "fullscreen"
 					: "normal");
 			auto color = config.color("split border "
-					~ (insertTab ? "insert " : "")
-					~ leaf);
+					~ (showTabs ? "insert " : "")
+					~ state);
 			draw.clip([offset,0], [size.w/cast(int)children.length,size.h]);
 			draw.setColor(color);
 			draw.rect([offset,0], [size.w/cast(int)children.length,size.h]);
-			if(monitor.peekTitles || insertTab){
+			if(monitor.peekTitles || showTabs){
 				if(!containerFocused && i == clientActive){
 					draw.setColor(config.color("split border active"));
 					draw.rect([offset,size.h-2], [size.w/cast(int)clients.length,2]);
 				}
 				color = config.color("split title "
-						~ (insertTab ? "insert " : "")
-						~ leaf);
+						~ (showTabs ? "insert " : "")
+						~ state);
 				draw.setColor(color);
 				draw.setFont("Consolas:size=10", 0);
 				draw.text([offset + size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2, size.h-bh], bh+2, c.name);
+				if(c.icon && c.icon.img){
+					//draw.rect([offset,size.h-bh], [c.icon.width, c.icon.height]);
+					//draw.to!XDraw.icon(c.icon, offset, size.h-bh);
+				}
 			}
 			draw.setColor(config.color("split background"));
 			if(i != 0)
@@ -217,7 +225,7 @@ class Tabs: Container {
 			draw.noclip;
 			offset += size.w/children.length;
 		}
-		if((monitor.peekTitles || insertTab) && containerFocused){
+		if((monitor.peekTitles || showTabs) && containerFocused){
 			draw.setColor(config.color("split border active"));
 			draw.rect([0,size.h-bh], [size.w, 2]);
 		}

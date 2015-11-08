@@ -10,7 +10,8 @@ class ButtonExec: Button {
 
 	this(){
 		super("");
-		font = "Consolas:size=9";
+		font = "Consolas";
+		fontSize = 9;
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -36,7 +37,8 @@ class ButtonDesktop: ButtonExec {
 		name = split[0];
 		exec = split[1];
 		type = "desktop";
-		font = "Consolas:size=9";
+		font = "Consolas";
+		fontSize = 9;
 	}
 
 	override void onDraw(){
@@ -73,7 +75,8 @@ class ButtonScript: ButtonExec {
 	this(string data){
 		exec = data;
 		type = "script";
-		font = "Consolas:size=9";
+		font = "Consolas";
+		fontSize = 9;
 	}
 
 	override void onDraw(){
@@ -117,7 +120,8 @@ class ButtonFile: ButtonExec {
 		catch{}
 		if(isDir){
 			auto enter = new Button("→");
-			enter.font = "Consolas:size=9";
+			enter.font = "Consolas";
+			enter.fontSize = 9;
 			enter.style.bg.hover = [0.5,0.5,0.5,1];
 			enter.leftClick ~= {
 				setContext(data);
@@ -131,6 +135,18 @@ class ButtonFile: ButtonExec {
 		if(parentDir.length)
 			parentDir ~= "/";
 		this.parentDir = parentDir;
+
+		rightClick ~= {
+			Button[] test;
+			test ~= new Button("This is the first button");
+			test[0].font = "Consolas";
+			test[0].fontSize = 9;
+			test ~= new Button("Hi");
+			test[1].font = "Consolas";
+			test[1].fontSize = 9;
+			auto popup = new ListPopup(test);
+			wm.add(popup);
+		};
 	}
 
 	override void resize(int[2] size){

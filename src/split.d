@@ -36,6 +36,8 @@ class Split: Container {
 
 	long[] sizes;
 	
+	bool lock;
+
 	this(int[2] pos, int[2] size, int mode=horizontal){
 		hidden = true;
 		this.mode = mode;
@@ -114,17 +116,22 @@ class Split: Container {
 			position = clientActive;
 		"split adding %s at %s".format(client.to!Client.name, position).log;
 		Tabs tab;
-		if(position >= 0 && position < children.length && children[position].to!Tabs.insertTab){
+		if(position >= 0 && position < children.length){
 			tab = children[position].to!Tabs;
 		}else{
 			tab = new Tabs;
 			tab.parent = this;
-			if(position < children.length.to!long){
+			if(position >= 0 && position < children.length.to!long){
 				children = children[0..position+1] ~ tab ~ children[position+1..$];
 				sizes = sizes[0..position+1] ~ client.size.w ~ sizes[position+1..$];
 			}else{
-				children ~= tab;
-				sizes ~= client.size.w;
+				if(position < 0){
+					children = tab ~ children;
+					sizes = client.size.w ~ sizes;
+				}else{
+					children ~= tab;
+					sizes ~= client.size.w;
+				}
 			}
 			tab.show;
 		}
@@ -132,58 +139,31 @@ class Split: Container {
 		rebuild;
 	}
 
-	void moveLeft(){
+	void moveClient(int dir){
+		lock = true;
 		if(clientActive >= 0 && clientActive < children.length){
 			auto tabs = children[clientActive].to!Tabs;
-			Tabs tabsLeft;
-			if(clientActive > 0 && clientActive < children.length)
-				tabsLeft = children[clientActive-1].to!Tabs;
-			if(tabs.prev){
-				tabs.moveLeft;
-			}else if(tabsLeft && tabsLeft.insertTab){
+			Tabs tabsNext;
+			if(clientActive+dir >= 0 && clientActive+dir < children.length)
+				tabsNext = children[clientActive+dir].to!Tabs;
+			if(dir < 0 && tabs.prev || dir > 0 && tabs.next){
+				if(dir < 0)
+					tabs.moveLeft;
+				else
+					tabs.moveRight;
+			}else if(tabsNext){
 				Client client = tabs.active;
 				remove(client);
-				tabsLeft.add(client);
-				rebuild;
-			}else if(clientActive == 0){
+				tabsNext.add(client);
+			}else{
 				Client client = tabs.active;
 				remove(client);
-				add(client, clientActive-1);
+				add(client, clientActive+dir);
 				flatman.focus(client);
-			}else if(clientActive > 0){
-				children.swap(clientActive, clientActive-1);
-				sizes.swap(clientActive, clientActive-1);
-				clientActive--;
 			}
-			resize(size);
 		}
-	}
-
-	void moveRight(){
-		if(clientActive >= 0 && clientActive < children.length){
-			auto tabs = children[clientActive].to!Tabs;
-			Tabs tabsRight;
-			if(clientActive >= 0 && clientActive < children.length-1)
-				tabsRight = children[clientActive+1].to!Tabs;
-			if(tabs.next){
-				tabs.moveRight;
-			}else if(tabsRight && tabsRight.insertTab){
-				Client client = tabs.active;
-				remove(client);
-				tabsRight.add(client);
-				rebuild;
-			}else if(clientActive == children.length-1){
-				Client client = tabs.active;
-				remove(client);
-				add(client, clientActive+1);
-				flatman.focus(client);
-			}else if(clientActive < children.length-1){
-				children.swap(clientActive, clientActive+1);
-				sizes.swap(clientActive, clientActive+1);
-				clientActive++;
-			}
-			resize(size);
-		}
+		lock = false;
+		rebuild;
 	}
 
 	override void onDraw(){
@@ -263,6 +243,8 @@ class Split: Container {
 	}
 
 	void rebuild(){
+		if(lock)
+			return;
 		if(children.length){
 			XMapWindow(dpy, window);
 			XLowerWindow(dpy, window);

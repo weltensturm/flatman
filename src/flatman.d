@@ -47,6 +47,7 @@ struct WmAtoms {
 	@("WM_PROTOCOLS") Atom protocols;
 	@("WM_DELETE_WINDOW") Atom delete_;
 	@("WM_STATE") Atom state;
+	@("WM_HINTS") Atom hints;
 	@("WM_TAKE_FOCUS") Atom takeFocus;
 }
 
@@ -362,9 +363,7 @@ void onClientMessage(XEvent *e){
 						c.setfullscreen(s);
 					},
 					net.attention: {
-						if(cme.data.l[0] == _NET_WM_STATE_ADD){
-							c.requestAttention;
-						}
+						c.requestAttention;
 					}
 				];
 				if(cme.data.l[1] in sh)
@@ -634,6 +633,7 @@ Client[] clientsVisible(){
 }
 
 void restack(){
+	XGrabServer(dpy);
 	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
 		XLowerWindow(dpy, tabs.window);
 	foreach_reverse(c; clientsVisible)
@@ -643,6 +643,7 @@ void restack(){
 	XSync(dpy, false);
 	XEvent ev;
 	while(XCheckMaskEvent(dpy, EnterWindowMask, &ev)){}
+	XUngrabServer(dpy);
 }
 
 Monitor dirtomon(int dir){
@@ -837,7 +838,7 @@ void onUnmap(XEvent *e){
 		if(ev.send_event)
 			c.setState(WithdrawnState);
 		else
-			c.unmanage;
+			c.unmanage(false);
 	}
 }
 

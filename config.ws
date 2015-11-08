@@ -43,11 +43,13 @@ split {
 		normal 222222
 		active dd8300
 		urgent ffff00
+		hover 444444
 		fullscreen 005588
 		insert {
 			normal 222222
 			active dd8300
 			urgent ffff00
+			hover 444444
 			fullscreen 005588
 		}
 	}
@@ -56,11 +58,13 @@ split {
 		normal cccccc
 		active ffffff
 		urgent 000000
+		hover ffffff
 		fullscreen ffffff
 		insert {
 			normal ffffff
 			active ffffff
 			urgent 000000
+			hover ffffff
 			fullscreen ffffff
 		}
 	}

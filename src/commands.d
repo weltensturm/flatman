@@ -56,7 +56,7 @@ void registerFunctions(){
 	register("quit", &quit);
 	register("workspace", &workspace);
 	register("reload", &reload);
-	register("insert", &insert);
+	register("insert", &toggleTabs);
 }
 
 
@@ -128,11 +128,11 @@ void reload(){
 	grabkeys;
 }
 
-void insert(){
+void toggleTabs(){
 	auto s = monitor.workspace.split.to!Split;
 	if(s.clients){
 		auto tabs = s.children[s.clientActive].to!Tabs;
-		tabs.insertTab = !tabs.insertTab;
+		tabs.showTabs = !tabs.showTabs;
 		tabs.resize(tabs.size);
 		tabs.onDraw;
 	}

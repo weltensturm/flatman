@@ -248,7 +248,7 @@ class WorkspaceDock: ws.wm.Window {
 		super.onDraw;
 		draw.setColor([0.6,0.6,0.6]);
 		auto time = Clock.currTime;
-		draw.text([size.w/2-draw.width("00:00")/2, 5], "%02d:%02d".format(time.hour, time.minute), 0);
+		draw.text([size.w/2-draw.width("00:00:00 - 0000-00-00")/2, 5], "%02d:%02d:%02d - %04d-%02d-%02d".format(time.hour, time.minute, time.second, time.year, time.month, time.day), 0);
 		draw.finishFrame;
 	}
 

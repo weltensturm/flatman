@@ -10,7 +10,10 @@ class Config {
 	string[string] values;
 
 	string opIndex(string name){
-		return values.get(name, "ff9999");
+		if(name in values)
+			return values[name];
+		"WARNING: config entry not found: %s".format(name).log;
+		return "ff9999";
 	}
 
 	float[3] color(string name){

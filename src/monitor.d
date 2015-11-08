@@ -88,11 +88,11 @@ class Monitor {
 	}
 
 	void moveLeft(){
-		workspace.split.moveLeft;
+		workspace.split.moveClient(-1);
 	}
 
 	void moveRight(){
-		workspace.split.moveRight;
+		workspace.split.moveClient(1);
 	}
 
 	void moveDown(){

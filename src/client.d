@@ -23,31 +23,57 @@ class Client: Base {
 	bool isfixed, neverfocus, oldstate, isfullscreen;
 	flatman.Monitor monitor;
 	Window win;
+	Window child;
 
 	Pixmap mPixmap;
 	Picture mPicture;
 	XRenderPictFormat* format;
+	Icon icon;
 
-	this(Window win, flatman.Monitor monitor){
+	long ignoreHide;
+
+	this(Window client, flatman.Monitor monitor){
 		this.monitor = monitor;
 		XSync(dpy, false);
-		this.win = win;
+		
 		XWindowAttributes attr;
-		XGetWindowAttributes(dpy, win, &attr);
+		XGetWindowAttributes(dpy, client, &attr);
 		pos = [attr.x, attr.y];
 		posFloating = pos;
 		size = [attr.width, attr.height];
 		sizeFloating = size;
+
+		/+
+		XSetWindowAttributes wa;
+		wa.override_redirect = true;
+		wa.background_pixmap = ParentRelative;
+		wa.event_mask = (SubstructureRedirectMask |
+			     ButtonPressMask | ButtonReleaseMask |
+			     EnterWindowMask | LeaveWindowMask);
+		win = XCreateWindow(
+				dpy, flatman.root, pos.x, pos.y, size.w, size.h,
+				0, DefaultDepth(dpy, screen), CopyFromParent,
+				DefaultVisual(dpy, screen),
+				CWBackPixmap | CWBorderPixel | CWCursor | CWEventMask, &wa
+		);
+		XReparentWindow(dpy, child, win, 0, 0);
+		XMapWindow(dpy, win);
+		+/
+
+		win = client;
+		
 		updateType;
 		updateSizeHints;
 		updateWmHints;
 		//updateWorkspace;
+		updateIcon;
 		updateStrut;
 	}
 
 	override void hide(){
 		"hide %s".format(name).log;
 		hidden = true;
+		ignoreHide += 2;
 		XUnmapWindow(dpy, win);
 		XSync(dpy, false);
 	}
@@ -202,7 +228,9 @@ class Client: Base {
 				wmh.flags &= ~XUrgencyHint;
 				XSetWMHints(dpy, win, wmh);
 			}else{
-				isUrgent = (wmh.flags & XUrgencyHint) ? true : false;
+				if(wmh.flags & XUrgencyHint){
+					requestAttention;
+				}
 				//flatman.monitor.dock.show;
 			}
 			if(wmh.flags & InputHint)
@@ -211,6 +239,36 @@ class Client: Base {
 				neverfocus = false;
 			XFree(wmh);
 		}
+	}
+
+	void updateIcon(){
+		int format;
+		ubyte* p = null;
+		ulong count, extra;
+		Atom type;
+		if(XGetWindowProperty(dpy, win, net.icon, 0, long.max, false, AnyPropertyType,
+		                      &type, &format, &count, &extra, cast(ubyte**)&p) != 0)
+			return;
+		if(p){
+			long* data = cast(long*)p;
+			long width = data[0];
+			long height = data[1];
+			ubyte[] pixels;
+			foreach(pixel; data[2..width*height+2]){
+				pixels ~= [
+					cast(ubyte)(pixel & 0xff),
+					cast(ubyte)(pixel >> 8 & 0xff),
+					cast(ubyte)(pixel >> 16 & 0xff),
+					cast(ubyte)(pixel >> 24)
+				];
+			}
+			icon = new Icon;
+			icon.img = XCreateImage(dpy, null, DefaultDepth(dpy, screen), ZPixmap, 0, cast(char*)pixels.ptr, cast(uint)width, cast(uint)height, 32, 0);
+			icon.width = cast(int)width;
+			icon.height = cast(int)height;
+			assert(pixels.length == width*height*4);
+		}
+		XFree(p);
 	}
 
 	void updateWorkspace(){
@@ -249,8 +307,11 @@ class Client: Base {
 			isUrgent = false;
 			return;
 		}
-		if(!isVisible && this != previousFocus)
+		if(!isVisible && this != previousFocus){
 			"%s requests attention".format(name).log;
+			["notify-send", "%s requests attention".format(name)].spawnProcess;
+
+		}
 		isUrgent = true;
 	}
 
@@ -372,7 +433,7 @@ void unfocus(Client c, bool setfocus){
 }
 
 void unmanage(Client c, bool force=false){
-	if(force || !c.hidden)
+	if(force)
 		c.monitor.remove(c);
 	else{
 		XWindowChanges wc;
@@ -385,7 +446,8 @@ void unmanage(Client c, bool force=false){
 		XSetErrorHandler(&xerror);
 		XUngrabServer(dpy);
 	}
-	focus(null);
+	if(previousFocus == c)
+		focus(null);
 	updateClientList();
 }
 

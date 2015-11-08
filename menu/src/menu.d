@@ -105,7 +105,7 @@ class Menu: ws.wm.Window {
 		auto screen = screenSize.get(2);
 
 		path = addNew!PathChooser;
-		path.text = context.nice;
+		//path.path = context.nice;
 
 		tabs = addNew!Categories;
 		tabs.addPage("Frequent", new ListFrequent);
@@ -137,7 +137,7 @@ class Menu: ws.wm.Window {
 
 	override void drawInit(){
 		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
-		_draw.setFont("Consolas:size=9", 0);
+		_draw.setFont("Consolas", 9);
 	}
 
 	override void gcInit(){}
@@ -180,7 +180,7 @@ class Menu: ws.wm.Window {
 
 	override void onMouseFocus(bool focus){
 		if(active != focus && !active){
-			path.text = context.nice;
+			path.path = context.nice;
 			remove(tabs);
 			tabs = addNew!Categories;
 			tabs.addPage("Files", new ListFiles);
@@ -204,7 +204,8 @@ class Categories: Tabs {
 
 	this(){
 		super(left);
-		font = "Consolas:size=9";
+		font = "Consolas";
+		fontSize = 9;
 		offset = 0;
 		style.bg = [0.3, 0.3, 0.3, 1];
 		style.bg.hover = [0.1, 0.1 ,0.1, 1];
@@ -217,17 +218,64 @@ class Categories: Tabs {
 }
 
 
-class PathChooser: Base {
+class PathPart: Base {
 
-	string text;
+	string part;
+	string path;
+
+	this(string part, string path){
+		this.part = part;
+		this.path = path;
+	}
 
 	override void onDraw(){
+		if(hasMouseFocus){
+			draw.setColor([0.3,0.3,0.3]);
+			draw.rect(pos, size);
+		}
+		draw.setColor([0.733,0.933,0.733]);
+		draw.setFont("Consolas", 9);
+		draw.text(pos.a + [0,5], part, 0);
+	}
+
+	override void onMouseButton(Mouse.button button, bool pressed, int, int){
+		if(button == Mouse.buttonLeft && pressed){
+			writeln(path);
+			setContext(path);
+			menuWindow.onMouseFocus(false);
+			menuWindow.onMouseFocus(true);
+		}
+	}
+
+}
+
+
+class PathChooser: Base {
+
+	void path(string path){
+		draw.setFont("Consolas", 9);
+		foreach(c; children){
+			remove(c);
+		}
+		int x = size.w/2 - draw.width(path)/2;
+		string current;
+		foreach(i, part; path.split("/")){
+			current ~= part ~ "/";
+			auto p = addNew!PathPart(part ~ "/", current);
+			p.moveLocal([x,0]);
+			p.resize([draw.width(part ~ "/"), 25]);
+			x += p.size.w;
+		}
+	}
+
+	override void onDraw(){
+		/+
 		draw.setColor([0.1,0.1,0.1]);
 		draw.rect(pos, size);
 		draw.setColor([0.867,0.514,0]);
 		draw.rect(pos, [size.w, 1]);
 		draw.setColor([1,1,1]);
-		draw.setFont("Consolas:size=9", 0);
+		draw.setFont("Consolas", 9);
 		int x = size.w/2 - draw.width(text)/2;
 		foreach(i, part; text.split("/")){
 			bool last = i == text.length-1;
@@ -240,6 +288,7 @@ class PathChooser: Base {
 				x += draw.width("/");
 			}
 		}
+		+/
 		super.onDraw;
 	}
 

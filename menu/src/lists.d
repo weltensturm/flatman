@@ -34,13 +34,14 @@ void sortDir(ref string[] dirs){
 	dirs.sort!("!a.startsWith(\".\") && b.startsWith(\".\")", SwapStrategy.stable);
 }
 
-void loadAddDir(string directory, Base container){
-	writeln(directory);
+void loadAddDir(string directory, Base container, string root){
 	string[] dirs;
 	string[] dirsHidden;
 	string[] files;
 	string[] filesHidden;
-	directory = directory.chomp("/") ~ "/";
+	writeln(directory);
+	directory = (directory.chomp("/") ~ "/");
+	root = (root.chomp("/") ~ "/");
 	foreach(DirEntry entry; directory.dirEntries(SpanMode.shallow)){
 		auto name = entry.name.chompPrefix(directory);
 		if(entry.isDir){
@@ -56,7 +57,8 @@ void loadAddDir(string directory, Base container){
 		}
 	}
 	dirs.sortDir;
-	dirs = ".." ~ dirs;
+	if(directory == root || directory.chompPrefix(root).startsWith("..") && directory.endsWith("../"))
+		dirs = ".." ~ dirs;
 	dirsHidden.sortDir;
 	files.sortDir;
 	filesHidden.sortDir;
@@ -68,7 +70,7 @@ void loadAddDir(string directory, Base container){
 		bool once;
 		button.leftClick ~= {
 			if(!once)
-				loadAddDir(directory ~ dir, tree);
+				loadAddDir(directory ~ dir, tree, root);
 			once = true;
 		};
 		container.add(tree);
@@ -93,7 +95,7 @@ class ListFiles: Scroller {
 		list = addNew!DynamicList;
 		list.padding = 0;
 		list.style.bg = [0.1,0.1,0.1,1];
-		loadAddDir(context, list);
+		loadAddDir(context, list, context);
 	}
 
 	override void onDraw(){

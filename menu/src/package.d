@@ -45,5 +45,6 @@ public import
 	menu.menu,
 	menu.lists,
 	menu.buttons,
+	menu.popup,
 	menu.proputil;
 	

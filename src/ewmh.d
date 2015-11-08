@@ -27,6 +27,7 @@ struct NetAtoms {
 
 	@("_NET_WM_PID") Atom pid;
 	@("_NET_WM_NAME") Atom name;
+	@("_NET_WM_ICON") Atom icon;
 	@("_NET_WM_STATE") Atom state;
 	@("_NET_WM_STATE_MODAL") Atom modal;
 	@("_NET_WM_STATE_FULLSCREEN") Atom fullscreen;
