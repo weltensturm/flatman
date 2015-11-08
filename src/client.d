@@ -30,7 +30,7 @@ class Client: Base {
 	XRenderPictFormat* format;
 	Icon icon;
 
-	long ignoreHide;
+	long ignoreUnmap;
 
 	this(Window client, flatman.Monitor monitor){
 		this.monitor = monitor;
@@ -73,7 +73,7 @@ class Client: Base {
 	override void hide(){
 		"hide %s".format(name).log;
 		hidden = true;
-		ignoreHide += 2;
+		ignoreUnmap += 1;
 		XUnmapWindow(dpy, win);
 		XSync(dpy, false);
 	}

@@ -838,7 +838,7 @@ void onUnmap(XEvent *e){
 		if(ev.send_event)
 			c.setState(WithdrawnState);
 		else
-			c.unmanage(false);
+			c.unmanage(!c.hidden);
 	}
 }
 
