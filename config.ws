@@ -3,11 +3,14 @@
 keys {
 	alt+d				exec dinu Monospace-fn -9 -c "~/.dinu/$(cws)"
 	alt+Return			exec cd "$(cat ~/.dinu/$(cws))" && terminator
+	alt+n				exec firefox
 	alt+shift+w			exec i3lock && systemctl suspend
-	alt+j				focus -
-	alt+Left			focus -
-	alt+semicolon		focus +
-	alt+Right			focus +
+	alt+j				focus dir -
+	alt+Left			focus dir -
+	alt+i				focus stack -
+	alt+semicolon		focus dir +
+	alt+Right			focus dir +
+	alt+o				focus stack +
 	alt+ctrl+j			resize -
 	alt+ctrl+semicolon	resize +
 	alt+r				resize mouse
@@ -27,6 +30,7 @@ keys {
 	alt+shift+e			quit
 	alt+t				toggle titles
 	alt+shift+r			reload
+	#alt+p				"if setxkbmap -query | grep us; then setxkbmap de; else setxkbmap us; fi; notify-send `setxkbmap -query | grep layout`"
 	
 	XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +3%
 	XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -3%
@@ -54,6 +58,8 @@ split {
 		}
 	}
 	title {
+		font Tahoma
+		font-size 9
 		show 0
 		normal cccccc
 		active ffffff

@@ -3,7 +3,7 @@ module flatman.dock.tray;
 
 import dock;
 
-
+/+
 /**
  * System tray plugin to lxpanel
  *
@@ -30,8 +30,6 @@ import dock;
  * Copyright (C) 2003-2006 Vincent Untz */
 
 
-/+
-
 
 /* Standards reference:  http://standards.freedesktop.org/systemtray-spec/ */
 
@@ -51,7 +49,7 @@ struct BalloonMessage {
     long length;				/* Message string length */
     long id;					/* Client supplied unique message ID */
     long remaining_length;			/* Remaining length expected of incomplete message */
-    char* string;				/* Message string */
+    string text;				/* Message string */
 }
 
 /* Representative of a tray client. */
@@ -68,7 +66,7 @@ class TrayPlugin {
     TrayClient[] clients;			/* List of tray clients */
     BalloonMessage[] incomplete_messages;	/* List of balloon messages for which we are awaiting data */
     BalloonMessage[] messages;			/* List of balloon messages actively being displayed or waiting to be displayed */
-    Widget balloon_message_popup;		/* Popup showing balloon message */
+    gtk.Window.Window balloon_message_popup;		/* Popup showing balloon message */
     uint balloon_message_timer;		/* Timer controlling balloon message */
     Widget invisible;			/* Invisible window that holds manager selection */
     x11.X.Window invisible_window;			/* X window ID of invisible window */
@@ -83,7 +81,7 @@ class TrayPlugin {
     }
 
     static if(false){
-        void client_print(char c, TrayClient* tc, XClientMessageEvent * xevent){
+        void client_print(char c, TrayClient* tc, XClientMessageEvent* xevent){
                 char *name = get_utf8_property(tc.window, a_NET_WM_NAME);
                 int pid = get_net_wm_pid(tc.window);
                 XClientMessageEvent xcm = {0};
@@ -105,22 +103,18 @@ class TrayPlugin {
         balloon_incomplete_message_remove(client.window, true, 0);
         balloon_message_remove(client.window, true, 0);
         /* Remove the socket from the icon grid. */
+        /+
         if(destroy)
             gtk_widget_destroy(client.socket);
+        +/
     }
 
     /*** Balloon message display ***/
 
-    /* Free a balloon message structure. */
-    void balloon_message_free(BalloonMessage* message)
-    {
-        g_free(message.string);
-        g_free(message);
-    }
-
     /* General code to deactivate a message and optionally display the next.
      * This is used in three scenarios: balloon clicked, timeout expired, destructor. */
     void balloon_message_advance(bool destroy_timer, bool display_next){
+    	/+
         /* Remove the message from the queue. */
         BalloonMessage msg = messages[0];
         messages = messages.without(msg);
@@ -137,64 +131,61 @@ class TrayPlugin {
         /* If there is another message waiting in the queue, display it.  This is not done in the destructor. */
         if ((display_next) && (messages != null))
             balloon_message_display(messages);
+        +/
     }
 
     /* Handler for "button-press-event" from balloon message popup menu item. */
     static bool balloon_message_activate_event(Widget * widget, GdkEventButton * event, TrayPlugin* tr){
-        balloon_message_advance(true, true);
+        //balloon_message_advance(true, true);
         return true;
     }
 
     /* Timer expiration for balloon message. */
     static bool balloon_message_timeout(TrayPlugin* tr){
+        /+
         if (!g_source_is_destroyed(g_main_current_source()))
             balloon_message_advance(false, true);
-        return false;
+        +/
+    	return false;
     }
 
     /* Create the graphic elements to display a balloon message. */
-    void balloon_message_display(BalloonMessage* msg){
+    void balloon_message_display(BalloonMessage msg){
         /* Create a window and an item containing the text. */
-        balloon_message_popup = gtk_window_new(GTK_WINDOW_POPUP);
-        Widget * balloon_text = gtk_label_new(msg.string);
-        gtk_label_set_line_wrap(GTK_LABEL(balloon_text), true);
-        gtk_misc_set_alignment(GTK_MISC(balloon_text), 0.5, 0.5);
-        gtk_container_add(GTK_CONTAINER(balloon_message_popup), balloon_text);
-        gtk_widget_show(balloon_text);
-        gtk_container_set_border_width(GTK_CONTAINER(balloon_message_popup), 4);
+
+        balloon_message_popup = new gtk.Window.Window(GtkWindowType.POPUP);
+        auto balloon_text = new Label(msg.text);
+        balloon_text.setLineWrap(true);
+        balloon_text.setJustify(Justification.CENTER);
+        balloon_message_popup.add(balloon_text);
+        balloon_message_popup.setBorderWidth(4);
         /* Connect signals.  Clicking the popup dismisses it and displays the next message, if any. */
-        gtk_widget_add_events(balloon_message_popup, GDK_BUTTON_PRESS_MASK);
-        g_signal_connect(balloon_message_popup, "button-press-event", G_CALLBACK(balloon_message_activate_event), cast(void*)tr);
+        balloon_message_popup.addOnButtonPress(&balloon_message_activate_event, tr);
         /* Compute the desired position in screen coordinates near the tray plugin. */
         int x;
         int y;
         lxpanel_plugin_popup_set_position_helper(panel, plugin, balloon_message_popup, &x, &y);
         /* Show the popup. */
-        gtk_window_move(GTK_WINDOW(balloon_message_popup), x, y);
-        gtk_widget_show(balloon_message_popup);
+        balloon_message_popup.move(x, y);
+        balloon_message_popup.showAll;
         /* Set a timer, if the client specified one.  Both are in units of milliseconds. */
         if (msg.timeout != 0)
             balloon_message_timer = g_timeout_add(msg.timeout, cast(GSourceFunc) balloon_message_timeout, tr);
     }
 
     /* Add a balloon message to the tail of the message queue.  If it is the only element, display it immediately. */
-    void balloon_message_queue(BalloonMessage* msg){
-        if (messages == null){
-            messages = msg;
-            balloon_message_display(msg);
-        }else{
-            BalloonMessage* msg_pred;
-            for (msg_pred = messages; ((msg_pred != null) && (msg_pred.flink != null)); msg_pred = msg_pred.flink){}
-            if (msg_pred != null)
-                msg_pred.flink = msg;
-        }
+    void balloon_message_queue(BalloonMessage msg){
+        messages ~= msg;
+        if(messages.length == 1)
+			balloon_message_display(msg);
     }
 
     /* Remove an incomplete message from the queue, selected by window and optionally also client's ID.
      * Used in two scenarios: client issues CANCEL (ID significant), client plug removed (ID don't care). */
     void balloon_incomplete_message_remove(x11.X.Window window, bool all_ids, long id){
-        BalloonMessage* msg_pred = null;
-        BalloonMessage* msg = incomplete_messages;
+    	/+
+        BalloonMessage msg_pred = null;
+        BalloonMessage msg = incomplete_messages;
         while (msg != null){
             /* Establish successor in case of deletion. */
             BalloonMessage* msg_succ = msg.flink;
@@ -210,11 +201,13 @@ class TrayPlugin {
             /* Advance to successor. */
             msg = msg_succ;
         }
+        +/
     }
 
     /* Remove a message from the message queue, selected by window and optionally also client's ID.
      * Used in two scenarios: client issues CANCEL (ID significant), client plug removed (ID don't care). */
     void balloon_message_remove(x11.X.Window window, bool all_ids, long id){
+    	/+
         BalloonMessage* msg_pred = null;
         BalloonMessage* msg_head = messages;
         BalloonMessage* msg = msg_head;
@@ -247,6 +240,7 @@ class TrayPlugin {
         /* If there is a new message head, display it now. */
         if ((messages != msg_head) && (messages != null))
             balloon_message_display(messages);
+        +/
     }
 
     /*** Event interfaces ***/
@@ -265,7 +259,7 @@ class TrayPlugin {
             msg.length = xevent.data.l[3];
             msg.id = xevent.data.l[4];
             msg.remaining_length = msg.length;
-            msg.string = g_new0!char(msg.length + 1);
+            msg.text = g_new0!char(msg.length + 1);
             /* Message length of 0 indicates that no follow-on messages will be sent. */
             if(msg.length == 0)
                 balloon_message_queue(msg);
@@ -296,7 +290,7 @@ class TrayPlugin {
             if (xevent.window == msg.window){
                 /* Append the message segment to the message. */
                 int length = MIN(msg.remaining_length, 20);
-                memcpy((msg.string + msg.length - msg.remaining_length), &xevent.data, length);
+                memcpy((msg.text + msg.length - msg.remaining_length), &xevent.data, length);
                 msg.remaining_length -= length;
                 /* If the message has been completely collected, display it. */
                 if (msg.remaining_length == 0){
@@ -561,5 +555,4 @@ class TrayPlugin {
     +/
 
 }
-
 +/

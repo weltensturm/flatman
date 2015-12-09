@@ -85,8 +85,8 @@ class Split: Container {
 	override void show(){
 		if(!hidden)
 			return;
-		if(clients.length)
-			XMapWindow(dpy, window);
+		//if(clients.length)
+		//	XMapWindow(dpy, window);
 		"split show".log;
 		hidden = false;
 		foreach(c; children)
@@ -133,7 +133,8 @@ class Split: Container {
 					sizes ~= client.size.w;
 				}
 			}
-			tab.show;
+			if(!hidden)
+				tab.show;
 		}
 		tab.add(client);
 		rebuild;
@@ -245,9 +246,9 @@ class Split: Container {
 	void rebuild(){
 		if(lock)
 			return;
-		if(children.length){
-			XMapWindow(dpy, window);
-			XLowerWindow(dpy, window);
+		if(children.length && !hidden){
+			//XMapWindow(dpy, window);
+			//XLowerWindow(dpy, window);
 		}else
 			XUnmapWindow(dpy, window);
 		normalize;
@@ -292,6 +293,12 @@ class Split: Container {
 		if(client){
 			"focus dir %s client %s".format(dir, client.name).log;
 			flatman.focus(client);
+		}
+	}
+
+	void focusTabs(int dir){
+		if(clientActive+dir >= 0 && clientActive+dir < children.length){
+			focus(children[clientActive+dir].to!Tabs.active);
 		}
 	}
 

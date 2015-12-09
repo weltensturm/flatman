@@ -23,8 +23,8 @@ class Tabs: Container {
 				DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
-		XMapWindow(dpy, window);
-		XLowerWindow(dpy, window);
+		//XMapWindow(dpy, window);
+		//XLowerWindow(dpy, window);
 		//XDefineCursor(dpy, window, flatman.cursor[CurMove].cursor);
 		_draw = new XDraw(dpy, DefaultScreen(dpy), window, size.w, size.h);
 		window.register([
@@ -35,6 +35,8 @@ class Tabs: Container {
 			ButtonRelease: (XEvent* e)=>mouse(e.xbutton.button, false),
 			MotionNotify: (XEvent* e)=>mouse([e.xmotion.x, e.xmotion.y])
 		]);
+		hidden = true;
+		replace!long(window, net.windowDesktop, monitor.workspaceActive);
 	}
 
 	void mouse(bool focus){
@@ -99,7 +101,11 @@ class Tabs: Container {
 	alias add = Base.add;
 
 	override void add(Client client){
-		add(client.to!Base);
+		//add(client.to!Base);
+		if(clientActive+1 < children.length)
+			children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
+		else
+			add(client.to!Base);
 		active = client;
 		resize(size);
 		XSync(dpy, false);
@@ -161,10 +167,12 @@ class Tabs: Container {
 	override void active(Client client){
 		if(active && active != client)
 			active.hide;
-		client.show;
+		if(!hidden && client.hidden)
+			client.show;
 		"tabs focus %s".format(client.name).log;
 		super.active = client;
-		resize(size);
+		if(!hidden)
+			resize(size);
 	}
 
 	override void resize(int[2] size){
@@ -186,35 +194,45 @@ class Tabs: Container {
 			return;
 		int offset = 0;
 		bool containerFocused = clients.canFind(flatman.active);
+		draw.setColor(config.color("split background"));
+		draw.rect([0,0], size);
 		foreach(i, c; children.to!(Client[])){
 			auto gap = config["split paddingElem"].to!int;
 			bool hover = mouseFocus && cursorPos.x > offset && cursorPos.x < offset+size.w/cast(int)children.length;
 			auto state = (
-					hover ? "hover"
-					: c.isUrgent ? "urgent"
+					c.isUrgent ? "urgent"
 					: flatman.active == c ? "active"
+					: hover ? "hover"
 					: c.isfullscreen ? "fullscreen"
 					: "normal");
 			auto color = config.color("split border "
 					~ (showTabs ? "insert " : "")
 					~ state);
 			draw.clip([offset,0], [size.w/cast(int)children.length,size.h]);
-			draw.setColor(color);
+			if(!containerFocused && i == clientActive){
+				draw.setColor(config.color("split border hover"));
+			}else
+				draw.setColor(color);
 			draw.rect([offset,0], [size.w/cast(int)children.length,size.h]);
 			if(monitor.peekTitles || showTabs){
-				if(!containerFocused && i == clientActive){
-					draw.setColor(config.color("split border active"));
-					draw.rect([offset,size.h-2], [size.w/cast(int)clients.length,2]);
-				}
 				color = config.color("split title "
 						~ (showTabs ? "insert " : "")
 						~ state);
 				draw.setColor(color);
-				draw.setFont("Consolas:size=10", 0);
-				draw.text([offset + size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2, size.h-bh], bh+2, c.name);
-				if(c.icon && c.icon.img){
-					//draw.rect([offset,size.h-bh], [c.icon.width, c.icon.height]);
-					//draw.to!XDraw.icon(c.icon, offset, size.h-bh);
+				draw.setFont(config["split title font"], config["split title font-size"].to!int);
+				draw.text([offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh), size.h-bh], bh+2, c.name);
+				if(c.icon){
+					foreach(x; 0..c.iconSize.w){
+						foreach(y; 0..c.iconSize.h){
+							long ii = x+y*c.iconSize.w;
+							draw.setColor([c.icon[ii], c.icon[ii+1], c.icon[ii+2]]);
+							draw.rect([offset+cast(int)x,size.h-bh+cast(int)y], [2,2]);
+						}
+					}
+					/+
+					draw.rect([offset,size.h-bh], [c.icon.width, c.icon.height]);
+					draw.to!XDraw.icon(c.icon, offset, size.h-bh);
+					+/
 				}
 			}
 			draw.setColor(config.color("split background"));

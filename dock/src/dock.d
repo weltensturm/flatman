@@ -16,17 +16,41 @@ Composite composite;
 
 
 void main(){
-	xerrorxlib = XSetErrorHandler(&xerror);
-	dockWindow = new WorkspaceDock(400, 300, "flatman-dock");
-	composite = new Composite;
-	wm.add(dockWindow);
-	while(wm.hasActiveWindows){
-		wm.processEvents;
-		dockWindow.onDraw;
-		dockWindow.tick;
-		Thread.sleep(10.msecs);
+	try {
+		xerrorxlib = XSetErrorHandler(&xerror);
+		dockWindow = new WorkspaceDock(400, 300, "flatman-dock");
+		composite = new Composite;
+		wm.add(dockWindow);
+		while(wm.hasActiveWindows){
+			wm.processEvents;
+			dockWindow.onDraw;
+			dockWindow.tick;
+			Thread.sleep(10.msecs);
+		}
+	}catch(Throwable t){
+		writeln(t);
 	}
 }
+
+
+x11.X.Window[] windows(){
+	XFlush(wm.displayHandle);
+	XGrabServer(wm.displayHandle);
+	x11.X.Window root_return, parent_return;
+	x11.X.Window* children;
+	x11.X.Window[] wins;
+	uint nchildren;
+	XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &nchildren);
+	if(children){
+		foreach(window; children[0..nchildren])
+			wins ~= window;
+		XFree(children);
+	}
+	XUngrabServer(wm.displayHandle);
+	XFlush(wm.displayHandle);
+	return wins;
+}
+
 
 
 Atom atom(string name){
@@ -49,6 +73,7 @@ class CompositeClient: ws.wm.Window {
 		isActive = true;
 		createPicture;
 		desktop = new CardinalProperty(windowHandle, "_NET_WM_DESKTOP");
+		wm.handler[windowHandle][MapNotify] ~= (e){ createPicture; };
 		wm.handler[windowHandle][PropertyNotify] ~= &onProperty;
 		XSelectInput(wm.displayHandle, windowHandle, wm.eventMask | PropertyChangeMask);
 	}
@@ -129,32 +154,6 @@ class Composite {
 }
 
 
-class Watcher(T) {
-
-	T[] data;
-
-	void check(T[] data){
-		data = data.sort!"a < b".array;
-		if(this.data != data){
-			foreach(delta; data.setDifference(this.data))
-				foreach(event; add)
-					event(delta);
-			foreach(delta; this.data.setDifference(data))
-				foreach(event; remove)
-					event(delta);
-			foreach(event; update)
-				event();
-			this.data = data;
-		}
-	}
-
-	void delegate(T)[] add;
-	void delegate(T)[] remove;
-	void delegate()[] update;
-
-}
-
-
 class WorkspaceDock: ws.wm.Window {
 
 	CardinalListProperty screenSize;
@@ -214,6 +213,8 @@ class WorkspaceDock: ws.wm.Window {
 			update;
 			currentDesktopInternal = currentDesktop.get;
 			showTime = Clock.currSystemTick.msecs+500;
+		}else if(e.xproperty.atom == clients.property){
+			update;
 		}
 	}
 
@@ -255,7 +256,7 @@ class WorkspaceDock: ws.wm.Window {
 	void tick(){
 		int targetX = cast(int)screenSize.get(2).w-(visible ? size.w : 1);
 		if(pos.x != targetX){
-			XMoveWindow(dpy, windowHandle, pos.x - cast(int)((pos.x-targetX)/1.5).lround, 0);
+			XMoveWindow(dpy, windowHandle, targetX, 0);
 			XRaiseWindow(dpy, windowHandle);
 		}
 	}
@@ -266,11 +267,21 @@ class WorkspaceDock: ws.wm.Window {
 
 	void update(){
 		writeln("updating dock");
+		XMapWindow(dpy, windowHandle);
 		desktops = desktops.init;
-		windowWatcher.check(clients.get(-1));
+		windowWatcher.check(.windows);
 		XSync(dpy, false);
-		foreach(window; windows)
-			desktops[window.desktop.get] ~= window;
+		"NEW ORDER".writeln;
+		foreach(handle; windowWatcher.data){
+			auto win = windows.find!(a => a.windowHandle == handle);
+			if(win.length){
+				auto desktop = win[0].desktop.get;
+				desktops[desktop] ~= win[0];
+				if(desktop != currentDesktop.get)
+					continue;
+				"WS %s TITLE %s".format(desktop, win[0].getTitle).writeln;
+			}
+		}
 		foreach(c; children)
 			remove(c);
 		auto count = desktopCount.get;
@@ -469,7 +480,7 @@ class WindowIcon: Base {
 	}
 
 	override void onDraw(){
-		if(dragGhost)
+		if(dragGhost)// || (!window.isActive && window.desktop.get == dockWindow.currentDesktop.get))
 			return;
 		composite.draw(window, pos, size);
 		/+

@@ -28,7 +28,8 @@ class Client: Base {
 	Pixmap mPixmap;
 	Picture mPicture;
 	XRenderPictFormat* format;
-	Icon icon;
+	ubyte[] icon;
+	long[2] iconSize;
 
 	long ignoreUnmap;
 
@@ -80,7 +81,6 @@ class Client: Base {
 
 	override void show(){
 		"show %s".format(name).log;
-		hidden = false;
 		XMapWindow(dpy, win);
 		XSync(dpy, false);
 	}
@@ -231,7 +231,6 @@ class Client: Base {
 				if(wmh.flags & XUrgencyHint){
 					requestAttention;
 				}
-				//flatman.monitor.dock.show;
 			}
 			if(wmh.flags & InputHint)
 				neverfocus = !wmh.input;
@@ -253,20 +252,24 @@ class Client: Base {
 			long* data = cast(long*)p;
 			long width = data[0];
 			long height = data[1];
-			ubyte[] pixels;
+			icon = [];
+			ubyte[] icon;
 			foreach(pixel; data[2..width*height+2]){
-				pixels ~= [
+				icon ~= [
 					cast(ubyte)(pixel & 0xff),
 					cast(ubyte)(pixel >> 8 & 0xff),
 					cast(ubyte)(pixel >> 16 & 0xff),
 					cast(ubyte)(pixel >> 24)
 				];
 			}
+			iconSize = [width,height];
+			/+
 			icon = new Icon;
-			icon.img = XCreateImage(dpy, null, DefaultDepth(dpy, screen), ZPixmap, 0, cast(char*)pixels.ptr, cast(uint)width, cast(uint)height, 32, 0);
+			icon.img = XCreateImage(dpy, null, DefaultDepth(dpy, screen), ZPixmap, 0, cast(char*)icon.ptr, cast(uint)width, cast(uint)height, 32, 0);
 			icon.width = cast(int)width;
 			icon.height = cast(int)height;
-			assert(pixels.length == width*height*4);
+			assert(icon.length == width*height*4);
+			+/
 		}
 		XFree(p);
 	}
@@ -384,15 +387,17 @@ void togglefloating(Client client = null){
 		client = active;
 	if(!client)
 		return;
-	if(client.isFloating){
+	if(client.isFloating && !client.isfullscreen){
 		client.posFloating = client.pos;
 		client.sizeFloating = client.size;
 	}
 	client.isFloating = !client.isFloating;
-	monitor.remove(client);
-	monitor.add(client, monitor.workspaceActive);
-	if(client.isFloating){
-		client.moveResize(client.posFloating, client.sizeFloating);
+	if(!client.isfullscreen){
+		monitor.remove(client);
+		monitor.add(client, monitor.workspaceActive);
+		if(client.isFloating){
+			client.moveResize(client.posFloating, client.sizeFloating);
+		}
 	}
 	client.focus;
 }
@@ -403,12 +408,20 @@ void setfullscreen(Client c, bool fullscreen){
 		if(!proplist.canFind(net.fullscreen))
 			append(c.win, net.state, [net.fullscreen]);
 		c.isfullscreen = true;
+		if(c.isFloating){
+			monitor.remove(c);
+			monitor.add(c, monitor.workspaceActive);
+		}
 		c.moveResize(c.monitor.pos, c.monitor.size);
-		XRaiseWindow(dpy, c.win);
+		c.focus;
 	}else{
 		if(proplist.canFind(net.fullscreen))
 			replace(c.win, net.state, c.getPropList(net.state).without(net.fullscreen));
 		c.isfullscreen = false;
+		if(c.isFloating){
+			monitor.remove(c);
+			monitor.add(c, monitor.workspaceActive);
+		}
 		if(!c.isFloating)
 			monitor.workspace.split.rebuild;
 		else
@@ -497,9 +510,11 @@ void clearurgent(Client c){
 }
 
 void focus(Client c){
-	if(!c || !c.isVisible)
+	if(!monitor || !monitor.workspace)
 		return;
-	if(monitor.active && monitor.active != c)
+	if(!c && monitor.workspace && monitor.workspace.clients.length)
+		c = monitor.workspace.clients[$-1];
+	if(monitor.active)
 		unfocus(monitor.active, false);
 	if(c){
 		if(c.monitor != monitor)
@@ -520,13 +535,13 @@ void focus(Client c){
 			}
 		}
 	}
-	if(c.isfullscreen)
+	if(c && c.isfullscreen)
 		c.moveResize(c.monitor.pos, c.monitor.size);
-	restack;
 	foreach(m; monitors)
 		m.draw;
 	XSync(dpy, false);
 	previousFocus = c;
+	restack;
 }
 
 long[4] getStrut(Client client){

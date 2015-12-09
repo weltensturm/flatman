@@ -12,6 +12,7 @@ import
 	gdk.Screen,
 	gdk.Rectangle,
 	glib.ListSG,
+	glib.Timeout,
 	cairo.Context,
 	gtk.Main,
 	gtk.VBox,
@@ -141,9 +142,14 @@ void spawnMainWindow(GdkRectangle area, int iconSize){
 	nb.appendPage(new DeviceContainer(sinks.array, appsOutput.array), "Output");
 	nb.appendPage(new DeviceContainer(sources.array, appsInput.array), "Input");
 	w.add(nb);
-	w.grabFocus;
+	bool focus;
+	w.addOnFocusIn((GdkEventFocus* c, w){
+		focus = true;
+		return true;
+	});
 	w.addOnFocusOut((GdkEventFocus* c, w){
-		w.hide;
+		if(focus)
+			w.hide;
 		return true;
 	});
 	w.showAll;
@@ -163,9 +169,20 @@ void main(string[] args){
 		spawnMainWindow(area, icon.getSize);
 		return true;
 	});
-	string visual = "audio-volume-medium";
+	string visual;
 	auto updateIcon = (int size){
-		icon.setFromGicon(IconTheme.getDefault.loadIcon(visual, size, GtkIconLookupFlags.DIR_LTR));
+		auto old = visual;
+		auto sink = sinks.selected;
+		if(sink.muted || sink.volume <= 0)
+			visual = "audio-volume-muted";
+		else if(sink.volume > 2.0/3)
+			visual = "audio-volume-high";
+		else if(sink.volume > 1.0/3)
+			visual = "audio-volume-medium";
+		else
+			visual = "audio-volume-low";
+		if(visual != old)
+			icon.setFromGicon(IconTheme.getDefault.loadIcon(visual, size, GtkIconLookupFlags.DIR_LTR));
 	};
 	icon.addOnScroll((GdkEventScroll* event, icon){
 		auto sink = sinks.selected;
@@ -174,12 +191,6 @@ void main(string[] args){
 			sink.setVolume((sink.volume+0.05).min(1));
 		else if(event.direction == GdkScrollDirection.DOWN)
 			sink.setVolume((sink.volume-0.05).max(0));
-		if(sink.volume > 2.0/3)
-			visual = "audio-volume-high";
-		else if(sink.volume > 1.0/3)
-			visual = "audio-volume-medium";
-		else
-			visual = "audio-volume-low";
 		updateIcon(icon.getSize);
 		return true;
 	});
@@ -188,6 +199,7 @@ void main(string[] args){
 		return true;
 	});
 	updateIcon(icon.getSize);
+	new Timeout(400, { updateIcon(icon.getSize); return true; });
 	Main.run;
 }
 
@@ -209,7 +221,9 @@ Device[] sinks(){
 			devices ~= new Sink;
 			devices[$-1].index = s.matchFirst(r"Sink #([0-9]+)")[1].to!int;
 		}else{
-			if(s.canFind("Name: ")){
+			if(s.canFind("Mute: "))
+				devices[$-1].muted = s.canFind("Mute: yes");
+			else if(s.canFind("Name: ")){
 				devices[$-1].systemName = s.matchFirst(r"Name: (.*)")[1].to!string;
 			}else if(s.canFind("device.description")){
 				devices[$-1].name = s.matchFirst(`device.description = "(.*)"`)[1].to!string;
@@ -298,6 +312,7 @@ class Device {
 	string systemName;
 	string name;
 	double volume;
+	bool muted;
 
 	void select(){}
 

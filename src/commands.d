@@ -60,8 +60,11 @@ void registerFunctions(){
 }
 
 
-void focus(string what){
-	monitor.workspace.focusDir(what == "+" ? 1 : -1);
+void focus(string what, string dir){
+	if(what == "dir")
+		monitor.workspace.focusDir(dir == "+" ? 1 : -1);
+	else if(what == "stack")
+		monitor.workspace.focusTabs(dir == "+" ? 1 : -1);
 }
 
 void resize(string what){

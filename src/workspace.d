@@ -31,7 +31,7 @@ class Workspace: Container {
 	override void add(Client client){
 		"adding %s isFloating %s".format(client.name, client.isFloating).log;
 		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
-		if(client.isFloating || client.isfullscreen){
+		if(client.isFloating && !client.isfullscreen){
 			floating.add(client);
 		}else{
 			if(monitor.workspace == this)
@@ -64,6 +64,10 @@ class Workspace: Container {
 			split.focusDir(dir);
 	}
 
+	void focusTabs(int dir){
+		split.focusTabs(dir);
+	}
+
 	alias remove = Base.remove;
 
 	override void remove(Client client){
@@ -74,8 +78,6 @@ class Workspace: Container {
 			c.to!Container.remove(client);
 		if(!split.children)
 			split.hide;
-		if(refocus)
-			focus(active);
 	}
 
 	override void show(){

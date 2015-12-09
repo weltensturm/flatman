@@ -1,5 +1,6 @@
 module flatman.flatman;
 
+
 import flatman;
 
 
@@ -426,8 +427,6 @@ void onProperty(XEvent *e){
 				c.updateSizeHints;
 			},
 			XA_WM_HINTS: {
-				if(del)
-					return;
 				c.updateWmHints;
 				monitor.draw;
 			},
@@ -562,17 +561,28 @@ void onExpose(XEvent *e){
 }
 
 void onFocus(XEvent* e){ /* there are some broken focus acquiring clients */
-	XFocusChangeEvent *ev = &e.xfocus;
+	//XFocusChangeEvent *ev = &e.xfocus;
 	//if(monitor.active && ev.window != monitor.active.win)
 	//	setfocus(monitor.active);
-	auto c = wintoclient(ev.window);
-	if(c && c != active)
-		c.requestAttention;
+	//auto c = wintoclient(ev.window);
+	//if(c && c != active)
+	//	c.requestAttention;
 }
 
 void onKey(XEvent* e){
 	XKeyEvent *ev = &e.xkey;
 	KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)ev.keycode, 0);
+	"key %s".format(keysym).log;
+	foreach(key; flatman.keys){
+		if(keysym == key.keysym && CLEANMASK(key.mod) == CLEANMASK(ev.state) && key.func)
+			key.func();
+	}
+}
+
+void onKeyRelease(XEvent* e){
+	XKeyEvent *ev = &e.xkey;
+	KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)ev.keycode, 0);
+	"key release %s".format(keysym).log;
 	foreach(key; flatman.keys){
 		if(keysym == key.keysym && CLEANMASK(key.mod) == CLEANMASK(ev.state) && key.func)
 			key.func();
@@ -609,8 +619,13 @@ void onMotion(XEvent* e){
 	static Monitor mon = null;
 	Monitor m;
 	XMotionEvent* ev = &e.xmotion;
-	if(ev.window != root)
-		return;
+	/+
+	if(ev.window != root && (!active || ev.window != active.win && ev.subwindow != active.win)){
+		auto c = wintoclient(ev.window);
+		if(c)
+			c.focus;
+	}
+	+/
 	if((m = recttomon(ev.x_root, ev.y_root, 1, 1)) != mon && mon){
 		unfocus(monitor.active, true);
 		monitor = m;
@@ -636,6 +651,9 @@ void restack(){
 	XGrabServer(dpy);
 	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
 		XLowerWindow(dpy, tabs.window);
+	foreach_reverse(c; clientsVisible)
+		if(c.global)
+			c.lower;
 	foreach_reverse(c; clientsVisible)
 		if(!c.global && (!c.isfullscreen || active != c))
 			c.lower;
@@ -711,19 +729,23 @@ bool gettextprop(Window w, Atom atom, ref string text){
 	return true;
 }
 
+void grabKey(Key key){
+	auto modifiers = [ 0, LockMask, numlockmask, numlockmask|LockMask ];
+	auto code = XKeysymToKeycode(dpy, key.keysym);
+	foreach(mod; modifiers)
+		XGrabKey(dpy, code, key.mod | mod, root, true, GrabModeAsync, GrabModeAsync);
+}
+
 void grabkeys(){
 	updatenumlockmask();
 	uint i, j;
-	uint[] modifiers = [ 0, LockMask, numlockmask, numlockmask|LockMask ];
 	KeyCode code;
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	foreach(key; flatman.keys){
-		code = XKeysymToKeycode(dpy, key.keysym);
-		if(code)
-			for(j = 0; j < modifiers.length; j++)
-				XGrabKey(dpy, code, key.mod | modifiers[j], root,
-					 true, GrabModeAsync, GrabModeAsync);
+		grabKey(key);
 	}
+	//grabKey(Key(XK_Alt_L));
+    //XGrabKeyboard(dpy, root, true, GrabModeAsync, GrabModeAsync, CurrentTime);
 }
 
 void killclient(Client client=null){
@@ -760,7 +782,7 @@ void manage(Window w, XWindowAttributes* wa){
 		c.monitor = monitor;
 		c.applyRules;
 	}
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask);
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask|PointerMotionMask);
 	c.grabbuttons(false);
 	if(!c.isFloating)
 		c.isFloating = c.oldstate = trans != None || c.isfixed;
@@ -835,9 +857,10 @@ void onUnmap(XEvent *e){
 	XUnmapEvent *ev = &e.xunmap;
 	Client c = wintoclient(ev.window);
 	if(c){
-		if(ev.send_event)
+		if(ev.send_event){
 			c.setState(WithdrawnState);
-		else
+			c.hidden = true;
+		}else
 			c.unmanage(!c.hidden);
 	}
 }

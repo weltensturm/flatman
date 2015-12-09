@@ -1,4 +1,5 @@
-module dock;
+module composite;
+
 
 public import
 	core.thread,
@@ -23,19 +24,15 @@ public import
 	x11.extensions.render,
 	x11.extensions.Xrender,
 	x11.keysymdef,
-	gtk.Widget,
-	gtk.Window,
-	gtk.Label,
-	ws.bindings.xft,
-	ws.bindings.fontconfig,
-	ws.gl.gl,
-	ws.x.draw,
 	ws.wm,
-	ws.gui.base,
-	ws.gui.input,
-	ws.gui.point,
-	dock.draw,
-	dock.dock,
-	dock.watcher,
-	dock.proputil;
-	
+	ws.math,
+	ws.x.property,
+	composite.main,
+	composite.client,
+	composite.animation;
+
+
+Screen screen;
+ulong root;
+
+enum CompositeRedirectManual = 1;
