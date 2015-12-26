@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=flatman
+Comment=improved dynamic tiling window manager
+Exec=/home/weltensturm/Projects/d/flatman/flatman
+Type=Application
+DesktopNames=flatman
