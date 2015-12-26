@@ -40,8 +40,8 @@ class Config {
 
 	void load(){
 		auto prioritizedPaths = [
-			"%s/config.ws".format(thisExePath.dirName),
-			"/etc/flatman",
+			"%s/res/config.ws".format(thisExePath.dirName),
+			"/etc/flatman/config.ws",
 			"~/.config/flatman/config.ws".expandTilde,
 		];
 		foreach(path; prioritizedPaths){
