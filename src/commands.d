@@ -139,17 +139,13 @@ void workspace(string dir, string how){
 			}else
 				switchWorkspace(workspaceActive-1);
 		}else if(dir == "first"){
-			if(how == "create"){
+			if(how == "create")
 				newWorkspace(0);
-				firstWs;
-			}else
-				switchWorkspace(0);
+			switchWorkspace(0);
 		}else if(dir == "last"){
-			if(how == "create"){
+			if(how == "create")
 				newWorkspace(workspaces.length);
-				lastWs;
-			}else
-				switchWorkspace(workspaces.length.to!int-1);
+			switchWorkspace(workspaces.length.to!int-1);
 		}
 	}
 }
