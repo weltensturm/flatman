@@ -19,7 +19,7 @@ class CompositeClient: ws.wm.Window {
 	Property!(XA_CARDINAL, false) currentTab;
 	Property!(XA_CARDINAL, false) currentTabs;
 
-	void hide(){}
+	override void hide(){}
 
 	this(x11.X.Window window, int[2] pos, int[2] size, XWindowAttributes a){
 		super(window);
