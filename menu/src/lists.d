@@ -126,6 +126,7 @@ class ListFrequent: Scroller {
 		Entry[string] tmp;
 		history = [];
 		if(historyFile.exists){
+			int count = 0;
 			foreach(line; historyFile.readText.splitLines){
 				auto m = line.matchAll(`([0-9]+) (\S+)(?: (.*))?`);
 				if(m.captures[3] !in tmp){
@@ -134,7 +135,7 @@ class ListFrequent: Scroller {
 					tmp[e.text] = e;
 					history ~= e;
 				}
-				tmp[m.captures[3]].count++;
+				tmp[m.captures[3]].count = count++;
 			}
 			history.sort!"a.count > b.count";
 		}
@@ -164,6 +165,8 @@ class ListFrequent: Scroller {
 	}
 
 	override void onDraw(){
+		draw.setColor([0.1,0.1,0.1]);
+		draw.rect(pos, size);
 		super.onDraw;
 		draw.setColor([0.3,0.3,0.3]);
 		draw.rect(pos, [2, size.h]);

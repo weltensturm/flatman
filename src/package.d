@@ -46,8 +46,6 @@ public import
 	flatman.flatman,
 	flatman.monitor,
 	flatman.workspace,
-	flatman.workspaceDock,
-	flatman.bar,
 	flatman.container,
 	flatman.split,
 	flatman.floating,

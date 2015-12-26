@@ -4,6 +4,8 @@ import flatman;
 
 __gshared:
 
+Atom currentTab;
+Atom currentTabs;
 
 class Tabs: Container {
 
@@ -36,7 +38,12 @@ class Tabs: Container {
 			MotionNotify: (XEvent* e)=>mouse([e.xmotion.x, e.xmotion.y])
 		]);
 		hidden = true;
-		replace!long(window, net.windowDesktop, monitor.workspaceActive);
+		if(!currentTab)
+			currentTab = XInternAtom(dpy, "_FLATMAN_TAB", false);
+		if(!currentTabs)
+			currentTabs = XInternAtom(dpy, "_FLATMAN_TABS", false);
+		if(!currentTab)
+			writeln("error");
 	}
 
 	void mouse(bool focus){
@@ -80,10 +87,14 @@ class Tabs: Container {
 	override void show(){
 		if(!hidden)
 			return;
+		replace!long(window, net.windowDesktop, monitor.workspaceActive);
 		XMapWindow(dpy, window);
 		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
 		if(active)
 			active.show;
+		foreach(c; children.to!(Client[])){
+			XMoveWindow(dpy, c.win, c.pos.x, c.pos.y);
+		}
 		resize(size);
 		onDraw;
 		hidden = false;
@@ -93,8 +104,9 @@ class Tabs: Container {
 		if(hidden)
 			return;
 		XUnmapWindow(dpy, window);
-		foreach(c; clients)
-			c.hide;
+		foreach(c; clients){
+            XMoveWindow(dpy, c.win, c.pos.x, -monitor.size.h+c.pos.y);
+        }
 		hidden = true;
 	}
 
@@ -107,6 +119,7 @@ class Tabs: Container {
 		else
 			add(client.to!Base);
 		active = client;
+		updateHints;
 		resize(size);
 		XSync(dpy, false);
 	}
@@ -120,8 +133,16 @@ class Tabs: Container {
 		auto n = any;
 		if(n)
 			active = n;
-		writeln(n);
+		updateHints;
 		onDraw;
+	}
+
+	void updateHints(){
+		foreach(i, c; children.to!(Client[])){
+			c.win.replace(currentTab, cast(long)i);
+			c.win.replace(currentTabs, cast(long)cast(void*)this);
+		}
+		XSync(dpy, false);
 	}
 
 	Client next(){
@@ -141,6 +162,7 @@ class Tabs: Container {
 			return;
 		swap(children[clientActive], children[clientActive-1]);
 		clientActive--;
+		updateHints;
 		onDraw;
 	}
 
@@ -149,6 +171,7 @@ class Tabs: Container {
 			return;
 		swap(children[clientActive], children[clientActive+1]);
 		clientActive++;
+		updateHints;
 		onDraw;
 	}
 
@@ -178,11 +201,16 @@ class Tabs: Container {
 	override void resize(int[2] size){
 		super.resize(size);
 		auto padding = config["split paddingOuter"].split.to!(int[4]);
-		if(active)
-			active.moveResize(
-				pos.a + [padding[0], showTabs ? bh : padding[2]],
-				size.a - [padding[0]+padding[1], (showTabs ? bh : padding[2])+padding[3]]
-			);
+		if(active){
+			if(active.isfullscreen){
+				active.moveResize(active.monitor.pos, active.monitor.size);
+			}else{
+				active.moveResize(
+					pos.a + [padding[0], showTabs ? bh : padding[2]],
+					size.a - [padding[0]+padding[1], (showTabs ? bh : padding[2])+padding[3]]
+				);
+			}
+		}
 		//XRaiseWindow(dpy, window);
 		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, (monitor.peekTitles || showTabs) ? bh : padding[2]);
 		draw.resize(size);
@@ -218,8 +246,14 @@ class Tabs: Container {
 				color = config.color("split title "
 						~ (showTabs ? "insert " : "")
 						~ state);
-				draw.setColor(color);
 				draw.setFont(config["split title font"], config["split title font-size"].to!int);
+				draw.setColor([0.1,0.1,0.1]);
+				foreach(x; [-1,0,1]){
+					foreach(y; [-1,0,1]){
+						draw.text([x+offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh), y+size.h-bh], bh+2, c.name);
+					}
+				}
+				draw.setColor(color);
 				draw.text([offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh), size.h-bh], bh+2, c.name);
 				if(c.icon){
 					foreach(x; 0..c.iconSize.w){

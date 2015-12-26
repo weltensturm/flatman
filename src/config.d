@@ -79,9 +79,6 @@ enum snap      = 32;       /* snap pixel */
 enum showbar           = false;     /* False means no bar */
 enum topbar            = false;     /* False means bottom bar */
 
-/* tagging */
-enum tags = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
-
 void each(T)(T[] data, void delegate(size_t i, T data) dg){
 	foreach(i, d; data)
 		dg(i, d);

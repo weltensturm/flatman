@@ -19,6 +19,12 @@ keys {
 	alt+Down			workspace + filled
 	alt+l				workspace - filled
 	alt+Up				workspace - filled
+	alt+ctrl+l			workspace - create
+	alt+ctrl+k			workspace + create
+	alt+0				workspace last s
+	alt+9				workspace last create
+	alt+1				workspace first s
+	alt+2				workspace first create
 	alt+shift+j			move -
 	alt+shift+semicolon	move +
 	alt+shift+k			move down
@@ -41,7 +47,7 @@ keys {
 split {
 	background 222222
 	border 0 0 2 0
-	paddingElem 4
+	paddingElem 0
 	paddingOuter 0 0 2 0
 	border {
 		normal 222222

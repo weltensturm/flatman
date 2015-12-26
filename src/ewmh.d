@@ -48,13 +48,13 @@ void updateCurrentDesktop(){
 }
 
 void updateDesktopCount(){
-	replace(net.desktopCount, cast(CARDINAL)tags.length);
+	replace(net.desktopCount, cast(CARDINAL)monitor.workspaces.length);
 }
 
 void updateDesktopNames(){
 	string names;
 	foreach(i, ws; monitor.workspaces){
-		names ~= tags[i];
+		names ~= i.to!string;
 		try{
 			names ~= ": " ~ std.string.replace("~/.dinu/%s".format(i).expandTilde.readText, "~".expandTilde, "~");
 		}catch{}

@@ -10,7 +10,6 @@ class Monitor {
 	int[2] pos;
 	int[2] size;
 	Client[] strutClients;
-	Bar bar;
 
 	Workspace[] workspaces;
 	Client[] globals;
@@ -22,9 +21,7 @@ class Monitor {
 	this(int[2] pos, int[2] size){
 		this.pos = pos;
 		this.size = size;
-		foreach(t; tags){
-			workspaces ~= new Workspace(pos, size);
-		}
+		workspaces ~= new Workspace(pos, size);
 		workspace.show;
 		//auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
 		//dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
@@ -38,11 +35,34 @@ class Monitor {
 		return workspaces[workspaceActive];
 	}
 
+	void newWorkspace(long pos){
+		"create new workspace at %s".format(pos).writeln;
+		auto ws = new Workspace(this.pos, size);
+		if(pos <= 0)
+			workspaces = ws ~ workspaces;
+		else if(pos > workspaces.length-1)
+			workspaces ~= ws;
+		else
+			workspaces.insertInPlace(pos, ws);
+		if(workspaceActive >= pos)
+			workspaceActive++;
+		updateDesktopCount;
+		foreach(i, w; workspaces)
+			foreach(c; w.clients)
+				updateWindowDesktop(c, i);
+	}
+
 	void switchWorkspace(int pos){
 		if(pos == workspaceActive)
 			return;
 		"hide workspace %s".format(workspaceActive).log;
 		workspace.hide;
+		if(workspace.clients.length == 0 && workspaces.length > 1){
+			workspaces = workspaces.without(workspace);
+			if(pos > workspaceActive)
+				pos--;
+			updateDesktopCount;
+		}
 		workspaceActive = pos;
 		if(monitor.workspaceActive < 0)
 			workspaceActive = cast(int)workspaces.length-1;
@@ -60,32 +80,6 @@ class Monitor {
 		if(flatman.active)
 			flatman.active.setWorkspace(pos);
 	}
-	
-	void nextWs(){
-		switchWorkspace(workspaceActive+1);
-	}
-	
-	void nextWsFilled(){
-		foreach(i; workspaceActive+1..workspaces.length){
-			if(workspaces[i].clients.length){
-				switchWorkspace(cast(int)i);
-				return;
-			}
-		}
-	}
-
-	void prevWs(){
-		switchWorkspace(workspaceActive-1);
-	}
-	
-	void prevWsFilled(){
-		foreach_reverse(i; 0..workspaceActive){
-			if(workspaces[i].clients.length){
-				switchWorkspace(i);
-				return;
-			}
-		}
-	}
 
 	void moveLeft(){
 		workspace.split.moveClient(-1);
@@ -97,7 +91,7 @@ class Monitor {
 
 	void moveDown(){
 		if(workspaceActive == workspaces.length-1)
-			return;
+			newWorkspace(workspaces.length);
 		auto win = active;
 		if(win)
 			win.setWorkspace(workspaceActive+1);
@@ -108,7 +102,7 @@ class Monitor {
 	
 	void moveUp(){
 		if(workspaceActive == 0)
-			return;
+			newWorkspace(0);
 		auto win = active;
 		if(win)
 			win.setWorkspace(workspaceActive-1);
@@ -137,7 +131,16 @@ class Monitor {
 	}
 
 	void move(Client client, int workspace){
+		auto l = workspaces.length;
+		auto pos = workspaces.countUntil!(a => a.clients.canFind(client));
 		this.workspace.remove(client);
+		if(l < workspaces.length-1){
+			if(workspace < pos)
+				workspace--;
+			foreach(i, w; workspaces)
+				foreach(c; w.clients)
+					updateWindowDesktop(c, i);
+		}
 		workspaces[workspace].add(client);
 	}
 
@@ -165,12 +168,13 @@ class Monitor {
 	}
 
 	Client[] clients(){
-		return workspaces
+		Client[] c;
+		if(workspaces.length > 1)
+			c = workspaces
 				.without(workspace)
 				.map!"a.clients"
-				.reduce!"a ~ b"
-			~ workspace.clients
-			~ globals;
+				.reduce!"a ~ b";
+		return c ~ workspace.clients ~ globals;
 	}
 
 	Client[] clientsVisible(){

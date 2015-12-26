@@ -9,13 +9,17 @@ CompositeManager manager;
 
 
 void main(){
-	XSetErrorHandler(&xerror);
-	root = XDefaultRootWindow(wm.displayHandle);
-	manager = new CompositeManager;
-	while(true){
-		wm.processEvents;
-		manager.draw;
-		Thread.sleep(10.msecs);
+	try {
+		XSetErrorHandler(&xerror);
+		root = XDefaultRootWindow(wm.displayHandle);
+		manager = new CompositeManager;
+		while(true){
+			wm.processEvents;
+			manager.draw;
+			Thread.sleep(10.msecs);
+		}
+	}catch(Throwable t){
+		writeln(t);
 	}
 }
 
@@ -82,6 +86,84 @@ class CompositeManager {
 
 	Picture[ALPHA_STEPS] alpha;
 
+	CompositeClient currentClient;
+	CompositeClient lastClient;
+
+	this(){
+
+		XSynchronize(wm.displayHandle, true);
+
+		width = DisplayWidth(wm.displayHandle, DefaultScreen(wm.displayHandle));
+		height = DisplayHeight(wm.displayHandle, DefaultScreen(wm.displayHandle));
+
+	    reg_win = XCreateSimpleWindow(wm.displayHandle, RootWindow(wm.displayHandle, 0), 0, 0, 1, 1, 0, None, None);
+	    if(!reg_win)
+	    	throw new Exception("Failed to create simple window");
+	    "created simple window".writeln;
+		//XCompositeUnredirectWindow(wm.displayHandle, reg_win, CompositeRedirectManual);
+	    Xutf8SetWMProperties(wm.displayHandle, reg_win, cast(char*)"xcompmgr".toStringz, cast(char*)"xcompmgr".toStringz, null, 0, null, null, null);
+	    Atom a = XInternAtom(wm.displayHandle, "_NET_WM_CM_S0", False);
+	    XSetSelectionOwner(wm.displayHandle, a, reg_win, 0);
+	    "selected CM_S0 owner".writeln;
+
+		XCompositeRedirectSubwindows(wm.displayHandle, root, CompositeRedirectManual);
+		"redirected subwindows".writeln;
+		visual = DefaultVisual(wm.displayHandle, 0);
+		depth = DefaultDepth(wm.displayHandle, 0);
+		auto format = XRenderFindVisualFormat(wm.displayHandle, visual);
+		XSelectInput(wm.displayHandle, root,
+		    SubstructureNotifyMask
+		    | ExposureMask
+		    | PropertyChangeMask);
+
+ 		//overlay = XCompositeGetOverlayWindow(wm.displayHandle, root);
+	    //XSelectInput(wm.displayHandle, overlay, ExposureMask);
+
+		XRenderPictureAttributes pa;
+		pa.subwindow_mode = IncludeInferiors;
+		frontBuffer = XRenderCreatePicture(wm.displayHandle, root, format, CPSubwindowMode, &pa);
+		Pixmap pixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), DefaultDepth(wm.displayHandle, 0));
+		backBuffer = XRenderCreatePicture(wm.displayHandle, pixmap, format, 0, null);
+		XFreePixmap(wm.displayHandle, pixmap); // The picture owns the pixmap now
+		XSync(wm.displayHandle, false);
+		"created backbuffer".writeln;
+		
+		workspaceProperty = new Property!(XA_CARDINAL, false)(root, "_NET_CURRENT_DESKTOP");
+		
+		rootmapId = new Property!(XA_PIXMAP, false)(root, "_XROOTPMAP_ID");
+		setrootId = new Property!(XA_PIXMAP, false)(root, "_XSETROOT_ID");
+
+		wm.handlerAll[CreateNotify] ~= e => evCreate(e.xcreatewindow.window);
+		wm.handlerAll[DestroyNotify] ~= e => evDestroy(e.xdestroywindow.window);
+		wm.handlerAll[ConfigureNotify] ~= e => evConfigure(e);
+		wm.handlerAll[MapNotify] ~= e => evMap(&e.xmap);
+		wm.handlerAll[UnmapNotify] ~= e => evUnmap(&e.xunmap);
+		wm.handlerAll[PropertyNotify] ~= e => evProperty(&e.xproperty);
+
+		auto clientsProperty = new Property!(XA_WINDOW, true)(root, "_NET_CLIENT_LIST");
+
+		"looking for windows".writeln;
+		XFlush(wm.displayHandle);
+		XGrabServer(wm.displayHandle);
+		x11.X.Window root_return, parent_return;
+		x11.X.Window* children;
+		uint nchildren;
+		XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &nchildren);
+		if(children){
+			foreach(window; children[0..nchildren]){
+				if(root == root_return)
+					evCreate(window);
+			}
+			XFree(children);
+		}
+		XUngrabServer(wm.displayHandle);
+		XFlush(wm.displayHandle);
+
+		get_root_tile;
+
+		initAlpha;
+	}
+	
 	Picture colorPicture(bool argb, double a, double r, double g, double b){
 		auto pixmap = XCreatePixmap(wm.displayHandle, root, 1, 1, argb ? 32 : 8);
 		if(!pixmap)
@@ -112,100 +194,20 @@ class CompositeManager {
 		}
 	}
 
-	this(){
-
-		XSynchronize(wm.displayHandle, true);
-
-		width = DisplayWidth(wm.displayHandle, DefaultScreen(wm.displayHandle));
-		height = DisplayHeight(wm.displayHandle, DefaultScreen(wm.displayHandle));
-
-	    reg_win = XCreateSimpleWindow(wm.displayHandle, RootWindow(wm.displayHandle, 0), 0, 0, 1, 1, 0, None, None);
-	    if(!reg_win)
-	    	throw new Exception("Failed to create simple window");
-	    "created simple window".writeln;
-		//XCompositeUnredirectWindow(wm.displayHandle, reg_win, CompositeRedirectManual);
-	    Xutf8SetWMProperties(wm.displayHandle, reg_win, cast(char*)"xcompmgr".toStringz, cast(char*)"xcompmgr".toStringz, null, 0, null, null, null);
-	    Atom a = XInternAtom(wm.displayHandle, "_NET_WM_CM_S0", False);
-	    XSetSelectionOwner(wm.displayHandle, a, reg_win, 0);
-	    "selected CM_S0 owner".writeln;
-
-		XCompositeRedirectSubwindows(wm.displayHandle, root, CompositeRedirectManual);
-		"redirected subwindows".writeln;
-		visual = DefaultVisual(wm.displayHandle, 0);
-		depth = DefaultDepth(wm.displayHandle, 0);
-		auto format = XRenderFindVisualFormat(wm.displayHandle, visual);
-		XSelectInput(wm.displayHandle, root,
-		    SubstructureNotifyMask
-		    | ExposureMask
-		    | StructureNotifyMask
-		    | PropertyChangeMask);
-
- 		//overlay = XCompositeGetOverlayWindow(wm.displayHandle, root);
-	    //XSelectInput(wm.displayHandle, overlay, ExposureMask);
-
-		XRenderPictureAttributes pa;
-		pa.subwindow_mode = IncludeInferiors;
-		frontBuffer = XRenderCreatePicture(wm.displayHandle, root, format, CPSubwindowMode, &pa);
-		Pixmap pixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), DefaultDepth(wm.displayHandle, 0));
-		backBuffer = XRenderCreatePicture(wm.displayHandle, pixmap, format, 0, null);
-		XFreePixmap(wm.displayHandle, pixmap); // The picture owns the pixmap now
-		XSync(wm.displayHandle, false);
-		"created backbuffer".writeln;
-		
-		workspaceProperty = new Property!(XA_CARDINAL, false)(root, "_NET_CURRENT_DESKTOP");
-		
-		rootmapId = new Property!(XA_PIXMAP, false)(root, "_XROOTPMAP_ID");
-		setrootId = new Property!(XA_PIXMAP, false)(root, "_XSETROOT_ID");
-
-		//XSelectInput(wm.displayHandle, root, wm.eventMask | PropertyChangeMask);
-
-		wm.handlerAll[CreateNotify] ~= e => evCreate(e.xany.window);
-		wm.handlerAll[DestroyNotify] ~= e => evDestroy(e.xany.window);
-		wm.handlerAll[ConfigureNotify] ~= e => evConfigure(e);
-		wm.handlerAll[MapNotify] ~= e => evMap(&e.xmap);
-		wm.handlerAll[UnmapNotify] ~= e => evUnmap(&e.xunmap);
-		wm.handlerAll[PropertyNotify] ~= e => evProperty(&e.xproperty);
-
-		auto clientsProperty = new Property!(XA_WINDOW, true)(root, "_NET_CLIENT_LIST");
-
-		"looking for windows".writeln;
-		XFlush(wm.displayHandle);
-		XGrabServer(wm.displayHandle);
-		x11.X.Window root_return, parent_return;
-		x11.X.Window* children;
-		uint nchildren;
-		XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &nchildren);
-		if(children){
-			foreach(window; children[0..nchildren]){
-				if(root == root_return)
-					evCreate(window);
-			}
-			XFree(children);
-		}
-		XUngrabServer(wm.displayHandle);
-		XFlush(wm.displayHandle);
-
-		get_root_tile;
-
-		initAlpha;
-	}
-
 	void evCreate(x11.X.Window window){
 		XWindowAttributes wa;
 		if(!XGetWindowAttributes(wm.displayHandle, window, &wa))
 			return;
-		//XSelectInput(wm.displayHandle, window, PropertyChangeMask);
 		auto client = new CompositeClient(window, [wa.x,wa.y], [wa.width,wa.height], wa);
 		"found window %s".format(window).writeln;
 		clients ~= client;
-		wm.add(client);
 	}
 
 	void evDestroy(x11.X.Window window){
 		foreach(i, c; clients){
 			if(c.windowHandle == window && !c.destroyed){
 				c.destroyed = true;
-				wm.remove(c);
+				c.onHide;
 				return;
 			}
 		}
@@ -215,7 +217,6 @@ class CompositeManager {
 		foreach(i, c; clients){
 			if(c.windowHandle == e.xconfigure.window){
 				c.processEvent(*e);
-				c.createPicture;
 				updateStack;
 				return;
 			}
@@ -237,6 +238,7 @@ class CompositeManager {
 		foreach(c; clients){
 			if(c.windowHandle == e.window){
 				c.onHide;
+				return;
 			}
 		}
 	}
@@ -244,9 +246,10 @@ class CompositeManager {
 	void evProperty(XPropertyEvent* e){
 		if(e.window == root){
 			if(e.atom == workspaceProperty.property){
+				auto oldWorkspace = workspace;
 				workspace = workspaceProperty.get;
 				foreach(c; clients){
-					c.workspaceAnimation(workspace);
+					c.workspaceAnimation(workspace, oldWorkspace);
 				}
 			}
 		}else{
@@ -254,8 +257,7 @@ class CompositeManager {
 				if(c.windowHandle == e.window){
 					if(e.atom == c.workspaceProperty.property){
 						c.workspace = c.workspaceProperty.get;
-						writeln(c.workspace);
-						c.workspaceAnimation(workspace);
+						c.workspaceAnimation(workspace, workspace);
 					}
 				}
 			}
@@ -321,15 +323,50 @@ class CompositeManager {
 			XFree(children);
 		}
 		XUngrabServer(wm.displayHandle);
+		if(clients.length){
+			/+
+			if(clients[0] != currentClient){
+				lastClient = currentClient;
+				currentClient = clients[0];
+				writeln(currentClient, ' ', lastClient);
+				if(lastClient)
+					writeln(currentClient.getTitle, ' ', lastClient.getTitle);
+				if(lastClient && currentClient.currentTabs.get == lastClient.currentTabs.get){
+					auto dir = currentClient.currentTab.get > lastClient.currentTab.get ? -1 : 1;
+					lastClient.switchTab(dir, false);
+					currentClient.switchTab(dir*-1, true);
+				}
+			}
+			+/
+		}
 	}
 
 	void draw(){
 		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
 		foreach(c; clients){
-			if(!XGetWindowAttributes(wm.displayHandle, c.windowHandle, &c.a))
-				continue;
-			auto alpha = c.fade.calculate;
+			//if(!XGetWindowAttributes(wm.displayHandle, c.windowHandle, &c.a))
+			//	continue;
+			auto alpha = c.animation.fade.calculate;
 			if(c.picture && alpha > 0){
+
+				/+
+				XTransform xform = {[
+				    [XDoubleToFixed( c.size[0]/c.animation.size[0].calculate ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
+				    [XDoubleToFixed( 0 ), XDoubleToFixed( c.size[1]/c.animation.size[1].calculate ), XDoubleToFixed(     0 )],
+				    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( 1 )]
+				]};
+				XRenderSetPictureTransform(wm.displayHandle, c.picture, &xform);
+				+/
+
+				auto scale = alpha/4+0.75;
+
+				XTransform xform = {[
+				    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+				    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
+				    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
+				]};
+				XRenderSetPictureTransform(wm.displayHandle, c.picture, &xform);
+
 				XRenderComposite(
 					wm.displayHandle,
 					alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
@@ -337,34 +374,17 @@ class CompositeManager {
 					alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
 					backBuffer,
 					0,0,0,0,
-					c.animatedPos.x.calculate.to!int,
-					c.animatedPos.y.calculate.to!int,
-					c.animatedSize[0].calculate.to!int,
-					c.animatedSize[1].calculate.to!int
+					(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
+					(c.animation.pos.y.calculate + (1-scale)*c.size.y/2).lround.to!int,
+					(c.animation.size[0].calculate*scale).lround.to!int,
+					(c.animation.size[1].calculate*scale).lround.to!int
 				);
 
-				/+
-				XRenderComposite(
-					wm.displayHandle,
-					PictOpInReverse,
-					c.picture,
-					None,
-					backBuffer,
-					0,
-					0,
-					0,
-					0,
-					c.animatedPos.x.to!int,
-					c.animatedPos.y.to!int,
-					c.animatedSize[0].to!int,
-					c.animatedSize[1].to!int
-				);
-				+/
 			}
 		}
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
 		foreach(i, c; clients){
-			if(c.destroyed && c.fade.done){
+			if(c.destroyed && c.animation.fade.done){
 				if(i < clients.length-1)
 					clients = clients[0..i] ~ clients[i+1..$];
 				else

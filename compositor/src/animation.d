@@ -10,13 +10,13 @@ class Animation {
 	double end;
 	double timeStart;
 	double duration;
-	double delegate(double) func;
+	double function(double) func;
 
 	this(double value){
 		this(value, value, 1);
 	}
 
-	this(double value, double delegate(double) func){
+	this(double value, double function(double) func){
 		this(value, value, 1, func);
 	}
 
@@ -24,12 +24,29 @@ class Animation {
 		this(start, end, duration, a => a);
 	}
 
-	this(double start, double end, double duration, double delegate(double) func){
+	this(double start, double end, double duration, double function(double) func){
 		this.start = start;
 		this.end = end;
 		this.timeStart = Clock.currSystemTick.msecs/1000.0;
 		this.duration = duration;
 		this.func = func;
+	}
+
+	void change(double value){
+		start = calculate;
+		end = value;
+		timeStart = Clock.currSystemTick.msecs/1000.0;
+	}
+
+	void change(double value, double function(double) func){
+		change(value);
+		this.func = func;
+	}
+
+	void replace(double start, double end){
+		this.start = start;
+		this.end = end;
+		timeStart = Clock.currSystemTick.msecs/1000.0;
 	}
 
 	double calculate(){

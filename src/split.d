@@ -31,7 +31,6 @@ class Split: Container {
 	}
 
 	int mode;
-	int padding;
 	Window window;
 
 	long[] sizes;
@@ -41,7 +40,6 @@ class Split: Container {
 	this(int[2] pos, int[2] size, int mode=horizontal){
 		hidden = true;
 		this.mode = mode;
-		padding = config["split paddingElem"].to!int;
 
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
@@ -221,6 +219,7 @@ class Split: Container {
 	}
 
 	void normalize(){
+		auto padding = config["split paddingElem"].to!long;
 		long max = size.w-padding*(children.length-1);
 		max = max.max(400);
 		foreach(ref s; sizes)
@@ -257,7 +256,7 @@ class Split: Container {
 			c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
 			XSync(dpy, false);
 			c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);
-			offset += cast(int)sizes[i]+padding;
+			offset += cast(int)sizes[i]+config["split paddingElem"].to!long;
 		}
 		onDraw;
 	}

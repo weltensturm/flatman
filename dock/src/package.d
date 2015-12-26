@@ -30,12 +30,13 @@ public import
 	ws.bindings.fontconfig,
 	ws.gl.gl,
 	ws.x.draw,
+	ws.x.property,
 	ws.wm,
 	ws.gui.base,
 	ws.gui.input,
 	ws.gui.point,
 	dock.draw,
 	dock.dock,
-	dock.watcher,
-	dock.proputil;
+	dock.compositeClient,
+	dock.watcher;
 	

@@ -35,8 +35,6 @@ auto height(T)(T x){
 	return x.size.h + 2 * x.bw;
 }
 
-enum TAGMASK = (1 << tags.length) - 1;
-
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
 enum { SchemeNorm, SchemeSel, SchemeLast }; /* color schemes */
@@ -109,7 +107,7 @@ enum handler = [
 	ButtonPress: &onButton,
 	ClientMessage: &onClientMessage,
 	ConfigureRequest: &onConfigureRequest,
-	ConfigureNotify: &onConfigure,
+	ConfigureNotify: (e) => onConfigure(e.xconfigure.window, e.xconfigure.width, e.xconfigure.height),
 	DestroyNotify: &onDestroy,
 	EnterNotify: &onEnter,
 	Expose: &onExpose,
@@ -338,6 +336,7 @@ void onButton(XEvent* e){
 		//focus(null);
 	}
 	if(c){
+		"win '%s' ev %s".format(c.getTitle, "onButton").log;
 		c.focus;
 		for(i = 0; i < buttons.length; i++)
 			if(buttons[i].button == ev.button
@@ -348,12 +347,16 @@ void onButton(XEvent* e){
 
 void onClientMessage(XEvent *e){
 	XClientMessageEvent *cme = &e.xclient;
+	auto c = wintoclient(cme.window);
+	if(c)
+		"win '%s' ev %s".format(c.getTitle, "ClientMessage").log;
 	auto handler = [
 		net.currentDesktop: {
+			if(cme.data.l[2] > 0)
+				monitor.newWorkspace(cme.data.l[0]);
 			monitor.switchWorkspace(cast(int)cme.data.l[0]);
 		},
 		net.state: {
-			Client c = wintoclient(cme.window);
 			if(!c)
 				return;
 			if(cme.message_type == net.state){
@@ -374,7 +377,6 @@ void onClientMessage(XEvent *e){
 			}
 		},
 		net.windowActive: {
-			Client c = wintoclient(cme.window);
 			if(!c || c == monitor.active)
 				return;
 			if(cme.data.l[0] < 2){
@@ -383,19 +385,16 @@ void onClientMessage(XEvent *e){
 				c.focus;
 		},
 		net.windowDesktop: {
-			Client c = wintoclient(cme.window);
 			if(!c)
 				return;
 			c.setWorkspace(cme.data.l[0]);
 		},
 		net.moveResize: {
-			Client c = wintoclient(cme.window);
 			if(!c || !c.isFloating)
 				return;
 			c.moveResize(cme.data.l[0..2].to!(int[2]), cme.data.l[2..4].to!(int[2]));
 		},
 		net.restack: {
-			Client c = wintoclient(cme.window);
 			if(!c || c == monitor.active)
 				return;
 			c.requestAttention;
@@ -412,6 +411,7 @@ void onProperty(XEvent *e){
 	if((ev.window == root) && (ev.atom == XA_WM_NAME))
 		updatestatus();
 	else if(c){
+		"win '%s' ev %s %s".format(c.getTitle, "onProperty", "").log;
 		auto del = ev.state == PropertyDelete;
 		auto ph = [
 			XA_WM_TRANSIENT_FOR: {
@@ -459,13 +459,11 @@ void onProperty(XEvent *e){
 	}
 }
 
-void onConfigure(XEvent *e){
-	Monitor m;
-	XConfigureEvent *ev = &e.xconfigure;
-	if(ev.window == root){
-		bool dirty = (sw != ev.width || sh != ev.height);
-		sw = ev.width;
-		sh = ev.height;
+void onConfigure(Window window, int width, int height){
+	if(window == root){
+		bool dirty = (sw != width || sh != height);
+		sw = width;
+		sh = height;
 		if(updategeom() || dirty){
 			"updating desktop size".log;
 			draw.resize(sw, sh);
@@ -480,6 +478,7 @@ void onConfigureRequest(XEvent* e){
 	XConfigureRequestEvent* ev = &e.xconfigurerequest;
 	Client c = wintoclient(ev.window);
 	if(c){
+		"win '%s' ev %s".format(c.getTitle, "ConfigureRequest").log;
 		if(ev.value_mask & CWWidth)
 			c.sizeFloating.w = c.size.w;
 		if(ev.value_mask & CWHeight)
@@ -512,9 +511,8 @@ void onConfigureRequest(XEvent* e){
 			+/
 			if(c.isVisible)
 				XMoveResizeWindow(dpy, c.win, c.pos.x, c.pos.y, c.size.w, c.size.h);
-		}else{
-			c.configure;
 		}
+		c.configure;
 	}else{
 		XWindowChanges wc;
 		wc.x = ev.x;
@@ -649,14 +647,14 @@ Client[] clientsVisible(){
 
 void restack(){
 	XGrabServer(dpy);
-	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
-		XLowerWindow(dpy, tabs.window);
 	foreach_reverse(c; clientsVisible)
 		if(c.global)
 			c.lower;
 	foreach_reverse(c; clientsVisible)
 		if(!c.global && (!c.isfullscreen || active != c))
 			c.lower;
+	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
+		XLowerWindow(dpy, tabs.window);
 	XLowerWindow(dpy, monitor.workspace.split.window);
 	XSync(dpy, false);
 	XEvent ev;
@@ -799,6 +797,7 @@ void manage(Window w, XWindowAttributes* wa){
 		c.focus;
 	else
 		c.requestAttention;
+	c.updateType;
 }
 
 void quit(){

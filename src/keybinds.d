@@ -46,10 +46,10 @@ void registerConfigKeys(){
 		}
 	}
 
-	[XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9, XK_0].each((size_t i, size_t k){
-		flatman.keys ~= Key(MODKEY, k, {monitor.switchWorkspace(cast(int)i);});
-		flatman.keys ~= Key(MODKEY|ShiftMask, k, {monitor.moveWorkspace(cast(int)i);});
-	});
+	//[XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9, XK_0].each((size_t i, size_t k){
+	//	flatman.keys ~= Key(MODKEY, k, {monitor.switchWorkspace(cast(int)i);});
+	//	flatman.keys ~= Key(MODKEY|ShiftMask, k, {monitor.moveWorkspace(cast(int)i);});
+	//});
 
 	buttons = [
 		Button(MODKEY, Button1, {mousemove;} ),

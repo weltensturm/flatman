@@ -63,7 +63,6 @@ class Client: Base {
 
 		win = client;
 		
-		updateType;
 		updateSizeHints;
 		updateWmHints;
 		//updateWorkspace;
@@ -98,7 +97,7 @@ class Client: Base {
 			return;
 		"set workspace %s %s".format(name, i).log;
 		monitor.remove(this);
-		monitor.add(this, i < 0 ? tags.length : i);
+		monitor.add(this, i < 0 ? monitor.workspaces.length-1 : i);
 		updateWindowDesktop(this, i);
 		"set workspace done".log;
 	}
@@ -152,7 +151,7 @@ class Client: Base {
 
 	void updateType(){
 		Atom[] state = this.getPropList(net.state);
-		if(state.canFind(net.fullscreen))
+		if(state.canFind(net.fullscreen) || size == monitor.size)
 			setfullscreen(this, true);
 		if(state.canFind(net.modal))
 			isFloating = true;
@@ -219,6 +218,22 @@ class Client: Base {
 		if(maxh > int.max || maxh < 0)
 			maxh = 0;
 		isfixed = (maxw && minw && maxh && minh && maxw == minw && maxh == minh);
+	}
+
+	string getTitle(){
+		Atom netWmName, utf8, actType;
+		size_t nItems, bytes;
+		int actFormat;
+		ubyte* data;
+		netWmName = XInternAtom(dpy, "_NET_WM_NAME".toStringz, False);
+		utf8 = XInternAtom(dpy, "UTF8_STRING".toStringz, False);
+		XGetWindowProperty(
+				dpy, win, netWmName, 0, 0x77777777, False, utf8,
+				&actType, &actFormat, &nItems, &bytes, &data
+		);
+		auto text = to!string(cast(char*)data);
+		XFree(data);
+		return text;
 	}
 
 	void updateWmHints(){
