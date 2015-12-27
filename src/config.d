@@ -40,7 +40,7 @@ class Config {
 
 	void load(){
 		auto prioritizedPaths = [
-			"%s/res/config.ws".format(thisExePath.dirName),
+			//"%s/res/config.ws".format(thisExePath.dirName),
 			"/etc/flatman/config.ws",
 			"~/.config/flatman/config.ws".expandTilde,
 		];

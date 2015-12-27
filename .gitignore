@@ -1,4 +1,3 @@
-**/flatman*
 **/dub.selections.json
 **/.dub
 **/.project
@@ -6,3 +5,9 @@
 **/.buildpath
 sh.exe.stackdump
 PKGBUILD.local
+flatman
+compositor/flatman-compositor
+dock/flatman-dock
+menu/flatman-menu
+volume-icon/flatman-volume-icon
+1

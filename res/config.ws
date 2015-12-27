@@ -1,7 +1,7 @@
 
 
 keys {
-	alt+d				exec dinu Monospace-fn -9 -c "~/.dinu/$(cws)"
+	alt+d				exec dinu -fn Monospace-9 -c "~/.dinu/$(cws)"
 	alt+Return			exec cd "$(cat ~/.dinu/$(cws))" && terminator
 	alt+n				exec firefox
 	alt+shift+w			exec i3lock && systemctl suspend

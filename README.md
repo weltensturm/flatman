@@ -18,7 +18,7 @@ Currently only horizontal layouts are supported. To create multiple tab stacks, 
 ## usage
 
 * compile main and subprojects with `dub`
-* configure in `config.ws`, read order: `$installdir/config.ws`, `/etc/flatman`, `~/.config/flatman/config.ws`
+* configure in `config.ws`, read order: `$installdir/config.ws`, `/etc/flatman/config.ws`, `~/.config/flatman/config.ws`
 * usage of `weltensturm/dinu` as launcher is recommended
 * if `x11` causes problems, install `weltensturm/x11` and add it with `dub add-local <path-to-x11> <requested version>`
 * `~/.autostart.sh` is run on startup, add bar/dock and wallpaper (feh) there
