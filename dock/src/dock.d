@@ -64,6 +64,7 @@ Atom atom(string name){
 class Composite {
 
 	Picture picture;
+	Picture transparency;
 
 	this(){
 		foreach(i; 0..ScreenCount(dpy))
@@ -72,14 +73,15 @@ class Composite {
     	auto format = XRenderFindVisualFormat(dpy, visual);
 		XRenderPictureAttributes pa;
 		picture = XRenderCreatePicture(dpy, (cast(XDraw)dockWindow._draw).drawable, format, CPSubwindowMode, &pa);
+		transparency = colorPicture(false, 0.7, 0, 0, 0);
 	}
 
-	void draw(CompositeClient window, int[2] pos, int[2] size){
+	void draw(CompositeClient window, int[2] pos, int[2] size, bool ghost=false){
 		XRenderComposite(
 			dpy,
-			window.hasAlpha ? PictOpOver : PictOpSrc,
+			window.hasAlpha || ghost ? PictOpOver : PictOpSrc,
 			window.picture,
-			None,
+			ghost ? transparency : None,
             picture,
             0, 0,
             0, 0,
@@ -101,6 +103,27 @@ class Composite {
 	void render(Picture p, int[2] pos, int[2] size){
 
 		XRenderComposite(wm.displayHandle, PictOpSrc, p, None, picture, 0,0,0,0,pos.x+6,dockWindow.size.h-size.h-pos.y+6,size.x-12,size.y-12);
+	}
+
+	Picture colorPicture(bool argb, double a, double r, double g, double b){
+		auto pixmap = XCreatePixmap(wm.displayHandle, root, 1, 1, argb ? 32 : 8);
+		if(!pixmap)
+			return None;
+		XRenderPictureAttributes pa;
+		pa.repeat = True;
+		auto picture = XRenderCreatePicture(wm.displayHandle, pixmap, XRenderFindStandardFormat(wm.displayHandle, argb 	? PictStandardARGB32 : PictStandardA8), CPRepeat, &pa);
+		if(!picture){
+			XFreePixmap(wm.displayHandle, pixmap);
+			return None;
+		}
+		XRenderColor c;
+		c.alpha = (a * 0xffff).to!ushort;
+		c.red =   (r * 0xffff).to!ushort;
+		c.green = (g * 0xffff).to!ushort;
+		c.blue =  (b * 0xffff).to!ushort;
+		XRenderFillRectangle(wm.displayHandle, PictOpSrc, picture, &c, 0, 0, 1, 1);
+		XFreePixmap(wm.displayHandle, pixmap);
+		return picture;
 	}
 
 }
@@ -390,7 +413,7 @@ class WorkspaceDock: ws.wm.Window {
 	override void onMouseFocus(bool focus){
 		this.focus = focus;
 		if(showTime < Clock.currSystemTick.msecs)
-			showTime = Clock.currSystemTick.msecs+100;
+			showTime = Clock.currSystemTick.msecs+300;
 	}
 	
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -487,27 +510,13 @@ class WorkspaceView: Base {
 	}
 
 	override void onDraw(){
-		if(id in dock.workspaces && !empty){
+		if(preview || (id == dock.workspace && !empty)){
 			if(id == dock.workspace && !empty)
 				draw.setColor([0.867,0.514,0]);
-			else if(preview)
-				draw.setColor([0.6,0.6,0.6]);
 			else
-				draw.setColor([0.3,0.3,0.3]);
+				draw.setColor([0.6,0.6,0.6]);
 			dock.draw.rect(pos.a+[3,3], [size.w-6, size.h-6]);
-			/+
-			draw.setColor([0.3,0.3,0.3]);
-			draw.rect(pos.a+[5,5], [size.w-11,size.h-11]);
-			+/
 		}
-		if(id == dock.workspace && !empty || preview){
-			if(id !in dock.workspaces){
-				draw.setColor([0.4,0.4,0.4]);
-				draw.rect(pos.a+[2,2], size.a-[4,4]);
-			}
-			dock.draw.setColor([1,1,1]);
-		}else
-			dock.draw.setColor([0.4,0.4,0.4]);
 
 		if(!empty)
 			composite.render(dockWindow.root_picture, pos, size);
@@ -611,7 +620,7 @@ class Ghost: Base {
 	}
 
 	override void onDraw(){
-		composite.draw(window, pos, size);
+		composite.draw(window, pos, size, true);
 		draw.setColor([0.8,0.8,0.8]);
 		draw.rectOutline(pos, size);
 	}

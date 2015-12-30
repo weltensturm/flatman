@@ -62,6 +62,9 @@ class Monitor {
 			if(pos > workspaceActive)
 				pos--;
 			updateDesktopCount;
+			foreach(i, w; workspaces)
+				foreach(c; w.clients)
+					updateWindowDesktop(c, i);
 		}
 		workspaceActive = pos;
 		if(monitor.workspaceActive < 0)

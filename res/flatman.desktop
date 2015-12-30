@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=flatman
 Comment=improved dynamic tiling window manager
-Exec=flatman
+Exec=flatman-wm
 Type=Application
 DesktopNames=flatman

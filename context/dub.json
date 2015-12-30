@@ -1,0 +1,7 @@
+{
+	"name" : "flatman-context",
+	"description" : "per-workspace current directory for flatman",
+	"targetType": "executable",
+	"sourcePaths": ["src"],
+	"dependencies": {"ws": "~master"}
+}

@@ -1,5 +1,5 @@
 {
-	"name" : "flatman",
+	"name" : "flatman-wm",
 	"description" : "window manager",
 	"targetType": "executable",
 	"sourcePaths": ["src"],

@@ -18,10 +18,8 @@ class CompositeClient: ws.wm.Window {
 		this.a = a;
 		super(window);
 		isActive = true;
-		if(a.map_state & IsViewable){
-			hidden = false;
-			createPicture;
-		}
+		hidden = false;
+		createPicture;
 		XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
 		workspaceProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 	}

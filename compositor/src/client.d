@@ -8,6 +8,9 @@ class CompositeClient: ws.wm.Window {
 	
 	bool hasAlpha;
 	Picture picture;
+	Picture resizeGhost;
+	Pixmap resizeGhostPixmap;
+	int[2] resizeGhostSize;
 	Pixmap pixmap;
 	Property!(XA_CARDINAL, false) workspaceProperty;
 	long workspace;
@@ -50,11 +53,11 @@ class CompositeClient: ws.wm.Window {
 		"create picture %s".format(getTitle).writeln;
 		XWindowAttributes attr;
 		XGetWindowAttributes(wm.displayHandle, windowHandle, &attr);
-    	XRenderPictFormat *format = XRenderFindVisualFormat(wm.displayHandle, attr.visual);
-    	if(!format){
-    		"failed to find format".writeln;
-    		return;
-    	}
+		XRenderPictFormat *format = XRenderFindVisualFormat(wm.displayHandle, attr.visual);
+		if(!format){
+			"failed to find format".writeln;
+			return;
+		}
 		hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
 		XRenderPictureAttributes pa;
 		pa.subwindow_mode = IncludeInferiors;
@@ -62,6 +65,8 @@ class CompositeClient: ws.wm.Window {
 		if(pixmap)
 			picture = XRenderCreatePicture(wm.displayHandle, pixmap, format, CPSubwindowMode, &pa);
 		else
+			"could not create picture".writeln;
+		if(!picture)
 			"could not create picture".writeln;
 		XRenderSetPictureFilter(wm.displayHandle, picture, "best", null, 0);
 	}
@@ -71,18 +76,34 @@ class CompositeClient: ws.wm.Window {
 			XFreePixmap(wm.displayHandle, pixmap);
 		if(picture)
 			XRenderFreePicture(wm.displayHandle, picture);
+		if(resizeGhostPixmap)
+			XFreePixmap(wm.displayHandle, resizeGhostPixmap);
+		if(resizeGhost)
+			XRenderFreePicture(wm.displayHandle, resizeGhost);
 	}
 
-	override void resize(int[2] size){	
+	override void resize(int[2] size){
+		hidden = false;
 		auto spd = (animation.size.x.calculate + animation.size.y.calculate + 0.0).sqrt/1000;
 		animation.size.x.change(size.x);
 		animation.size.y.change(size.y);
+		resizeGhostSize = this.size;
 		this.size = size;
 		"resize %s %s".format(getTitle, size).writeln;
+		if(resizeGhostPixmap)
+			XFreePixmap(wm.displayHandle, resizeGhostPixmap);
+		if(resizeGhost)
+			XRenderFreePicture(wm.displayHandle, resizeGhost);
+		resizeGhostPixmap = pixmap;
+		resizeGhost = picture;
+		pixmap = None;
+		picture = None;
 		createPicture;
 	}
 
 	override void move(int[2] pos){
+		if(pos.y <= this.pos.y-manager.height)
+			return;
 		auto spd = (animation.pos.x.calculate + animation.pos.y.calculate + 0.0).sqrt/1000;
 		animation.pos.x.change(pos.x);
 		animation.pos.y.change(pos.y);
@@ -115,18 +136,20 @@ class CompositeClient: ws.wm.Window {
 	override void onShow(){
 		hidden = false;
 		"onShow %s".format(getTitle).writeln;
+		XSync(wm.displayHandle, false);
+		XWindowAttributes wa;
+		XGetWindowAttributes(wm.displayHandle, windowHandle, &wa);
 		createPicture;
 		animation.fade.change(1);
-		animation.pos.x.replace(pos.x, pos.x);
-		animation.pos.y.replace(pos.y, pos.y);
-		animation.size.x.replace(size.x, size.x);
-		animation.size.y.replace(size.y, size.y);
+		animation.pos.x.replace(wa.x, wa.x);
+		animation.pos.y.replace(wa.y, wa.y);
+		animation.size.x.replace(wa.width, wa.width);
+		animation.size.y.replace(wa.height, wa.height);
 	}
 
 	override void onHide(){
 		hidden = true;
 		"onHide %s".format(getTitle).writeln;
-		XSync(wm.displayHandle, false);
 		animation.fade.change(0);
 		//animation.pos.x.change(pos.x + (manager.currentTab > manager.lastTab ? -1 : 1) * size.x/10);
 	}
@@ -150,7 +173,6 @@ class ClientAnimation {
 		this.pos = [new Animation(pos.x, pos.x, 0.3, &sinApproach), new Animation(pos.y, pos.y, 0.3, &sinApproach)];
 		this.size = [new Animation(size.x, size.x, 0.3, &sinApproach), new Animation(size.y, size.y, 0.3, &sinApproach)];
 		fade = new Animation(0, 0, 0.2, &sinApproach);
-		scale = new Animation(1, 1, 0.3);
 	}
 
 }

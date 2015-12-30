@@ -1,8 +1,8 @@
 
 
 keys {
-	alt+d				exec dinu -fn Monospace-9 -c "~/.dinu/$(cws)"
-	alt+Return			exec cd "$(cat ~/.dinu/$(cws))" && terminator
+	alt+d				exec dinu -fn Monospace-9 -c "$(flatman-context -p)"
+	alt+Return			exec cd "$(flatman-context)" && terminator
 	alt+n				exec firefox
 	alt+shift+w			exec i3lock && systemctl suspend
 	alt+j				focus dir -

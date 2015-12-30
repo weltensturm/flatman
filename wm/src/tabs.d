@@ -103,7 +103,8 @@ class Tabs: Container {
 	override void hide(){
 		if(hidden)
 			return;
-		XUnmapWindow(dpy, window);
+		//XUnmapWindow(dpy, window);
+        XMoveWindow(dpy, window, pos.x, -monitor.size.h);
 		foreach(c; clients){
             XMoveWindow(dpy, c.win, c.pos.x, -monitor.size.h+c.pos.y);
         }

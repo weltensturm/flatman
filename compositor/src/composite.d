@@ -14,9 +14,11 @@ void main(){
 		root = XDefaultRootWindow(wm.displayHandle);
 		manager = new CompositeManager;
 		while(true){
+			auto frameStart = Clock.currSystemTick.msecs/1000.0;
 			wm.processEvents;
 			manager.draw;
-			Thread.sleep(10.msecs);
+			auto frameEnd = Clock.currSystemTick.msecs/1000.0;
+			Thread.sleep(((frameStart + 1.0/60.0 - frameEnd).max(0)*1000).lround.msecs);
 		}
 	}catch(Throwable t){
 		writeln(t);
@@ -27,7 +29,7 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	try {
 		char[128] buffer;
 		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
-		//"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
+		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
 	}
 	catch {}
 	return 0;
@@ -65,6 +67,7 @@ class CompositeManager {
 	bool initialRepaint;
 
 	CompositeClient[] clients;
+	CompositeClient[] destroyed;
 	x11.X.Window[] windows;
 
 	x11.X.Window overlay;
@@ -208,6 +211,7 @@ class CompositeManager {
 			if(c.windowHandle == window && !c.destroyed){
 				c.destroyed = true;
 				c.onHide;
+				updateStack;
 				return;
 			}
 		}
@@ -315,9 +319,19 @@ class CompositeManager {
 			clients = [];
 			foreach(window; children[0..nchildren]){
 				foreach(c; clientsOld){
-					if(c.windowHandle == window){
+					if(c.windowHandle == window && !c.destroyed){
 						clients ~= c;
 					}
+				}
+			}
+			auto destroyedOld = destroyed;
+			destroyed = [];
+			foreach(c; clientsOld ~ destroyedOld){
+				if(c.destroyed){
+					if(c.animation.fade.calculate > 0)
+						destroyed ~= c;
+					else
+						c.destroy;
 				}
 			}
 			XFree(children);
@@ -342,27 +356,22 @@ class CompositeManager {
 	}
 
 	void draw(){
+		Animation.update;
 		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
-		foreach(c; clients){
+		foreach(c; clients ~ destroyed){
 			//if(!XGetWindowAttributes(wm.displayHandle, c.windowHandle, &c.a))
 			//	continue;
 			auto alpha = c.animation.fade.calculate;
 			if(c.picture && alpha > 0){
 
-				/+
-				XTransform xform = {[
-				    [XDoubleToFixed( c.size[0]/c.animation.size[0].calculate ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
-				    [XDoubleToFixed( 0 ), XDoubleToFixed( c.size[1]/c.animation.size[1].calculate ), XDoubleToFixed(     0 )],
-				    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( 1 )]
-				]};
-				XRenderSetPictureTransform(wm.displayHandle, c.picture, &xform);
-				+/
-
 				auto scale = alpha/4+0.75;
 
+				auto scaleX = c.size[0]/c.animation.size[0].calculate;
+				auto scaleY = c.size[1]/c.animation.size[1].calculate;
+
 				XTransform xform = {[
-				    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-				    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
+				    [XDoubleToFixed( scaleX ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+				    [XDoubleToFixed( 0 ), XDoubleToFixed( scaleY ), XDoubleToFixed( 0 )],
 				    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
 				]};
 				XRenderSetPictureTransform(wm.displayHandle, c.picture, &xform);
@@ -380,19 +389,37 @@ class CompositeManager {
 					(c.animation.size[1].calculate*scale).lround.to!int
 				);
 
+				if(c.resizeGhost && c.animation.fade.done){
+
+					scaleX = c.resizeGhostSize[0]/c.animation.size[0].calculate;
+					scaleY = c.resizeGhostSize[1]/c.animation.size[1].calculate;
+					XTransform xf = {[
+						[XDoubleToFixed( scaleX ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+						[XDoubleToFixed( 0 ), XDoubleToFixed( scaleY ), XDoubleToFixed( 0 )],
+						[XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
+					]};
+					XRenderSetPictureTransform(wm.displayHandle, c.resizeGhost, &xf);
+
+					alpha = (1-c.animation.size.x.completion*2).max(0);
+					if(alpha != 0){
+						XRenderComposite(
+							wm.displayHandle,
+							alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
+							c.resizeGhost,
+							alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
+							backBuffer,
+							0,0,0,0,
+							(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
+							(c.animation.pos.y.calculate + (1-scale)*c.size.y/2).lround.to!int,
+							(c.animation.size[0].calculate*scale).lround.to!int,
+							(c.animation.size[1].calculate*scale).lround.to!int
+						);
+					}
+				}
+
 			}
 		}
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
-		foreach(i, c; clients){
-			if(c.destroyed && c.animation.fade.done){
-				if(i < clients.length-1)
-					clients = clients[0..i] ~ clients[i+1..$];
-				else
-					clients = clients[0..i];
-				c.destroy;
-				return;
-			}
-		}
 		//XRectangle r = {0, 0, cast(ushort)width, cast(ushort)height};
 		//XserverRegion region = XFixesCreateRegion( wm.displayHandle, &r, 1 );
 		//if(damage)

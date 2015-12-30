@@ -6,6 +6,11 @@ import composite;
 
 class Animation {
 
+	static double time;
+	static update(){
+		time = Clock.currSystemTick.msecs/1000.0;
+	}
+
 	double start;
 	double end;
 	double timeStart;
@@ -27,7 +32,7 @@ class Animation {
 	this(double start, double end, double duration, double function(double) func){
 		this.start = start;
 		this.end = end;
-		this.timeStart = Clock.currSystemTick.msecs/1000.0;
+		this.timeStart = time;
 		this.duration = duration;
 		this.func = func;
 	}
@@ -35,7 +40,7 @@ class Animation {
 	void change(double value){
 		start = calculate;
 		end = value;
-		timeStart = Clock.currSystemTick.msecs/1000.0;
+		timeStart = time;
 	}
 
 	void change(double value, double function(double) func){
@@ -46,11 +51,14 @@ class Animation {
 	void replace(double start, double end){
 		this.start = start;
 		this.end = end;
-		timeStart = Clock.currSystemTick.msecs/1000.0;
+		timeStart = time;
+	}
+
+	double completion(){
+		return (timeCurrent - timeStart).min(duration)/duration;
 	}
 
 	double calculate(){
-		double completion = (timeCurrent - timeStart).min(duration)/duration;
 		return start + (end-start)*func(completion);
 	}
 
@@ -59,7 +67,7 @@ class Animation {
 	}
 
 	double timeCurrent(){
-		return Clock.currSystemTick.msecs/1000.0;
+		return time;
 	}
 
 }
