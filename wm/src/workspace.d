@@ -10,6 +10,7 @@ class Workspace: Container {
 	Split split;
 	Floating floating;
 	bool focusFloating;
+	string context;
 
 	this(int[2] pos, int[2] size){
 		this.pos = pos;
@@ -84,6 +85,8 @@ class Workspace: Container {
 		super.show;
 		if(split.children.length)
 			split.show;
+		if(context.exists)
+			std.file.write("~/.flatman/current", context);
 		floating.show;
 		focus(active);
 	}

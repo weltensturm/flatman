@@ -54,10 +54,11 @@ void updateDesktopCount(){
 void updateDesktopNames(){
 	string names;
 	foreach(i, ws; monitor.workspaces){
-		names ~= i.to!string;
 		try{
-			names ~= ": " ~ std.string.replace("~/.dinu/%s".format(i).expandTilde.readText, "~".expandTilde, "~");
-		}catch{}
+			names ~= ws.context.expandTilde.readText;
+		}catch{
+			names ~= "~";
+		}
 		names ~= "\0";
 	}
 	net.desktopNames.replace(names);

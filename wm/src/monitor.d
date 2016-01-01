@@ -58,6 +58,7 @@ class Monitor {
 		"hide workspace %s".format(workspaceActive).log;
 		workspace.hide;
 		if(workspace.clients.length == 0 && workspaces.length > 1){
+			workspace.destroy;
 			workspaces = workspaces.without(workspace);
 			if(pos > workspaceActive)
 				pos--;

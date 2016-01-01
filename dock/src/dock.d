@@ -92,10 +92,10 @@ class Composite {
 
 	void rect(int[2] pos, int[2] size, float[4] color){
 		XRenderColor c = {
-			(color[1]*255).to!ushort,
-			(color[2]*255).to!ushort,
-			(color[3]*255).to!ushort,
-			(color[0]*255).to!ushort
+			(color[0]*0xffff).to!ushort,
+			(color[1]*0xffff).to!ushort,
+			(color[2]*0xffff).to!ushort,
+			(color[3]*0xffff).to!ushort
 		};
 		XRenderFillRectangle(wm.displayHandle, PictOpOver, picture, &c, pos.x, dockWindow.size.h-size.h-pos.y, size.w, size.h);
 	}
@@ -243,6 +243,8 @@ class WorkspaceDock: ws.wm.Window {
 		XWindowAttributes wa;
 		if(window == dockWindow.windowHandle || !XGetWindowAttributes(wm.displayHandle, window, &wa))
 			return;
+		if(wa.c_class == InputOnly)
+			return;
 		auto client = new CompositeClient(window, [wa.x,wa.y], [wa.width,wa.height], wa);
 		"found window %s".format(window).writeln;
 		clients ~= client;
@@ -389,9 +391,10 @@ class WorkspaceDock: ws.wm.Window {
 		auto screen = screenSize.get;
 		auto ratio = screen.w/cast(double)screen.h;
 		auto height = cast(int)(size.w/ratio)+6;
+		workspace = workspaceProperty.get;
 		workspaces = workspaces.init;
 		foreach(c; clients){
-			if(!c.a.override_redirect && (c.workspaceProperty.get != workspace || !hidden))
+			if(c.workspaceProperty.get != workspace || !c.hidden)
 				workspaces[c.workspaceProperty.get] ~= c;
 		}
 		int[] desktopsHeight;
@@ -400,9 +403,13 @@ class WorkspaceDock: ws.wm.Window {
 			desktopsHeight ~= empty ? (draw.fontHeight/1.4).to!int : height;
 		}
 		int y = size.h/2 - desktopsHeight.reduce!"a+b"/2;
+
+		auto wsnames = new Property!(XA_STRING, false)(dock.root, "_NET_DESKTOP_NAMES").get.split('\0');
+
 		foreach(i; 0..count){
 			bool empty = i % 2 == 0;
 			auto ws = addNew!WorkspaceView(this, count-1-i, empty);
+			ws.name = wsnames[i/2];
 			ws.move([0, y]);
 			ws.resize([size.w, desktopsHeight[i]]);
 			ws.update;
@@ -481,9 +488,6 @@ class WorkspaceView: Base {
 					cast(int)(w.size.h*scale).lround
 				]);
 			}
-		try{
-			name = "~/.dinu/%s".format(id).expandTilde.readText.baseName;
-		}catch{}
 	}
 
 	override Base dropTarget(int x, int y, Base draggable){
@@ -524,16 +528,11 @@ class WorkspaceView: Base {
 		super.onDraw;
 
 		if(!empty){
-			//composite.rect([pos.x+6, pos.y+size.h-draw.fontHeight-6], [size.w-12, draw.fontHeight], [1,1,1,1]);
+			composite.rect([pos.x+6, pos.y+6], [size.w-12, draw.fontHeight], [0,0,0,0.5]);
 			//draw.rect(pos.a+[6,size.h-draw.fontHeight-6], [size.w-12, draw.fontHeight]);
 			draw.setColor([0.1,0.1,0.1]);
-			foreach(x; [-1,0,1]){
-				foreach(y; [-1,0,1]){
-					dock.draw.text(pos.a+[x+size.w/2,y+6], "%s: %s".format(id, name), 0.5);
-				}
-			}
 			draw.setColor([0.867,0.867,0.867]);
-			dock.draw.text(pos.a+[size.w/2,6], "%s: %s".format(id, name), 0.5);
+			dock.draw.text(pos.a+[size.w/2,6], name, 0.5);
 		}
 	}
 
@@ -602,7 +601,8 @@ class WindowIcon: Base {
 	override void onDraw(){
 		if(dragGhost)
 			return;
-		composite.draw(window, pos, size);
+		if(window.picture)
+			composite.draw(window, pos, size);
 		super.onDraw;
 	}
 
@@ -620,7 +620,8 @@ class Ghost: Base {
 	}
 
 	override void onDraw(){
-		composite.draw(window, pos, size, true);
+		if(window.picture)
+			composite.draw(window, pos, size, true);
 		draw.setColor([0.8,0.8,0.8]);
 		draw.rectOutline(pos, size);
 	}
@@ -628,6 +629,12 @@ class Ghost: Base {
 }
 
 
-extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
+extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
+	try {
+		char[128] buffer;
+		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
+		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
+	}
+	catch {}
 	return 0;
 }

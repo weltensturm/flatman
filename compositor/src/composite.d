@@ -359,10 +359,8 @@ class CompositeManager {
 		Animation.update;
 		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
 		foreach(c; clients ~ destroyed){
-			//if(!XGetWindowAttributes(wm.displayHandle, c.windowHandle, &c.a))
-			//	continue;
 			auto alpha = c.animation.fade.calculate;
-			if(c.picture && alpha > 0){
+			if(c.picture && alpha > 0 && c.animation.pos.y.calculate > -height && c.animation.pos.y.calculate < height){
 
 				auto scale = alpha/4+0.75;
 

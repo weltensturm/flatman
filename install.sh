@@ -4,6 +4,8 @@ installdir=$1
 
 parts=(wm compositor dock menu context volume-icon)
 
+set -e
+
 mkdir -p "$installdir/usr/bin/"
 for part in "${parts[@]}"; do
 	echo "Installing $part/flatman-$part"

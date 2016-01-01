@@ -51,9 +51,13 @@ class CompositeClient: ws.wm.Window {
 		if(picture)
 			XRenderFreePicture(wm.displayHandle, picture);
 		"create picture %s".format(getTitle).writeln;
-		XWindowAttributes attr;
-		XGetWindowAttributes(wm.displayHandle, windowHandle, &attr);
-		XRenderPictFormat *format = XRenderFindVisualFormat(wm.displayHandle, attr.visual);
+		if(!XGetWindowAttributes(wm.displayHandle, windowHandle, &a)){
+			"could not get attributes".writeln;
+			return;
+		}
+		if(!(a.map_state & IsViewable))
+			return;
+		XRenderPictFormat* format = XRenderFindVisualFormat(wm.displayHandle, a.visual);
 		if(!format){
 			"failed to find format".writeln;
 			return;
@@ -62,12 +66,19 @@ class CompositeClient: ws.wm.Window {
 		XRenderPictureAttributes pa;
 		pa.subwindow_mode = IncludeInferiors;
 		pixmap = XCompositeNameWindowPixmap(wm.displayHandle, windowHandle);
-		if(pixmap)
-			picture = XRenderCreatePicture(wm.displayHandle, pixmap, format, CPSubwindowMode, &pa);
-		else
-			"could not create picture".writeln;
-		if(!picture)
-			"could not create picture".writeln;
+
+		x11.X.Window root_return;
+		int int_return;
+		uint short_return;
+		auto s = XGetGeometry(wm.displayHandle, pixmap, &root_return, &int_return, &int_return, &short_return, &short_return, &short_return, &short_return);
+		if(!s){
+			"XCompositeNameWindowPixmap failed for ".writeln(windowHandle);
+			pixmap = None;
+			picture = None;
+			return;
+		}
+
+		picture = XRenderCreatePicture(wm.displayHandle, pixmap, format, CPSubwindowMode, &pa);
 		XRenderSetPictureFilter(wm.displayHandle, picture, "best", null, 0);
 	}
 	

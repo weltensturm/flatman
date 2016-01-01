@@ -18,8 +18,10 @@ class CompositeClient: ws.wm.Window {
 		this.a = a;
 		super(window);
 		isActive = true;
-		hidden = false;
-		createPicture;
+		if(a.map_state & IsViewable){
+			hidden = false;
+			createPicture;
+		}
 		XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
 		workspaceProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 	}
@@ -33,6 +35,7 @@ class CompositeClient: ws.wm.Window {
 			XFreePixmap(dpy, pixmap);
 		if(picture)
 			XRenderFreePicture(dpy, picture);
+
 		XWindowAttributes attr;
 		XGetWindowAttributes(dpy, windowHandle, &attr);
     	XRenderPictFormat *format = XRenderFindVisualFormat(dpy, attr.visual);
@@ -40,10 +43,19 @@ class CompositeClient: ws.wm.Window {
 		XRenderPictureAttributes pa;
 		pa.subwindow_mode = IncludeInferiors;
 		pixmap = XCompositeNameWindowPixmap(dpy, windowHandle);
-		if(pixmap)
-			picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
-		else
-			"could not create picture".writeln;
+
+		x11.X.Window root_return;
+		int int_return;
+		uint short_return;
+		auto s = XGetGeometry(wm.displayHandle, pixmap, &root_return, &int_return, &int_return, &short_return, &short_return, &short_return, &short_return);
+		if(!s){
+			"XCompositeNameWindowPixmap failed".writeln;
+			pixmap = None;
+			picture = None;
+			return;
+		}
+
+		picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
 		auto screen = dockWindow.screenSize.get;
 		auto scale = (dockWindow.size.w-12).to!double/screen.w;
 		// Scaling matrix
