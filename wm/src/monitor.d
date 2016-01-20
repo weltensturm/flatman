@@ -47,9 +47,7 @@ class Monitor {
 		if(workspaceActive >= pos)
 			workspaceActive++;
 		updateDesktopCount;
-		foreach(i, w; workspaces)
-			foreach(c; w.clients)
-				updateWindowDesktop(c, i);
+		updateWorkspaces;
 	}
 
 	void switchWorkspace(int pos){
@@ -63,9 +61,7 @@ class Monitor {
 			if(pos > workspaceActive)
 				pos--;
 			updateDesktopCount;
-			foreach(i, w; workspaces)
-				foreach(c; w.clients)
-					updateWindowDesktop(c, i);
+			updateWorkspaces;
 		}
 		workspaceActive = pos;
 		if(monitor.workspaceActive < 0)
@@ -141,9 +137,7 @@ class Monitor {
 		if(l < workspaces.length-1){
 			if(workspace < pos)
 				workspace--;
-			foreach(i, w; workspaces)
-				foreach(c; w.clients)
-					updateWindowDesktop(c, i);
+			updateWorkspaces();
 		}
 		workspaces[workspace].add(client);
 	}

@@ -31,6 +31,7 @@ public import
 	ws.gl.gl,
 	ws.x.draw,
 	ws.wm,
+	ws.inotify,
 	ws.gui.base,
 	ws.gui.tabs,
 	ws.gui.textSimple,
@@ -45,6 +46,8 @@ public import
 	menu.menu,
 	menu.lists,
 	menu.buttons,
+	menu.files,
+	menu.bookmarks,
 	menu.popup,
 	menu.proputil;
 	

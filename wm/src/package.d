@@ -34,6 +34,7 @@ public import
 	x11.extensions.Xrender,
 	x11.keysymdef,
 	ws.math,
+	ws.inotify,
 	ws.gui.base,
 	ws.gui.input,
 	ws.x.draw,

@@ -144,6 +144,7 @@ static bool running = true;
 bool restart = false;
 Client previousFocus;
 Window[] unmanaged;
+Inotify inotify;
 
 void log(string s){
 	"/tmp/flatman.log".append(s ~ '\n');
@@ -242,6 +243,8 @@ void setup(){
 	fillAtoms(wm);
 	fillAtoms(net);
 
+	inotify = new Inotify;
+
 	//updatebars();
 	updategeom();
 	updatestatus();
@@ -289,6 +292,7 @@ void run(){
 				handler[ev.type](&ev);
 			}catch(Throwable t){
 				t.toString.log;
+				["notify-send", t.toString].execute;
 			}
 		}
 	}
@@ -387,6 +391,8 @@ void onClientMessage(XEvent *e){
 		net.windowDesktop: {
 			if(!c)
 				return;
+			if(cme.data.l[2] == 1)
+				monitor.newWorkspace(cme.data.l[0]);
 			c.setWorkspace(cme.data.l[0]);
 		},
 		net.moveResize: {

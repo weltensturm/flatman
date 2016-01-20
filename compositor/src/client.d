@@ -101,21 +101,27 @@ class CompositeClient: ws.wm.Window {
 		resizeGhostSize = this.size;
 		this.size = size;
 		"resize %s %s".format(getTitle, size).writeln;
+		
 		if(resizeGhostPixmap)
 			XFreePixmap(wm.displayHandle, resizeGhostPixmap);
+		resizeGhostPixmap = pixmap;
+		pixmap = None;
+		
 		if(resizeGhost)
 			XRenderFreePicture(wm.displayHandle, resizeGhost);
-		resizeGhostPixmap = pixmap;
 		resizeGhost = picture;
-		pixmap = None;
 		picture = None;
+		
 		createPicture;
 	}
 
 	override void move(int[2] pos){
 		if(pos.y <= this.pos.y-manager.height)
 			return;
-		auto spd = (animation.pos.x.calculate + animation.pos.y.calculate + 0.0).sqrt/1000;
+		auto spd = ((
+				(pos.x-animation.pos.x.calculate).abs
+				+ (pos.y-animation.pos.y.calculate).abs
+			).sqrt/100).min(0.3);
 		animation.pos.x.change(pos.x);
 		animation.pos.y.change(pos.y);
 		this.pos = pos;
@@ -125,16 +131,18 @@ class CompositeClient: ws.wm.Window {
 		workspace = workspaceProperty.get;
 		if(workspace < 0)
 			return;
-		if(ws != workspace && workspace >= 0){
-			if(ws > workspace)
-				animation.pos.y.change(-manager.height+pos.y);
-			else
-				animation.pos.y.change(manager.height);
-		}else
-			animation.pos.y.replace(ws > old ? manager.height+pos.y : -manager.height+pos.y, pos.y);
+		//if(ws != workspace && workspace >= 0){
+			auto target = ws > workspace ? -manager.height+pos.y : manager.height;
+			if(ws == workspace)
+				target = pos.y;
+			if(target != animation.pos.y.end)
+				animation.pos.y.change(target);
+		//}else
+		//	animation.pos.y.replace(ws > old ? manager.height+pos.y : -manager.height+pos.y, pos.y);
 	}
 
 	void switchTab(long dir, bool activate){
+		/+
 		if(activate){
 			animation.pos.x.replace(pos.x-size.x/10*dir, pos.x);
 			animation.fade.change(1);
@@ -142,6 +150,7 @@ class CompositeClient: ws.wm.Window {
 			animation.pos.x.change(pos.x-size.x/10*dir);
 			animation.fade.change(0);
 		}
+		+/
 	}
 
 	override void onShow(){
@@ -152,16 +161,22 @@ class CompositeClient: ws.wm.Window {
 		XGetWindowAttributes(wm.displayHandle, windowHandle, &wa);
 		createPicture;
 		animation.fade.change(1);
-		animation.pos.x.replace(wa.x, wa.x);
-		animation.pos.y.replace(wa.y, wa.y);
-		animation.size.x.replace(wa.width, wa.width);
-		animation.size.y.replace(wa.height, wa.height);
+		animation.pos.x.replace(wa.x);
+		animation.pos.y.replace(wa.y);
+		animation.size.x.replace(wa.width);
+		animation.size.y.replace(wa.height);
 	}
 
 	override void onHide(){
 		hidden = true;
 		"onHide %s".format(getTitle).writeln;
 		animation.fade.change(0);
+		if(resizeGhostPixmap)
+			XFreePixmap(wm.displayHandle, resizeGhostPixmap);
+		resizeGhostPixmap = None;
+		if(resizeGhost)
+			XRenderFreePicture(wm.displayHandle, resizeGhost);
+		resizeGhost = None;
 		//animation.pos.x.change(pos.x + (manager.currentTab > manager.lastTab ? -1 : 1) * size.x/10);
 	}
 
@@ -169,9 +184,11 @@ class CompositeClient: ws.wm.Window {
 
 }
 
+
 double sinApproach(double a){
 	return (sin((a-0.5)*PI)+1)/2;
 }
+
 
 class ClientAnimation {
 

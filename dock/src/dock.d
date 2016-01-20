@@ -24,10 +24,12 @@ void main(){
 		composite = new Composite;
 		wm.add(dockWindow);
 		while(wm.hasActiveWindows){
+			auto frameStart = Clock.currSystemTick.msecs/1000.0;
 			wm.processEvents;
 			dockWindow.onDraw;
 			dockWindow.tick;
-			Thread.sleep(10.msecs);
+			auto frameEnd = Clock.currSystemTick.msecs/1000.0;
+			Thread.sleep(((frameStart + 1.0/60.0 - frameEnd).max(0)*1000).lround.msecs);
 		}
 	}catch(Throwable t){
 		writeln(t);
@@ -130,9 +132,12 @@ class Composite {
 
 class WorkspaceDock: ws.wm.Window {
 
-	Property!(XA_CARDINAL, true) screenSize;
+	Property!(XA_CARDINAL, true) screenSizeProperty;
+	long[] screenSize;
 	
-	Property!(XA_CARDINAL, false) workspaceCount;
+	Property!(XA_CARDINAL, false) workspaceCountProperty;
+	long workspaceCount;
+
 	Property!(XA_CARDINAL, false) workspaceProperty;
 	long workspace;
 	
@@ -149,16 +154,19 @@ class WorkspaceDock: ws.wm.Window {
 
 	Watcher!(x11.X.Window) windowWatcher;
 
+	long activeBgPos = 0;
+
 	this(int w, int h, string title){
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
-		screenSize = new Property!(XA_CARDINAL, true)(dock.root, "_NET_DESKTOP_GEOMETRY");
+		screenSizeProperty = new Property!(XA_CARDINAL, true)(dock.root, "_NET_DESKTOP_GEOMETRY");
 		workspaceProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_CURRENT_DESKTOP");
-		workspaceCount = new Property!(XA_CARDINAL, false)(dock.root, "_NET_NUMBER_OF_DESKTOPS");
-		auto screen = screenSize.get;
-		w = cast(int)(screen.w/10);
+		workspaceCountProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_NUMBER_OF_DESKTOPS");
+		workspaceCount = workspaceCountProperty.get;
+		screenSize = screenSizeProperty.get;
+		w = cast(int)(screenSize.w/10);
 
-		super(w, cast(int)screen.h, title);
+		super(w, cast(int)screenSize.h, title);
 
 		wm.handlerAll[CreateNotify] ~= e => evCreate(e.xcreatewindow.window);
 		wm.handlerAll[DestroyNotify] ~= e => evDestroy(e.xdestroywindow.window);
@@ -230,15 +238,15 @@ class WorkspaceDock: ws.wm.Window {
 			if (BKEND_GLX == ps.o.backend)
 				return glx_bind_pixmap(ps, &root_tile_paint.ptex, root_pixmap, 0, 0, 0);
 		}
-		auto size = screenSize.get;
 		XTransform xform = {[
 		    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
 		    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed(     0 )],
-		    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( (this.size.w.to!double-12)/size.w )]
+		    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( (this.size.w.to!double-12)/screenSize.w )]
 		]};
 		XRenderSetPictureTransform(dpy, root_picture, &xform);
 		XRenderSetPictureFilter(dpy, root_picture, "best", null, 0);
 	}
+
 	void evCreate(x11.X.Window window){
 		XWindowAttributes wa;
 		if(window == dockWindow.windowHandle || !XGetWindowAttributes(wm.displayHandle, window, &wa))
@@ -297,7 +305,15 @@ class WorkspaceDock: ws.wm.Window {
 		if(e.window == .root){
 			if(e.atom == workspaceProperty.property){
 				workspace = workspaceProperty.get;
-			}
+				showTime = Clock.currSystemTick.msecs+300;
+			}else if(e.atom == workspaceCountProperty.property){
+				workspaceCount = workspaceCountProperty.get;
+				showTime = Clock.currSystemTick.msecs+300;
+			}else if(e.atom == screenSizeProperty.property){
+				screenSize = screenSizeProperty.get;
+			}else
+				return;
+			update;
 		}else{
 			foreach(c; clients){
 				if(c.windowHandle == e.window){
@@ -363,6 +379,12 @@ class WorkspaceDock: ws.wm.Window {
 			return;
 		draw.setColor([0.05,0.05,0.05]);
 		draw.rect([0,0], size);
+
+		auto ratio = screenSize.w/cast(double)screenSize.h;
+		auto height = cast(int)(size.w/ratio)+6;
+		draw.setColor([0.867,0.514,0]);
+		draw.rect(pos.a+[3,activeBgPos], [size.w-6, height-6]);
+
 		super.onDraw;
 		draw.setColor([0.6,0.6,0.6]);
 		auto time = Clock.currTime;
@@ -371,10 +393,10 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	void tick(){
-		int targetX = cast(int)screenSize.get.w-(visible ? size.w : 1);
+		int targetX = cast(int)screenSize.w-(visible ? size.w : 1);
 		if(pos.x != targetX || pos.y != 0){
 			XMoveWindow(dpy, windowHandle, targetX, 0);
-			XRaiseWindow(dpy, windowHandle);
+			//XRaiseWindow(dpy, windowHandle);
 		}
 	}
 
@@ -387,15 +409,13 @@ class WorkspaceDock: ws.wm.Window {
 		XSync(dpy, false);
 		foreach(c; children)
 			remove(c);
-		auto count = workspaceCount.get*2+1;
-		auto screen = screenSize.get;
-		auto ratio = screen.w/cast(double)screen.h;
+		auto count = workspaceCount*2+1;
+		auto ratio = screenSize.w/cast(double)screenSize.h;
 		auto height = cast(int)(size.w/ratio)+6;
-		workspace = workspaceProperty.get;
 		workspaces = workspaces.init;
 		foreach(c; clients){
-			if(c.workspaceProperty.get != workspace || !c.hidden)
-				workspaces[c.workspaceProperty.get] ~= c;
+			if(!c.hidden)
+				workspaces[c.workspace] ~= c;
 		}
 		int[] desktopsHeight;
 		foreach(i; 0..count){
@@ -409,7 +429,8 @@ class WorkspaceDock: ws.wm.Window {
 		foreach(i; 0..count){
 			bool empty = i % 2 == 0;
 			auto ws = addNew!WorkspaceView(this, count-1-i, empty);
-			ws.name = wsnames[i/2];
+			if(i/2 < wsnames.length && i/2 >= 0)
+				ws.name = wsnames[i/2];
 			ws.move([0, y]);
 			ws.resize([size.w, desktopsHeight[i]]);
 			ws.update;
@@ -425,19 +446,17 @@ class WorkspaceDock: ws.wm.Window {
 	
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
 		if(button == Mouse.wheelDown && pressed){
-			foreach(i; workspace+1..workspaceCount.get+1){
+			foreach(i; workspace+1..workspaceCount+1){
 				if(i !in workspaces)
 					continue;
-				workspace = i;
-				workspaceProperty.request([workspace, CurrentTime]);
+				workspaceProperty.request([i, CurrentTime]);
 				break;
 			}
 		}else if(button == Mouse.wheelUp && pressed){
 			foreach_reverse(i; 0..workspace){
 				if(i !in workspaces)
 					continue;
-				workspace = i;
-				workspaceProperty.request([workspace, CurrentTime]);
+				workspaceProperty.request([i, CurrentTime]);
 				break;
 			}
 		}else{
@@ -469,19 +488,19 @@ class WorkspaceView: Base {
 	void update(){
 		foreach(c; children)
 			remove(c);
-		auto scale = (size.w-12) / cast(double)dock.screenSize.get.w;
+		auto scale = (size.w-12) / cast(double)dock.screenSize.w;
 		if(id in dock.workspaces && !empty)
 			foreach_reverse(w; dock.workspaces[id]){
 				auto wv = addNew!WindowIcon(w, cast(int)id);
 				auto y = w.pos.y;
-				auto sh = dock.screenSize.get.y;
+				auto sh = dock.screenSize.y;
 				while(y > sh)
 					y -= sh;
 				while(y < 0)
 					y += sh;
 				wv.moveLocal([
 					6+cast(int)(w.pos.x*scale).lround,
-					6+cast(int)((dock.screenSize.get.h-y-w.size.h)*scale).lround
+					6+cast(int)((dock.screenSize.h-y-w.size.h)*scale).lround
 				]);
 				wv.resize([
 					cast(int)(w.size.w*scale).lround,

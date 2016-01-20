@@ -55,7 +55,7 @@ void updateDesktopNames(){
 	string names;
 	foreach(i, ws; monitor.workspaces){
 		try{
-			names ~= ws.context.expandTilde.readText;
+			names ~= ws.context.expandTilde.readText.baseName;
 		}catch{
 			names ~= "~";
 		}
@@ -66,6 +66,17 @@ void updateDesktopNames(){
 
 void updateWindowDesktop(Client client, long n){
 	replace(client.win, net.windowDesktop, n);
+}
+
+void updateWorkspaces(){
+	foreach(n, ws; monitor.workspaces){
+		foreach(t; ws.split.children.to!(Tabs[])){
+			replace(t.window, net.windowDesktop, n);
+		}
+		foreach(c; ws.clients)
+			c.updateWindowDesktop(n);
+	}
+	updateDesktopNames;
 }
 
 void updateActiveWindow(){

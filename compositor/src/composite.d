@@ -387,8 +387,7 @@ class CompositeManager {
 					(c.animation.size[1].calculate*scale).lround.to!int
 				);
 
-				if(c.resizeGhost && c.animation.fade.done){
-
+				if(c.resizeGhost && (!c.animation.size[0].done || !c.animation.size[1].done)){
 					scaleX = c.resizeGhostSize[0]/c.animation.size[0].calculate;
 					scaleY = c.resizeGhostSize[1]/c.animation.size[1].calculate;
 					XTransform xf = {[
@@ -398,7 +397,7 @@ class CompositeManager {
 					]};
 					XRenderSetPictureTransform(wm.displayHandle, c.resizeGhost, &xf);
 
-					alpha = (1-c.animation.size.x.completion*2).max(0);
+					alpha = (1-c.animation.size.x.completion).max(0);
 					if(alpha != 0){
 						XRenderComposite(
 							wm.displayHandle,

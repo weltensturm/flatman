@@ -183,7 +183,7 @@ class Split: Container {
 			if(container.children.canFind(client)){
 				container.remove(client);
 				if(!container.children.length){
-					container.hide;
+					container.destroy;
 					remove(container);
 					sizes = sizes[0..i] ~ sizes[i+1..$];
 					if(clientActive >= children.length)

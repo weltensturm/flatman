@@ -7,6 +7,7 @@ import
 	std.file,
 	std.random,
 	std.conv,
+	std.array,
 	x11.X,
 	x11.Xlib,
 	x11.Xatom,
@@ -40,16 +41,11 @@ string getContextPath(){
 
 
 void setContext(string context){
+	context = context.expandTilde;
 	if(!PATH.expandTilde.exists)
 		mkdir(PATH.expandTilde);
-	foreach(e; PATH.expandTilde.dirEntries("*.context", SpanMode.shallow)){
-		if(e.readText == context){
-			std.file.write((PATH ~ "current").expandTilde, e);
-			return;
-		}
-	}
-	auto path = (uniform01*100000000000000).to!long.to!string ~ ".context";
-	std.file.write(PATH.expandTilde ~ "current", path);
+	auto path = context.replace("/", "-") ~ ".context";
+	std.file.write(PATH.expandTilde ~ "current", PATH.expandTilde ~ path);
 	std.file.write(PATH.expandTilde ~ path, context);
 }
 

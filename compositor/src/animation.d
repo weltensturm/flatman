@@ -43,6 +43,11 @@ class Animation {
 		timeStart = time;
 	}
 
+	void change(double value, double duration){
+		change(value);
+		this.duration = duration;
+	}
+
 	void change(double value, double function(double) func){
 		change(value);
 		this.func = func;
@@ -54,8 +59,14 @@ class Animation {
 		timeStart = time;
 	}
 
+	void replace(double end){
+		this.start = end;
+		this.end = end;
+		timeStart = 0;
+	}
+
 	double completion(){
-		return (timeCurrent - timeStart).min(duration)/duration;
+		return (time - timeStart).min(duration)/duration;
 	}
 
 	double calculate(){
@@ -63,7 +74,7 @@ class Animation {
 	}
 
 	bool done(){
-		return timeStart+duration < timeCurrent;
+		return timeStart+duration < time;
 	}
 
 	double timeCurrent(){

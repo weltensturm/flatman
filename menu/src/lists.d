@@ -1,5 +1,6 @@
 module menu.lists;
 
+
 import menu;
 
 
@@ -7,95 +8,33 @@ class ListDesktop: Scroller {
 
 	DynamicList list;
 
-	this(DesktopEntry[] applications){
+	this(DesktopEntry[][string] apps, string[string] categories){
+
 		list = new DynamicList;
 		list.padding = 3;
 		list.style.bg = [0.1,0.1,0.1,1];
 		add(list);
-		applications.each!((DesktopEntry app){
-			auto button = new ButtonDesktop([app.name, app.exec].bangJoin);
-			button.resize([5,25]);
-			list.add(button);
-		});
-	}
 
-	override void onDraw(){
-		draw.setColor([0.1,0.1,0.1]);
-		draw.rect(pos, size);
-		super.onDraw;
-		draw.setColor([0.3,0.3,0.3]);
-		draw.rect(pos, [2, size.h]);
-	}
+		foreach(name; categories.values.sort!"a.toUpper < b.toUpper"){
+			if(name !in apps)
+				continue;
 
-}
+			auto buttonCategory = new Button(name);
+			buttonCategory.resize([5,20]);
+			auto tree = new Tree(buttonCategory);
+			tree.expanded = true;
+			tree.padding = 0;
+			list.add(tree);
 
-void sortDir(ref string[] dirs){
-	dirs.sort!("a.toUpper < b.toUpper", SwapStrategy.stable);
-	dirs.sort!("!a.startsWith(\".\") && b.startsWith(\".\")", SwapStrategy.stable);
-}
+			foreach(app; apps[name].sort!"a.name.toUpper < b.name.toUpper"){
+				auto button = new ButtonDesktop([app.name, app.exec].bangJoin);
+				button.resize([5,20]);
+				tree.add(button);
+			}
 
-void loadAddDir(string directory, Base container, string root){
-	string[] dirs;
-	string[] dirsHidden;
-	string[] files;
-	string[] filesHidden;
-	writeln(directory);
-	directory = (directory.chomp("/") ~ "/");
-	root = (root.chomp("/") ~ "/");
-	foreach(DirEntry entry; directory.dirEntries(SpanMode.shallow)){
-		auto name = entry.name.chompPrefix(directory);
-		if(entry.isDir){
-			if(!name.startsWith("."))
-				dirs ~= name;
-			else
-				dirsHidden ~= name;
-		}else{
-			if(!name.startsWith("."))
-				files ~= name;
-			else
-				filesHidden ~= name;
+			tree.update;
 		}
-	}
-	dirs.sortDir;
-	if(directory == root || directory.chompPrefix(root).startsWith("..") && directory.endsWith("../"))
-		dirs = ".." ~ dirs;
-	dirsHidden.sortDir;
-	files.sortDir;
-	filesHidden.sortDir;
-	auto spawnDir = (string dir){
-		auto button = new ButtonFile(directory ~ dir);
-		button.resize([5,25]);
-		auto tree = new Tree(button);
-		tree.padding = 0;
-		bool once;
-		button.leftClick ~= {
-			if(!once)
-				loadAddDir(directory ~ dir, tree, root);
-			once = true;
-		};
-		container.add(tree);
-		tree.update;
-	};
-	auto spawnFile = (string file){
-		auto button = new ButtonFile(directory ~ file);
-		button.resize([5,25]);
-		container.add(button);
-	};
-	dirs.each!spawnDir;
-	files.each!spawnFile;
-	dirsHidden.each!spawnDir;
-	filesHidden.each!spawnFile;
-}
 
-class ListFiles: Scroller {
-
-	DynamicList list;
-
-	this(){
-		list = addNew!DynamicList;
-		list.padding = 0;
-		list.style.bg = [0.1,0.1,0.1,1];
-		loadAddDir(context, list, context);
 	}
 
 	override void onDraw(){
@@ -103,12 +42,10 @@ class ListFiles: Scroller {
 		draw.rect(pos, size);
 		super.onDraw;
 		draw.setColor([0.3,0.3,0.3]);
-		draw.rect(pos, [2, size.h]);
+		draw.rect(pos.a+[0,size.h-2], [size.w, 2]);
 	}
 
-
 }
-
 
 
 class ListFrequent: Scroller {
@@ -156,7 +93,7 @@ class ListFrequent: Scroller {
 					writeln("unknown type: ", split[0]);
 			}
 			if(button){
-				button.resize([5,25]);
+				button.resize([5,20]);
 				button.parameter = split[2];
 				list.add(button);
 			}
@@ -169,7 +106,7 @@ class ListFrequent: Scroller {
 		draw.rect(pos, size);
 		super.onDraw;
 		draw.setColor([0.3,0.3,0.3]);
-		draw.rect(pos, [2, size.h]);
+		draw.rect(pos.a+[0,size.h-2], [size.w, 2]);
 	}
 
 }

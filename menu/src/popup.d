@@ -7,50 +7,74 @@ __gshared:
 
 class ListPopup: ws.wm.Window {
 
+	bool allowDestroy;
+
 	this(Button[] buttons){
-		int width = buttons.map!(a=>a.text.length.to!int*12).reduce!max;
-		int height = 25*buttons.length.to!int;
+		super(1, 1, "Popup");
+
+		int width = buttons.map!(a=>draw.width(a.text)).reduce!max+8;
+		int height = 20*buttons.length.to!int;
 		auto list = addNew!List;
+		list.moveLocal([1,1]);
+		list.entryHeight = 20;
+		list.padding = 0;
 		foreach(button; buttons){
-			button.resize([width,25]);
-			button.leftClick ~= {hide;};
+			button.leftClick ~= {
+				hide;
+			};
 			list.add(button);
 		}
-		"size: %s".format([width,height]).writeln;
-		resize([width,height]);
+
 		int x;
 		int y;
 		ulong ulnull;
 		int inull;
 		uint uinull;
 		XQueryPointer(dpy, .root, &ulnull, &ulnull, &x, &y, &inull, &inull, &uinull);
-		move([x,y]);
-		super(100, 100, "Popup");
+		XMoveResizeWindow(wm.displayHandle, windowHandle, x+1, y+1, width+4, height+4);
 	}
 
 	override void drawInit(){
 		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
-		_draw.setFont("Consolas:size=9", 9);
+		_draw.setFont("Arial", 9);
 	}
 
 	override void gcInit(){}
 
 	override void resize(int[2] size){
+		this.size = size;
 		super.resize(size);
 		foreach(c; children)
-			c.resize(size);
+			c.resize(size.a-[2,2]);
+		onDraw;
 	}
 
 	override void onDraw(){
-		if(!active)
-			return;
+		//if(!active)
+		//	return;
 		//draw.setColor([0.1,0.1,0.1]);
 		draw.setColor([0.867,0.514,0]);
 		draw.rect(pos, size);
-		draw.setColor([0.1,0.1,0.1]);
-		draw.rect(pos.a+[0,2], size.a-[2,2]);
 		super.onDraw;
 		draw.finishFrame;
+	}
+
+	override void onMouseMove(int x, int y){
+		super.onMouseMove(x, y);
+		onDraw;
+	}
+
+	override void hide(){
+		super.hide();
+		menuWindow.popups = menuWindow.popups.without(this);
+	}
+
+	override void onMouseFocus(bool focus){
+		super.onMouseFocus(focus);
+		if(focus)
+			allowDestroy = true;
+		else if(allowDestroy)
+			hide;
 	}
 
 	override void show(){

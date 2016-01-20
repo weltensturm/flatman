@@ -24,6 +24,7 @@ class CompositeClient: ws.wm.Window {
 		}
 		XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
 		workspaceProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
+		workspace = workspaceProperty.get;
 	}
 	
     override void gcInit(){}
@@ -38,7 +39,9 @@ class CompositeClient: ws.wm.Window {
 
 		XWindowAttributes attr;
 		XGetWindowAttributes(dpy, windowHandle, &attr);
-    	XRenderPictFormat *format = XRenderFindVisualFormat(dpy, attr.visual);
+    	XRenderPictFormat* format = XRenderFindVisualFormat(dpy, attr.visual);
+    	if(!format)
+    		return;
 		hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
 		XRenderPictureAttributes pa;
 		pa.subwindow_mode = IncludeInferiors;
@@ -56,7 +59,7 @@ class CompositeClient: ws.wm.Window {
 		}
 
 		picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
-		auto screen = dockWindow.screenSize.get;
+		auto screen = dockWindow.screenSize;
 		auto scale = (dockWindow.size.w-12).to!double/screen.w;
 		// Scaling matrix
 		XTransform xform = {[

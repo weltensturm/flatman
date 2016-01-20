@@ -111,6 +111,10 @@ class Tabs: Container {
 		hidden = true;
 	}
 
+	void destroy(){
+		XDestroyWindow(dpy, window);
+	}
+
 	alias add = Base.add;
 
 	override void add(Client client){
