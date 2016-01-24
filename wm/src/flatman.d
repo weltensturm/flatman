@@ -295,6 +295,7 @@ void run(){
 				["notify-send", t.toString].execute;
 			}
 		}
+		inotify.update;
 	}
 }
 
@@ -653,17 +654,14 @@ Client[] clientsVisible(){
 
 void restack(){
 	XGrabServer(dpy);
-	/+
-	foreach_reverse(c; clients)
-		if(c.global)
-			c.lower;
-	+/
 	foreach_reverse(c; clients)
 		if(!c.global && (!c.isfullscreen || active != c))
 			c.lower;
 	foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
 		XLowerWindow(dpy, tabs.window);
 	XLowerWindow(dpy, monitor.workspace.split.window);
+	if(active && active.isfullscreen)
+		active.raise;
 	XSync(dpy, false);
 	XEvent ev;
 	while(XCheckMaskEvent(dpy, EnterWindowMask, &ev)){}

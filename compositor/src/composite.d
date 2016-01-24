@@ -273,7 +273,6 @@ class CompositeManager {
 		root_tile_fill = false;
 		bool fill = false;
 		Pixmap pixmap = None;
-		// Get the values of background attributes
 		foreach(bgprop; [rootmapId, setrootId]){
 			auto res = bgprop.get;
 			if(res){
@@ -281,19 +280,13 @@ class CompositeManager {
 				break;
 			}
 		}
-		// Make sure the pixmap we got is valid
-		//if(pixmap && !validate_pixmap(ps, pixmap))
-		//	pixmap = None;
-		// Create a pixmap if there isn't any
 		if(!pixmap){
 			pixmap = XCreatePixmap(wm.displayHandle, root, 1, 1, depth);
 			fill = true;
 		}
-		// Create Picture
 		XRenderPictureAttributes pa;
 		pa.repeat = True,
 		root_picture = XRenderCreatePicture(wm.displayHandle, pixmap, XRenderFindVisualFormat(wm.displayHandle, visual), CPRepeat, &pa);
-		// Fill pixmap if needed
 		if(fill){
 			XRenderColor c;
 			c.red = c.green = c.blue = 0x8080;
@@ -337,22 +330,6 @@ class CompositeManager {
 			XFree(children);
 		}
 		XUngrabServer(wm.displayHandle);
-		if(clients.length){
-			/+
-			if(clients[0] != currentClient){
-				lastClient = currentClient;
-				currentClient = clients[0];
-				writeln(currentClient, ' ', lastClient);
-				if(lastClient)
-					writeln(currentClient.getTitle, ' ', lastClient.getTitle);
-				if(lastClient && currentClient.currentTabs.get == lastClient.currentTabs.get){
-					auto dir = currentClient.currentTab.get > lastClient.currentTab.get ? -1 : 1;
-					lastClient.switchTab(dir, false);
-					currentClient.switchTab(dir*-1, true);
-				}
-			}
-			+/
-		}
 	}
 
 	void draw(){
@@ -364,41 +341,22 @@ class CompositeManager {
 
 				auto scale = alpha/4+0.75;
 
-				auto scaleX = c.size[0]/c.animation.size[0].calculate;
-				auto scaleY = c.size[1]/c.animation.size[1].calculate;
-
 				XTransform xform = {[
-				    [XDoubleToFixed( scaleX ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-				    [XDoubleToFixed( 0 ), XDoubleToFixed( scaleY ), XDoubleToFixed( 0 )],
+				    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+				    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
 				    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
 				]};
 				XRenderSetPictureTransform(wm.displayHandle, c.picture, &xform);
 
-				XRenderComposite(
-					wm.displayHandle,
-					alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
-					c.picture,
-					alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
-					backBuffer,
-					0,0,0,0,
-					(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
-					(c.animation.pos.y.calculate + (1-scale)*c.size.y/2).lround.to!int,
-					(c.animation.size[0].calculate*scale).lround.to!int,
-					(c.animation.size[1].calculate*scale).lround.to!int
-				);
-
 				if(c.resizeGhost && (!c.animation.size[0].done || !c.animation.size[1].done)){
-					scaleX = c.resizeGhostSize[0]/c.animation.size[0].calculate;
-					scaleY = c.resizeGhostSize[1]/c.animation.size[1].calculate;
 					XTransform xf = {[
-						[XDoubleToFixed( scaleX ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-						[XDoubleToFixed( 0 ), XDoubleToFixed( scaleY ), XDoubleToFixed( 0 )],
+						[XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+						[XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
 						[XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
 					]};
 					XRenderSetPictureTransform(wm.displayHandle, c.resizeGhost, &xf);
 
-					alpha = (1-c.animation.size.x.completion).max(0);
-					if(alpha != 0){
+					if(c.animation.size.x.completion != 1){
 						XRenderComposite(
 							wm.displayHandle,
 							alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
@@ -414,119 +372,23 @@ class CompositeManager {
 					}
 				}
 
+				alpha = alpha*(c.animation.size.x.completion).max(0);
+				XRenderComposite(
+					wm.displayHandle,
+					alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
+					c.picture,
+					alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
+					backBuffer,
+					0,0,0,0,
+					(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
+					(c.animation.pos.y.calculate + (1-scale)*c.size.y/2).lround.to!int,
+					(c.animation.size[0].calculate.min(c.size.x)*scale).lround.to!int,
+					(c.animation.size[1].calculate.min(c.size.y)*scale).lround.to!int
+				);
+
 			}
 		}
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
-		//XRectangle r = {0, 0, cast(ushort)width, cast(ushort)height};
-		//XserverRegion region = XFixesCreateRegion( wm.displayHandle, &r, 1 );
-		//if(damage)
-		//	XFixesDestroyRegion(wm.displayHandle, damage);
-		//auto damage = region;
-
-		//XFixesSetPictureClipRegion(wm.displayHandle, frontBuffer, 0, 0, damage);
-
-		/+
-		foreach(mon; monitors){
-			for(auto client = mon.clients; client; client = client.next){
-				//if(!client.isVisible || !client.isPainted)
-				//	continue;
-				// Update the region containing the area the window was last rendered at.
-				//client.updateOnScreenRegion;
-				// Only draw the window if it's opaque
-				//if(client.isOpaque){
-					// Set the clip region for the backbuffer to the damage region, and
-					// subtract the clients shape from the damage region
-					//XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, damage);
-					//XFixesSubtractRegion(wm.displayHandle, damage, damage, client.shape);
-					XRenderComposite(wm.displayHandle, PictOpSrc, client.picture,
-							None, backBuffer, 0, 0, 0, 0,
-							client.pos.x,
-							client.pos.y,
-							client.size.w,
-							client.size.h);
-				//}
-				// Save the clip region before the next client shape is subtracted from it.
-				// We need to restore it later when we're drawing the shadow.
-				//client.setShapeClip(damage);
-				//translucents = client ~ translucents;
-			}
-		}
-		+/
-
-		// Draw any areas of the root window not covered by windows
-		//XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, damage);
-		//XRenderComposite(wm.displayHandle, PictOpSrc, wallpaper, None, backBuffer, 0, 0, 0, 0, 0, 0, width, height);
-		// Destroy the damage region
-		//XFixesDestroyRegion(wm.displayHandle, damage);
-		//damage = None;
-		// Copy the back buffer contents to the root window
-		//XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, None);
-		/+
-		// If there's no damage, update the whole display
-		if(damage == None || initialRepaint){
-			XRectangle r = {0, 0, width, height};
-			XserverRegion region = XFixesCreateRegion( wm.displayHandle, &r, 1 );
-			if(damage)
-				XFixesDestroyRegion(wm.displayHandle, damage);
-			damage = region;
-			initialRepaint = false;
-		}
-		// Use the damage region as the clip region for the root window
-		XFixesSetPictureClipRegion(wm.displayHandle, frontBuffer, 0, 0, damage);
-		// Draw each opaque window top to bottom, subtracting the bounding rect of
-		// each drawn window from the clip region.
-		ClientList::ConstIterator end = mList.constEnd();
-		Client[] translucents;
-		for(ClientList::ConstIterator it = mList.constBegin(); it != end; ++it){
-			if(!client.isVisible || !client.isPainted)
-				continue;
-			// Update the region containing the area the window was last rendered at.
-			client.updateOnScreenRegion;
-			// Only draw the window if it's opaque
-			if(client.isOpaque{
-				// Set the clip region for the backbuffer to the damage region, and
-				// subtract the clients shape from the damage region
-				XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, damage);
-				XFixesSubtractRegion(wm.displayHandle, damage, damage, client.shape;
-				XRenderComposite(wm.displayHandle, PictOpSrc, client.picture,
-						None, backBuffer, 0, 0, 0, 0,
-						client.pos.x, client.pos.y,
-						client.size.w + client.borderWidth * 2,
-						client.size.h + client.borderWidth * 2);
-			}
-			// Save the clip region before the next client shape is subtracted from it.
-			// We need to restore it later when we're drawing the shadow.
-			client.setShapeClip(damage);
-			translucents = client ~ translucents;
-		}
-		// Draw any areas of the root window not covered by windows
-		XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, damage);
-		XRenderComposite(wm.displayHandle, PictOpSrc, rootTile, None, backBuffer, 0, 0, 0, 0, 0, 0, width(), height());
-		// Now walk the list backwards, drawing translucent windows and shadows.
-		// That we draw bottom to top is important now since we're drawing translucent windows.
-		end = translucents.constEnd();
-		foreach(client; translucents){
-			// Restore the previously saved clip region
-			XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, client.shapeClip;
-			// Only draw the window if it's translucent
-			// (we drew the opaque ones in the previous loop)
-			if(!client.isOpaque
-				XRenderComposite(wm.displayHandle, PictOpOver, client.picture,
-					    client.alphaMask, backBuffer, 0, 0, 0, 0,
-						client.pos.x + client.borderWidth,
-						client.pos.y + client.borderWidth,
-						client.width, client.height;
-			// We don't need the clip region anymore
-			client.destroyShapeClip;
-		}
-		translucents.clear;
-		// Destroy the damage region
-		XFixesDestroyRegion(wm.displayHandle, damage);
-		damage = None;
-		// Copy the back buffer contents to the root window
-		XFixesSetPictureClipRegion(wm.displayHandle, backBuffer, 0, 0, None);
-		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height;
-			+/
 	}
 
 }

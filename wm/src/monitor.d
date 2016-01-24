@@ -15,6 +15,8 @@ class Monitor {
 	Client[] globals;
 
 	int workspaceActive;
+	int globalActive;
+	bool focusGlobal;
 
 	bool peekTitles;
 
@@ -25,10 +27,37 @@ class Monitor {
 		workspace.show;
 		//auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
 		//dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
+		auto watch = inotify.addWatch("~/.flatman".expandTilde, false);
+		watch.change ~= (path, file){
+			if(workspace && file.endsWith("current")){
+				workspace.updateContext("~/.flatman/current".expandTilde.readText);
+			}
+		};
 	}
 
 	Client active(){
-		return workspace.active;
+		if(focusGlobal)
+			return globals[globalActive];
+		else
+			return workspace.active;
+	}
+
+	void setActive(Client client){
+		if(globals.canFind(client)){
+			foreach(i, global; globals){
+				if(global == client)
+					globalActive = cast(int)i;
+			}
+			writeln("focus global");
+		}else{
+			foreach(i, ws; workspaces){
+				if(ws.clients.canFind(client)){
+					ws.active = client;
+					workspaceActive = cast(int)i;
+					return;
+				}
+			}
+		}
 	}
 
 	Workspace workspace(){

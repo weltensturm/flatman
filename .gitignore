@@ -10,4 +10,7 @@ compositor/flatman-compositor
 dock/flatman-dock
 menu/flatman-menu
 volume-icon/flatman-volume-icon
+xinput-gui/flatman-input
+*.sync-conflict*
+*.swp
 1

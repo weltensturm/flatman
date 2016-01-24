@@ -542,14 +542,7 @@ void focus(Client c){
 		XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
 		XDeleteProperty(dpy, root, net.windowActive);
 	}
-	foreach(si, ws; monitor.workspaces){
-		foreach(w; ws.clients){
-			if(w == c){
-				monitor.workspaceActive = cast(int)si;
-				ws.active = w;
-			}
-		}
-	}
+	monitor.setActive(c);
 	if(c && c.isfullscreen)
 		c.moveResize(c.monitor.pos, c.monitor.size);
 	foreach(m; monitors)

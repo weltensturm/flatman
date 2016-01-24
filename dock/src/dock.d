@@ -140,6 +140,10 @@ class WorkspaceDock: ws.wm.Window {
 
 	Property!(XA_CARDINAL, false) workspaceProperty;
 	long workspace;
+	bool canSwitch;
+	
+	Property!(XA_STRING, false) workspaceNamesProperty;
+	string[] workspaceNames;
 	
 	Picture root_picture;
 
@@ -159,11 +163,20 @@ class WorkspaceDock: ws.wm.Window {
 	this(int w, int h, string title){
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
+		
 		screenSizeProperty = new Property!(XA_CARDINAL, true)(dock.root, "_NET_DESKTOP_GEOMETRY");
+		screenSize = screenSizeProperty.get;
+		
 		workspaceProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_CURRENT_DESKTOP");
+		canSwitch = true;
+
 		workspaceCountProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_NUMBER_OF_DESKTOPS");
 		workspaceCount = workspaceCountProperty.get;
-		screenSize = screenSizeProperty.get;
+		
+		workspaceNamesProperty = new Property!(XA_STRING, false)(dock.root, "_NET_DESKTOP_NAMES");
+		workspaceNames = workspaceNamesProperty.get.split('\0')[0..$-1];
+		writeln(workspaceNames);
+
 		w = cast(int)(screenSize.w/10);
 
 		super(w, cast(int)screenSize.h, title);
@@ -304,13 +317,19 @@ class WorkspaceDock: ws.wm.Window {
 	void evProperty(XPropertyEvent* e){
 		if(e.window == .root){
 			if(e.atom == workspaceProperty.property){
-				workspace = workspaceProperty.get;
+				auto ws = workspaceProperty.get;
+				if(ws == workspace)
+					canSwitch = true;
+				if(canSwitch)
+					workspace = ws;
 				showTime = Clock.currSystemTick.msecs+300;
 			}else if(e.atom == workspaceCountProperty.property){
 				workspaceCount = workspaceCountProperty.get;
 				showTime = Clock.currSystemTick.msecs+300;
 			}else if(e.atom == screenSizeProperty.property){
 				screenSize = screenSizeProperty.get;
+			}else if(e.atom == workspaceNamesProperty.property){
+				workspaceNames = workspaceNamesProperty.get.split('\0')[0..$-1];
 			}else
 				return;
 			update;
@@ -341,7 +360,6 @@ class WorkspaceDock: ws.wm.Window {
 						continue outer;
 					}
 				}
-				//evCreate(window);
 			}
 			XFree(children);
 		}
@@ -424,13 +442,11 @@ class WorkspaceDock: ws.wm.Window {
 		}
 		int y = size.h/2 - desktopsHeight.reduce!"a+b"/2;
 
-		auto wsnames = new Property!(XA_STRING, false)(dock.root, "_NET_DESKTOP_NAMES").get.split('\0');
-
 		foreach(i; 0..count){
 			bool empty = i % 2 == 0;
 			auto ws = addNew!WorkspaceView(this, count-1-i, empty);
-			if(i/2 < wsnames.length && i/2 >= 0)
-				ws.name = wsnames[i/2];
+			if(i/2 < workspaceNames.length && i/2 >= 0)
+				ws.name = workspaceNames[$-i/2-1];
 			ws.move([0, y]);
 			ws.resize([size.w, desktopsHeight[i]]);
 			ws.update;
@@ -445,23 +461,15 @@ class WorkspaceDock: ws.wm.Window {
 	}
 	
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.wheelDown && pressed){
-			foreach(i; workspace+1..workspaceCount+1){
-				if(i !in workspaces)
-					continue;
-				workspaceProperty.request([i, CurrentTime]);
-				break;
+		if((button == Mouse.wheelDown || button == Mouse.wheelUp) && pressed){
+			auto newWorkspace = workspace + (button == Mouse.wheelDown ? 1 : -1);
+			if(newWorkspace >= 0 && newWorkspace+1 < workspaces.length){
+				canSwitch = false;
+				workspace = newWorkspace;
+				workspaceProperty.request([workspace, CurrentTime]);
 			}
-		}else if(button == Mouse.wheelUp && pressed){
-			foreach_reverse(i; 0..workspace){
-				if(i !in workspaces)
-					continue;
-				workspaceProperty.request([i, CurrentTime]);
-				break;
-			}
-		}else{
+		}else
 			super.onMouseButton(button, pressed, x, y);
-		}
 	}
 
 }
@@ -547,7 +555,7 @@ class WorkspaceView: Base {
 		super.onDraw;
 
 		if(!empty){
-			composite.rect([pos.x+6, pos.y+6], [size.w-12, draw.fontHeight], [0,0,0,0.5]);
+			composite.rect([pos.x+6, pos.y+6], [size.w-12, draw.fontHeight], [0,0,0,0.7]);
 			//draw.rect(pos.a+[6,size.h-draw.fontHeight-6], [size.w-12, draw.fontHeight]);
 			draw.setColor([0.1,0.1,0.1]);
 			draw.setColor([0.867,0.867,0.867]);

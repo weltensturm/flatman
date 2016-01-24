@@ -9,6 +9,24 @@ class ListPopup: ws.wm.Window {
 
 	bool allowDestroy;
 
+	struct Action {
+		string name;
+		void delegate() action;
+	}
+
+	this(Action[] actions){
+		Button[] buttons;
+		foreach(action; actions){
+			auto b = new Button(action.name);
+			b.font = "Arial";
+			b.fontSize = 9;
+			b.style.bg.hover = [0.5,0.5,0.5,1];
+			b.leftClick ~= action.action;
+			buttons ~= b;
+		}
+		this(buttons);
+	}
+
 	this(Button[] buttons){
 		super(1, 1, "Popup");
 

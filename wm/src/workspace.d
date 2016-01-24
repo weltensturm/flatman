@@ -22,13 +22,10 @@ class Workspace: Container {
 		["flatman-context", "~"].execute;
 		if("~/.flatman/current".expandTilde.exists)
 			context = "~/.flatman/current".expandTilde.readText;
-		auto watch = inotify.addWatch("~/.flatman/current".expandTilde, false);
-		watch.change ~= (path, file){
-			if(!hidden){
-				context = "~/.flatman/current".expandTilde.readText;
-				"new context: %s".format(context).log;
-			}
-		};
+	}
+
+	void updateContext(string path){
+		context = path;
 	}
 
 	override void resize(int[2] size){
@@ -95,6 +92,7 @@ class Workspace: Container {
 		super.show;
 		if(split.children.length)
 			split.show;
+		"showing workspace, context: %s".format(context).log;
 		if(context.exists){
 			"reset context: %s".format(context.expandTilde.readText);
 			["flatman-context", context.expandTilde.readText].execute;
