@@ -41,7 +41,7 @@ string getContextPath(){
 
 
 void setContext(string context){
-	context = context.expandTilde;
+	context = context.expandTilde.buildNormalizedPath.absolutePath;
 	if(!PATH.expandTilde.exists)
 		mkdir(PATH.expandTilde);
 	auto path = context.replace("/", "-") ~ ".context";

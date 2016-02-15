@@ -48,17 +48,16 @@ class DeviceViewer: Scale {
 }
 
 
-class DeviceContainer: Table {
+class DeviceContainer: Grid {
 
 	Device[] devices;
 	Device[] apps;
 
 	this(Device[] devices, Device[] apps){
-		super(cast(uint)(devices.length+apps.length+1), 2, 0);
 		this.devices = devices;
 		this.apps = apps;
 		setBorderWidth(10);
-		setColSpacings(10);
+		setColumnHomogeneous(true);
 		RadioButton radio;
 		int row;
 		devices.each!((Device device){
@@ -68,60 +67,33 @@ class DeviceContainer: Table {
 				radio = new RadioButton(radio, device.name);
 			if(device.selected)
 				radio.setActive(true);
-			attach(
-				radio,
-				0, 1,
-				row, row+1,
-				GtkAttachOptions.FILL, GtkAttachOptions.SHRINK,
-				0, 0
-			);
+			attach(radio, 0, row, 2, 1);
 			radio.addOnToggled((self){
 				if(!radio && self.getActive){
 					device.select;
 				}
 			});
 			auto deviceViewer = new DeviceViewer(device);
-			deviceViewer.setSizeRequest(50, 0);
-			attach(
-				deviceViewer,
-				1, 2,
-				row, row+1,
-				GtkAttachOptions.FILL|GtkAttachOptions.EXPAND, GtkAttachOptions.SHRINK,
-				0, 0
-			);
+			//deviceViewer.setSizeRequest(50, 0);
+			attach(deviceViewer, 2, row, 1, 1);
 			row++;
 		});
 		radio = null;
-		attach(
-			new Separator(GtkOrientation.VERTICAL), 0, 2, row, row+1,
-			GtkAttachOptions.EXPAND|GtkAttachOptions.FILL, GtkAttachOptions.SHRINK,
-			10, 10
-		);
+		attach(new Separator(GtkOrientation.VERTICAL), 0, row, 3, 1);
 		row++;
 		apps.each!((Device device){
 			auto label = new Label(device.name);
 			label.setJustify(GtkJustification.LEFT);
-			attach(
-				label,
-				0, 1,
-				row, row+1,
-				GtkAttachOptions.SHRINK, GtkAttachOptions.SHRINK,
-				0, 0
-			);
+			attach(label, 0, row, 2, 1);
 			auto deviceViewer = new DeviceViewer(device);
-			deviceViewer.setSizeRequest(50, 0);
-			attach(
-				deviceViewer,
-				1, 2,
-				row, row+1,
-				GtkAttachOptions.FILL|GtkAttachOptions.EXPAND, GtkAttachOptions.SHRINK,
-				0, 0
-			);
+			//deviceViewer.setSizeRequest(50, 0);
+			attach(deviceViewer, 2, row, 1, 1);
 			row++;
 		});
 	}
 
 }
+
 
 void spawnMainWindow(GdkRectangle area, int iconSize){
 	auto w = new MainWindow("Sound Settings");
@@ -153,7 +125,13 @@ void spawnMainWindow(GdkRectangle area, int iconSize){
 		return true;
 	});
 	w.showAll;
-	w.move(area.x-300+iconSize, area.y+iconSize);
+	auto screen = w.getScreen();
+	int width, h;
+	w.getSize(width, h);
+	w.move(
+		(area.x-width).max(iconSize).min(screen.width-width-iconSize),
+		area.y.max(iconSize).min(screen.height-h-iconSize)
+	);
 }
 
 
@@ -247,7 +225,7 @@ Device[] sources(){
 				devices[$-1].systemName = s.matchFirst(r"Name: (.*)")[1].to!string;
 			}else if(s.canFind("device.description")){
 				devices[$-1].name = s.matchFirst(`device.description = "(.*)"`)[1].to!string;
-			}else if(s.canFind("Base Volume: ")){
+			}else if(s.canFind("Volume: front")){
 				devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
 			}
 		}

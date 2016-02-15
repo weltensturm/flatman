@@ -1,0 +1,13 @@
+
+menu {
+	button-tab {
+		font Arial
+		font-size 10
+		height 22
+	}
+	button-tree {
+		font Arial
+		font-size 9
+		height 18
+	}
+}

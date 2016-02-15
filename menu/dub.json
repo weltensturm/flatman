@@ -4,8 +4,7 @@
 	"targetType": "executable",
 	"sourcePaths": ["src"],
 	"dependencies" : {
-		"ws": "~master",
-		"dinu": "~master"
+		"ws": ">=1.0.6"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"]
 }

@@ -80,8 +80,6 @@ class Workspace: Container {
 
 	override void remove(Client client){
 		"workspace removing %s".format(client.name).log;
-		auto refocus = client == active;
-		//client.hide;
 		foreach(c; children)
 			c.to!Container.remove(client);
 		if(!split.children)
@@ -98,7 +96,8 @@ class Workspace: Container {
 			["flatman-context", context.expandTilde.readText].execute;
 		}
 		floating.show;
-		focus(active);
+		if(active)
+			active.focus;
 	}
 
 	override void hide(){

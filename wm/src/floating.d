@@ -26,8 +26,8 @@ class Floating: Container {
 	override void show(){
 		if(!hidden)
 			return;
-		foreach(c; hiddenChildren){
-			c.show;
+		foreach(c; clients){
+			XMoveWindow(dpy, c.win, c.pos.x, c.pos.y);
 			updateClient(c);
 		}
 		hidden = false;
@@ -36,8 +36,8 @@ class Floating: Container {
 	override void hide(){
 		if(hidden)
 			return;
-		foreach(c; children)
-			c.hide;
+		foreach(c; clients)
+            XMoveWindow(dpy, c.win, c.pos.x, -monitor.size.h+c.pos.y);
 		hidden = true;
 	}
 
@@ -48,19 +48,21 @@ class Floating: Container {
 	alias add = Base.add;
 
 	override void add(Client client){
-		"split adding %s".format(client.name).log;
-		add(cast(Base)client);
-		if(!client.isfullscreen && !client.isfixed && !client.pos.x && !client.pos.y)
-			client.moveResize([pos.x/2-client.size.w/2, size.h-client.size.h], client.size);
+		"floating adding %s".format(client.name).log;
+		add(client.to!Base);
+		if(!client.isfullscreen && !client.isfixed && (!client.pos.x && !client.pos.y || client.pos.x < 0 || client.pos.y < 0)){
+			client.moveResize([pos.x+size.w/2-client.size.w/2, pos.y+size.h/2-client.size.h/2], client.size, true);
+		}else
+			client.configure;
 	}
 
 	override Client[] clients(){
-		return children.map!(a=>cast(Client)a).array;
+		return children.to!(Client[]);
 	}
 
 	void destroy(){
-		foreach(c; children)
-			unmanage(cast(Client)c, false);
+		foreach(c; children.to!(Client[]))
+			c.unmanage(false);
 	}
 
 	void focusDir(int dir){
@@ -69,7 +71,7 @@ class Floating: Container {
 			newActive = 0;
 		else if(newActive < 0)
 			newActive = children.length-1;
-		focus(children[newActive].to!Client);
+		children[newActive].to!Client.focus;
 	}
 
 }

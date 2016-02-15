@@ -16,6 +16,10 @@ echo "Installing res/config.ws"
 mkdir -p "$installdir/etc/flatman/"
 cp -f res/config.ws "$installdir/etc/flatman/"
 
+echo "Installing res/menu"
+mkdir -p "$installdir/etc/flatman/"
+cp -f res/menu "$installdir/etc/flatman/"
+
 echo "Installing res/flatman.desktop"
 mkdir -p "$installdir/usr/share/xsessions/"
 cp -f res/flatman.desktop "$installdir/usr/share/xsessions/"

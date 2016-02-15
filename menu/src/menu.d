@@ -13,6 +13,13 @@ CardinalListProperty screenSize;
 CardinalProperty currentDesktop;
 
 
+struct Options {
+	@("-s") int screen = 0;
+}
+
+Options options;
+
+
 enum categories = [
 	"AudioVideo": "Media",
 	"Graphics": "Graphics",
@@ -21,6 +28,7 @@ enum categories = [
 	"Game": "Games",
 	"Network": "Internet",
 	"Office": "Office",
+	"Other": "Other",
 	"Utility": "Accessories",
 	"System": "System Tools",
 	"Settings": "System Settings"
@@ -28,21 +36,42 @@ enum categories = [
 
 
 void main(string[] args){
+	options.fill(args);
 	XInitThreads();
 	new Menu(400, 500, "flatman-menu");
 	wm.add(menuWindow);
 	while(wm.hasActiveWindows){
+		auto frameStart = now;
 		wm.processEvents;
-		menuWindow.onDraw;
 		menuWindow.tick;
-		Thread.sleep(10.msecs);
+		menuWindow.onDraw;
+		auto frameEnd = now;
+		Thread.sleep(((frameStart + 1.0/60.0 - frameEnd).max(0)*1000).lround.msecs);
 	}
+}
+
+
+
+struct Screen {
+	int x, y, w, h;
+}
+
+Screen[int] screens(){
+	int count;
+	auto screenInfo = XineramaQueryScreens(dpy, &count);
+	Screen[int] res;
+	foreach(screen; screenInfo[0..count])
+		res[screen.screen_number] = Screen(screen.x_org, screen.y_org, screen.width, screen.height);
+	XFree(screenInfo);
+	return res;
+
 }
 
 
 Atom atom(string name){
 	return XInternAtom(dpy, name.toStringz, false);
 }
+
 
 
 class Menu: ws.wm.Window {
@@ -65,24 +94,36 @@ class Menu: ws.wm.Window {
 
 	Scroller scroller;
 
+	Tree contexts;
+
+	Base keyboardFocus;
+
 	this(int w, int h, string title){
 		menuWindow = this;
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
 		screenSize = new CardinalListProperty(.root, "_NET_DESKTOP_GEOMETRY");
 		currentDesktop = new CardinalProperty(.root, "_NET_CURRENT_DESKTOP");
-		auto screen = screenSize.get(2);
+		auto screens = screens;
+		auto screen = [screens[options.screen].w, screens[options.screen].h];
 
 		inotify = new Inotify;
 
 		auto applications = getAll;
 
 		foreach(app; applications){
-			foreach(category, categoryNice; categories){
-				if(app.categories.canFind(category)){
-					appCategories[categoryNice] ~= app;
+			if(!app.exec.length || app.noDisplay)
+				continue;
+			bool found;
+			foreach(category; app.categories){
+				if(category in categories && category != "Other"){
+					found = true;
+					appCategories[categories[category]] ~= app;
+					break;
 				}
 			}
+			if(!found)
+				appCategories["Other"] ~= app;
 		}
 
 		scroller = addNew!Scroller;
@@ -91,27 +132,29 @@ class Menu: ws.wm.Window {
 		list.padding = 0;
 		list.style.bg = [0.1,0.1,0.1,1];
 		auto watcher = menuWindow.inotify.addWatch("~/.flatman/".normalize, false);
-		list.addFiles(watcher);
 		list.addApps(appCategories, categories);
-		list.addHistory(watcher);
+		contexts = list.addFiles(watcher);
+		list.addTrash;
+		//list.addHistory(watcher);
 
 		super(w, screen.h.to!int, title);
 
 		draw.setColor([0,0,0]);
 		draw.rect(pos,size);
 		draw.finishFrame;
+
 	}
 
 	override void drawInit(){
 		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
-		_draw.setFont("Arial", 9);
+		_draw.setFont(config["font"], config["font-size"].to!int);
 	}
 
 	override void gcInit(){}
 
 	override void show(){
 		new CardinalProperty(windowHandle, "_NET_WM_DESKTOP").set(-1);
-		//new AtomProperty(windowHandle, "_NET_WM_WINDOW_TYPE").set(atom("_NET_WM_WINDOW_TYPE_DIALOG"));
+		new AtomProperty(windowHandle, "_NET_WM_WINDOW_TYPE").set(atom("_NET_WM_WINDOW_TYPE_DIALOG"));
 		super.show;
 	}
 
@@ -122,11 +165,14 @@ class Menu: ws.wm.Window {
 			XMoveWindow(dpy, windowHandle, pos.x, pos.y);
 			XSync(dpy, false);
 		}
-		if(active)
+		if(active){
 			try
 				inotify.update;
 			catch(Exception e)
 				writeln(e);
+			foreach(c; contexts.children[1..$].to!(Path[]))
+				c.tick;
+		}
 	}
 
 	override void resize(int[2] size){
@@ -138,6 +184,7 @@ class Menu: ws.wm.Window {
 	override void onDraw(){
 		if(!active)
 			return;
+		Animation.update;
 		draw.setColor([0.867,0.514,0]);
 		draw.rect(pos, size);
 		draw.setColor([0.1,0.1,0.1]);
@@ -157,6 +204,22 @@ class Menu: ws.wm.Window {
 		super.onMouseFocus(focus);
 	}
 
+	override void onKeyboard(dchar c){
+		if(keyboardFocus)
+			keyboardFocus.onKeyboard(c);
+	}
+
+	override void onKeyboard(Keyboard.key key, bool pressed){
+		if(key == Keyboard.escape && !pressed){
+			if(keyboardFocus){
+				keyboardFocus.parent.remove(keyboardFocus);
+				keyboardFocus = null;
+			}else
+				menuWindow.onMouseFocus(false);
+		}
+		if(keyboardFocus)
+			keyboardFocus.onKeyboard(key, pressed);
+	}
 
 	override void onKeyboardFocus(bool focus){
 		writeln("FOCUS! ", focus);
@@ -194,10 +257,12 @@ class RootButton: Button {
 	}
 
 	override void onDraw(){
+		if(pos.y+size.h<0 || pos.y>menuWindow.size.h)
+			return;
 		double mod = (hasMouseFocus ? 1.1 : 1) * (tree && tree.expanded ? 1.3 : 1);
 		draw.setColor([0.15*mod,0.15*mod,0.15*mod]);
 		draw.rect(pos, size);
-		draw.setFont("Consolas", 10);
+		draw.setFont(config["button-tab", "font"], config["button-tab", "font-size"].to!int);
 		draw.setColor([0.9,0.9,0.9]);
 		draw.text(pos.a + [10, 0], size.h, name);
 	}

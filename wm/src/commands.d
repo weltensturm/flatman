@@ -102,7 +102,8 @@ void toggle(string what){
 			
 			break;
 		case "floating":
-			togglefloating;
+			if(active)
+				active.togglefloating;
 			break;
 		case "fullscreen":
 			togglefullscreen;
@@ -151,10 +152,12 @@ void workspace(string dir, string how){
 }
 
 void reload(){
-	config.load;
-	flatman.keys = [];
-	registerConfigKeys;
-	grabkeys;
+	//config.load;
+	//flatman.keys = [];
+	//registerConfigKeys;
+	//grabkeys;
+	restart = true;
+	running = false;
 }
 
 void toggleTabs(){

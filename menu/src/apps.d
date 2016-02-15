@@ -30,28 +30,29 @@ void addApps(DynamicList list, DesktopEntry[][string] apps, string[string] categ
 class ButtonExec: Button {
 
 	string parameter;
-	Type type;
+	string type;
+	double clickTime = 0;
 
 	this(){
 		super("");
-		font = "Consolas";
-		fontSize = 10;
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
 		super.onMouseButton(button, pressed, x, y);
 		if(button == Mouse.buttonLeft && !pressed){
+			clickTime = now;
 			spawnCommand;
 		}
 	}
 
 	void spawnCommand(){
-		menuWindow.onMouseFocus(false);
+		//menuWindow.onMouseFocus(false);
 	}
 
 	override void onDraw(){
 		if(mouseFocus){
-			draw.setColor([0.15, 0.15, 0.15]);
+			auto mul = 1.2-(now-clickTime-0.2).min(0.2);
+			draw.setColor([0.15*mul, 0.15*mul, 0.15*mul]);
 			draw.rect(pos, size);
 		}
 	}
@@ -63,17 +64,22 @@ class ButtonDesktop: ButtonExec {
 
 	string name;
 	string exec;
+	bool previewDrop;
 
 	this(string data){
 		auto split = data.bangSplit;
 		name = split[0];
 		exec = split[1];
-		type = Type.desktop;
+		type = "desktop";
 	}
 
 	override void onDraw(){
-		super.onDraw;
-		draw.setFont(font, fontSize);
+		if(mouseFocus || previewDrop){
+			auto mul = 1.2-(now-clickTime-0.2).min(0.2);
+			draw.setColor([0.15*mul, 0.15*mul, 0.15*mul]);
+			draw.rect(pos, size);
+		}
+		draw.setFont(config["button-tree", "font"], config["button-tree", "font-size"].to!int);
 		draw.setColor([189/255.0, 221/255.0, 255/255.0]);
 		draw.text(pos.a+[10,0], size.h, name);
 		auto textw = draw.width(name) + draw.fontHeight*2;
@@ -89,7 +95,25 @@ class ButtonDesktop: ButtonExec {
 		auto x = exec;
 		foreach(n; "uUfF")
 			x = x.replace("%" ~ n, parameter);
-		execute(type, [name,exec].bangJoin.replace("!", "\\!"), x, parameter);
+		contextPath.execute(type, [name,exec].bangJoin.replace("!", "\\!"), x, parameter);
+	}
+
+	override Base dropTarget(int x, int y, Base draggable){
+		if(cast(ButtonFileGhost)draggable && ["%u","%U","%f","%F"].any!(a => exec.canFind(a)))
+			return this;
+		return super.dropTarget(x, y, draggable);
+	}
+
+	override void dropPreview(int x, int y, Base draggable, bool start){
+		previewDrop = start;
+	}
+
+	override void drop(int x, int y, Base draggable){
+		root.remove(draggable);
+		auto button = cast(ButtonFileGhost)draggable;
+		parameter = button.source.file;
+		spawnCommand;
+		previewDrop = false;
 	}
 
 }
@@ -101,11 +125,11 @@ class ButtonScript: ButtonExec {
 
 	this(string data){
 		exec = data;
-		type = Type.script;
+		type = "script";
 	}
 
 	override void onDraw(){
-		draw.setFont(font, fontSize);
+		draw.setFont(config["button-tree", "font"], config["button-tree", "font-size"].to!int);
 		super.onDraw;
 		draw.setColor([187/255.0,187/255.0,255/255.0]);
 		draw.text(pos.a+[10,0], size.h, exec);
@@ -114,7 +138,7 @@ class ButtonScript: ButtonExec {
 	}
 
 	override void spawnCommand(){
-		execute(type, exec.replace("!", "\\!"), exec, parameter.replace("!", "\\!"));
+		contextPath.execute(type, exec.replace("!", "\\!"), exec, parameter.replace("!", "\\!"));
 	}
 
 }

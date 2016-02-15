@@ -8,16 +8,21 @@ __gshared:
 CompositeManager manager;
 
 
+bool running = true;
+
+
 void main(){
 	try {
 		XSetErrorHandler(&xerror);
 		root = XDefaultRootWindow(wm.displayHandle);
 		manager = new CompositeManager;
 		while(true){
-			auto frameStart = Clock.currSystemTick.msecs/1000.0;
 			wm.processEvents;
+			auto frameStart = now;
 			manager.draw;
-			auto frameEnd = Clock.currSystemTick.msecs/1000.0;
+			auto frameEnd = now;
+			if(frameEnd - frameStart > 1.0/58)
+				writeln(frameEnd - frameStart);
 			Thread.sleep(((frameStart + 1.0/60.0 - frameEnd).max(0)*1000).lround.msecs);
 		}
 	}catch(Throwable t){
@@ -94,8 +99,8 @@ class CompositeManager {
 
 	this(){
 
-		XSynchronize(wm.displayHandle, true);
-
+		//XSynchronize(wm.displayHandle, true);
+		XInitThreads;
 		width = DisplayWidth(wm.displayHandle, DefaultScreen(wm.displayHandle));
 		height = DisplayHeight(wm.displayHandle, DefaultScreen(wm.displayHandle));
 
@@ -113,7 +118,6 @@ class CompositeManager {
 		"redirected subwindows".writeln;
 		visual = DefaultVisual(wm.displayHandle, 0);
 		depth = DefaultDepth(wm.displayHandle, 0);
-		auto format = XRenderFindVisualFormat(wm.displayHandle, visual);
 		XSelectInput(wm.displayHandle, root,
 		    SubstructureNotifyMask
 		    | ExposureMask
@@ -124,6 +128,7 @@ class CompositeManager {
 
 		XRenderPictureAttributes pa;
 		pa.subwindow_mode = IncludeInferiors;
+		auto format = XRenderFindVisualFormat(wm.displayHandle, visual);
 		frontBuffer = XRenderCreatePicture(wm.displayHandle, root, format, CPSubwindowMode, &pa);
 		Pixmap pixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), DefaultDepth(wm.displayHandle, 0));
 		backBuffer = XRenderCreatePicture(wm.displayHandle, pixmap, format, 0, null);
@@ -165,6 +170,7 @@ class CompositeManager {
 		get_root_tile;
 
 		initAlpha;
+		setupVerticalSync;
 	}
 	
 	Picture colorPicture(bool argb, double a, double r, double g, double b){
@@ -257,11 +263,12 @@ class CompositeManager {
 				}
 			}
 		}else{
-			foreach(c; clients){
-				if(c.windowHandle == e.window){
-					if(e.atom == c.workspaceProperty.property){
+			if(clients.length && e.atom == clients[0].workspaceProperty.property){
+				foreach(c; clients){
+					if(c.windowHandle == e.window){
 						c.workspace = c.workspaceProperty.get;
 						c.workspaceAnimation(workspace, workspace);
+						running = false;
 					}
 				}
 			}
@@ -332,6 +339,23 @@ class CompositeManager {
 		XUngrabServer(wm.displayHandle);
 	}
 
+	x11.X.Window vsyncWindow;
+
+	void setupVerticalSync(){
+		GLint[] att = [GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, 0];
+		auto graphicsInfo = glXChooseVisual(wm.displayHandle, 0, att.ptr);
+		auto graphicsContext = glXCreateContext(wm.displayHandle, graphicsInfo, null, True);
+		writeln(graphicsContext);
+		vsyncWindow = XCreateSimpleWindow(wm.displayHandle, root, 0, 0, 1, 1, 0, 0, 0);
+		//XMapWindow(wm.displayHandle, vsyncWindow);
+		glXMakeCurrent(wm.displayHandle, cast(uint)vsyncWindow, cast(__GLXcontextRec*)graphicsContext);
+	}
+
+	void verticalSync(){
+		glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
+		glFinish();
+	}
+
 	void draw(){
 		Animation.update;
 		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
@@ -361,7 +385,7 @@ class CompositeManager {
 							wm.displayHandle,
 							alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
 							c.resizeGhost,
-							alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
+							alpha < 1 ? this.alpha[((1-alpha)*ALPHA_STEPS).to!int] : None,
 							backBuffer,
 							0,0,0,0,
 							(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
@@ -388,6 +412,8 @@ class CompositeManager {
 
 			}
 		}
+		//XSync(wm.displayHandle, false);
+		//verticalSync;
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
 	}
 

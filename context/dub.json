@@ -3,5 +3,5 @@
 	"description" : "per-workspace current directory for flatman",
 	"targetType": "executable",
 	"sourcePaths": ["src"],
-	"dependencies": {"ws": "~master"}
+	"dependencies": {"ws": ">=1.0.6"}
 }

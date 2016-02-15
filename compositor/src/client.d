@@ -50,7 +50,7 @@ class CompositeClient: ws.wm.Window {
 			XFreePixmap(wm.displayHandle, pixmap);
 		if(picture)
 			XRenderFreePicture(wm.displayHandle, picture);
-		"create picture %s".format(getTitle).writeln;
+		"create picture".writeln;
 		if(!XGetWindowAttributes(wm.displayHandle, windowHandle, &a)){
 			"could not get attributes".writeln;
 			return;
@@ -94,13 +94,12 @@ class CompositeClient: ws.wm.Window {
 	}
 
 	override void resize(int[2] size){
-		hidden = false;
 		auto spd = (animation.size.x.calculate + animation.size.y.calculate + 0.0).sqrt/1000;
 		animation.size.x.change(size.x);
 		animation.size.y.change(size.y);
 		resizeGhostSize = this.size;
+		"resize %s %s old %s".format(getTitle, size, this.size).writeln;
 		this.size = size;
-		"resize %s %s".format(getTitle, size).writeln;
 		
 		if(resizeGhostPixmap)
 			XFreePixmap(wm.displayHandle, resizeGhostPixmap);

@@ -72,7 +72,7 @@ class ListPopup: ws.wm.Window {
 		//	return;
 		//draw.setColor([0.1,0.1,0.1]);
 		draw.setColor([0.867,0.514,0]);
-		draw.rect(pos, size);
+		draw.rect([0,0], size);
 		super.onDraw;
 		draw.finishFrame;
 	}

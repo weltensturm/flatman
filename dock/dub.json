@@ -4,9 +4,8 @@
 	"targetType": "executable",
 	"sourcePaths": ["src"],
 	"dependencies" : {
-		"ws": "~master",
-		"dinu": "~master",
-		"gtk-d": "~master"
+		"ws": ">=1.0.6",
+		"gtk-d": ">=3.2.0"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"]
 }

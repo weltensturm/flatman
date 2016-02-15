@@ -38,9 +38,33 @@ struct NetAtoms {
 	@("_NET_WM_WINDOW_TYPE_DOCK") Atom windowTypeDock;
 	@("_NET_WM_WINDOW_TYPE_SPLASH") Atom windowTypeSplash;
 	@("_NET_WM_DESKTOP") Atom windowDesktop;
+
+	@("_NET_SUPPORTING_WM_CHECK") Atom supportingWm;
 }
 
 NetAtoms net;
+
+Window getWindow(Window window, Atom prop){
+	int di;
+	ulong dl;
+	ubyte* p;
+	Atom da, atom = None;
+	if(XGetWindowProperty(dpy, window, prop, 0L, atom.sizeof, false, XA_WINDOW,
+	                      &da, &di, &dl, &dl, &p) == Success && p){
+		atom = *cast(Atom*)p;
+		XFree(p);
+	}
+	return atom;
+}
+
+
+void setSupportingWm(){
+	auto window = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
+	foreach(w; [root, window]){
+		w.replace(net.supportingWm, window);
+		w.replace(net.name, "flatman");
+	}
+}
 
 
 void updateCurrentDesktop(){

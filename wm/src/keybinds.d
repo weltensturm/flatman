@@ -53,7 +53,7 @@ void registerConfigKeys(){
 
 	buttons = [
 		Button(MODKEY, Button1, {mousemove;} ),
-		Button(MODKEY, Button2, {togglefloating;} ),
+		Button(MODKEY, Button2, {if(active) active.togglefloating;} ),
 		Button(MODKEY, Button3, {mouseresize;} ),
 	];
 

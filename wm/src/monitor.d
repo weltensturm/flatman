@@ -5,11 +5,17 @@ import flatman;
 __gshared:
 
 
+struct StrutInfo {
+	Client client;
+	int[4] strut;
+}
+
+
 class Monitor {
 
 	int[2] pos;
 	int[2] size;
-	Client[] strutClients;
+	StrutInfo[] strutList;
 
 	Workspace[] workspaces;
 	Client[] globals;
@@ -32,6 +38,8 @@ class Monitor {
 			if(workspace && file.endsWith("current")){
 				workspace.updateContext("~/.flatman/current".expandTilde.readText);
 			}
+			if(file.endsWith("current") || file.endsWith(".context"))
+				updateDesktopNames;
 		};
 	}
 
@@ -77,6 +85,7 @@ class Monitor {
 			workspaceActive++;
 		updateDesktopCount;
 		updateWorkspaces;
+		resize(size);
 	}
 
 	void switchWorkspace(int pos){
@@ -101,8 +110,6 @@ class Monitor {
 		workspace.show;
 		draw;
 		updateCurrentDesktop;
-		updateDesktopNames;
-		//environment["FLATMAN_WORKSPACE"] = workspaceActive.to!string;
 	}
 
 	void moveWorkspace(int pos){
@@ -179,10 +186,7 @@ class Monitor {
 		}
 		globals = globals.without(client);
 		XSync(dpy, false);
-		if(strutClients.canFind(client)){
-			strutClients = strutClients.without(client);
-			resize(size);
-		}
+		strut(client, true);
 	}
 
 	void draw(){
@@ -210,31 +214,37 @@ class Monitor {
 
 	void resize(int[2] size){
 		this.size = size;
+		int[4] reserve;
+		foreach(c; strutList){
+			"monitor using strut %s %s".format(c.client.name, c.strut).log;
+			reserve[] += c.strut[];
+		}
 		foreach(ws; workspaces){
-			long[4] reserve;
-			foreach(c; strutClients){
-				auto s = c.getStrut;
-				"monitor using strut %s %s".format(c.name, s).log;
-				reserve[] += s[];
-			}
-			ws.move([cast(int)reserve[0], cast(int)reserve[2]]);
-			ws.resize([cast(int)(size.w-reserve[1]-reserve[0]), cast(int)(size.h-reserve[2]-reserve[3])]);
+			ws.move([reserve[0].to!int, cast(int)reserve[2]]);
+			ws.resize([(size.w-reserve[1]-reserve[0]).to!int, (size.h-reserve[2]-reserve[3]).to!int]);
 		}
 	}
 
 	void strut(Client client, bool remove=false){
 		XSync(dpy, false);
-		if(strutClients.canFind(client)){
-			if(remove){
-				"monitor remove strut %s".format(client).log;
-				strutClients = strutClients.without(client);
-				resize(size);
-			}
-		}else if(!remove && client.getStrut[0..4].any){
-			"monitor add strut %s %s".format(client.name, client.getStrut).log;
-			strutClients ~= client;
-			resize(size);
+		auto found = strutList.any!(a => a.client == client);
+		if(found){
+			"monitor remove strut %s".format(client).log;
+			strutList = strutList.filter!(a => a.client != client).array;
 		}
+
+		if(!remove && client.getStrut[0..4].any){
+			"monitor add strut %s %s".format(client.name, client.getStrut).log;
+			if(!found){
+				auto data = client.getStrut[0..4];
+				foreach(ref d; data){
+					if(d < 0 || d > 200)
+						d = 0;
+				}
+				strutList ~= StrutInfo(client, data.to!(int[4]));
+			}
+		}
+		resize(size);
 	}
 
 }

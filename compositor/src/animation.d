@@ -8,7 +8,7 @@ class Animation {
 
 	static double time;
 	static update(){
-		time = Clock.currSystemTick.msecs/1000.0;
+		time = now;
 	}
 
 	double start;

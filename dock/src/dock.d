@@ -24,11 +24,11 @@ void main(){
 		composite = new Composite;
 		wm.add(dockWindow);
 		while(wm.hasActiveWindows){
-			auto frameStart = Clock.currSystemTick.msecs/1000.0;
+			auto frameStart = now;
 			wm.processEvents;
 			dockWindow.onDraw;
 			dockWindow.tick;
-			auto frameEnd = Clock.currSystemTick.msecs/1000.0;
+			auto frameEnd = now;
 			Thread.sleep(((frameStart + 1.0/60.0 - frameEnd).max(0)*1000).lround.msecs);
 		}
 	}catch(Throwable t){
@@ -68,6 +68,8 @@ class Composite {
 	Picture picture;
 	Picture transparency;
 
+	int[4] clipInfo = [0,0,int.max,int.max];
+
 	this(){
 		foreach(i; 0..ScreenCount(dpy))
 		    XCompositeRedirectSubwindows(dpy, RootWindow(dpy, i), 0);
@@ -76,6 +78,14 @@ class Composite {
 		XRenderPictureAttributes pa;
 		picture = XRenderCreatePicture(dpy, (cast(XDraw)dockWindow._draw).drawable, format, CPSubwindowMode, &pa);
 		transparency = colorPicture(false, 0.7, 0, 0, 0);
+	}
+
+	void clip(int[2] pos, int[2] size){
+		clipInfo = pos ~ size;
+	}
+
+	void noclip(){
+		clipInfo = [0,0,int.max,int.max];
 	}
 
 	void draw(CompositeClient window, int[2] pos, int[2] size, bool ghost=false){
@@ -130,28 +140,44 @@ class Composite {
 
 }
 
+
+
+struct Screen {
+	int x, y, w, h;
+}
+
+Screen[int] screens(){
+	int count;
+	auto screenInfo = XineramaQueryScreens(dpy, &count);
+	Screen[int] res;
+	foreach(screen; screenInfo[0..count])
+		res[screen.screen_number] = Screen(screen.x_org, screen.y_org, screen.width, screen.height);
+	XFree(screenInfo);
+	return res;
+
+}
+
+
 class WorkspaceDock: ws.wm.Window {
 
-	Property!(XA_CARDINAL, true) screenSizeProperty;
-	long[] screenSize;
-	
 	Property!(XA_CARDINAL, false) workspaceCountProperty;
 	long workspaceCount;
 
 	Property!(XA_CARDINAL, false) workspaceProperty;
 	long workspace;
 	bool canSwitch;
+	int[2] screenSize;
 	
 	Property!(XA_STRING, false) workspaceNamesProperty;
 	string[] workspaceNames;
-	
+	ubyte[3][] workspaceColors;
 	Picture root_picture;
 
 	CompositeClient[] clients;
 	x11.X.Window[] windows;
 	CompositeClient[][long] workspaces;
 
-	long showTime;
+	double showTime;
 	bool focus;
 
 	Pid launcher;
@@ -164,8 +190,8 @@ class WorkspaceDock: ws.wm.Window {
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
 		
-		screenSizeProperty = new Property!(XA_CARDINAL, true)(dock.root, "_NET_DESKTOP_GEOMETRY");
-		screenSize = screenSizeProperty.get;
+		auto screens = screens;
+		screenSize = [screens[0].w, screens[0].h];
 		
 		workspaceProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_CURRENT_DESKTOP");
 		canSwitch = true;
@@ -174,8 +200,9 @@ class WorkspaceDock: ws.wm.Window {
 		workspaceCount = workspaceCountProperty.get;
 		
 		workspaceNamesProperty = new Property!(XA_STRING, false)(dock.root, "_NET_DESKTOP_NAMES");
-		workspaceNames = workspaceNamesProperty.get.split('\0')[0..$-1];
-		writeln(workspaceNames);
+		auto names = workspaceNamesProperty.get.split('\0');
+		if(names.length)
+			workspaceNames = names[0..$-1];
 
 		w = cast(int)(screenSize.w/10);
 
@@ -322,14 +349,17 @@ class WorkspaceDock: ws.wm.Window {
 					canSwitch = true;
 				if(canSwitch)
 					workspace = ws;
-				showTime = Clock.currSystemTick.msecs+300;
+				showTime = now+0.3;
 			}else if(e.atom == workspaceCountProperty.property){
 				workspaceCount = workspaceCountProperty.get;
-				showTime = Clock.currSystemTick.msecs+300;
-			}else if(e.atom == screenSizeProperty.property){
-				screenSize = screenSizeProperty.get;
+				showTime = now+0.3;
+				canSwitch = true;
 			}else if(e.atom == workspaceNamesProperty.property){
 				workspaceNames = workspaceNamesProperty.get.split('\0')[0..$-1];
+				import std.digest.md;
+				workspaceColors = [];
+				foreach(i, n; workspaceNames)
+					workspaceColors ~= digest!MD5(n)[0..3];
 			}else
 				return;
 			update;
@@ -372,13 +402,7 @@ class WorkspaceDock: ws.wm.Window {
 	override void show(){
 		auto windowWorkspace = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 		windowWorkspace.set(-1);
-		/+
-		auto type = [
-			atom("_NET_WM_WINDOW_TYPE_DOCK"),
-			atom("_NET_WM_WINDOW_TYPE_DIALOG"),
-		];
-		new Property!(XA_ATOM, true)(windowHandle, "_NET_WM_WINDOW_TYPE").setAtoms(type);
-		+/
+		new Property!(XA_ATOM, false)(windowHandle, "_NET_WM_WINDOW_TYPE").set(atom("_NET_WM_WINDOW_TYPE_DIALOG"));
 		super.show;
 	}
 
@@ -390,6 +414,62 @@ class WorkspaceDock: ws.wm.Window {
 	override void resize(int[2] size){
 		super.resize(size);
 		draw.resize(size);
+	}
+
+	void tick(){
+		int targetX = cast(int)screenSize.w-(visible ? size.w : 1);
+		if(pos.x != targetX || pos.y != 0){
+			XMoveWindow(dpy, windowHandle, targetX, 0);
+			//XRaiseWindow(dpy, windowHandle);
+		}
+	}
+
+	bool visible(){
+		return showTime > now || focus;
+	}
+
+	void update(){
+		XMapWindow(dpy, windowHandle);
+		XSync(dpy, false);
+		foreach(c; children)
+			remove(c);
+		auto count = workspaceCount*2+1;
+		auto ratio = screenSize.w/cast(double)screenSize.h;
+		auto height = cast(int)(size.w/ratio)+6;
+		workspaces = workspaces.init;
+		foreach(c; clients){
+			if(!c.hidden){
+				if(c.workspace == -1)
+					foreach(ws; workspaces)
+						ws ~= c;
+				else
+					workspaces[c.workspace] ~= c;
+			}
+		}
+		int[] desktopsHeight;
+		foreach(i; 0..count){
+			bool empty = i % 2 == 0;
+			desktopsHeight ~= empty ? (draw.fontHeight/1.4).to!int : height;
+		}
+
+		auto heightSum = desktopsHeight.reduce!"a+b";
+		auto heightRatio = ((size.h-draw.fontHeight*2-10).to!double/heightSum).min(1);
+
+		int y = size.h/2 - heightSum.min(size.h-draw.fontHeight*2-10)/2;
+
+		foreach(i; 0..count){
+			bool empty = i % 2 == 0;
+			auto ws = addNew!WorkspaceView(this, count-1-i, empty);
+			if(i/2 < workspaceNames.length && i/2 >= 0)
+				ws.name = workspaceNames[$-i/2-1];
+			if(i/2 < workspaceColors.length && i/2 >= 0)
+				ws.color = workspaceColors[$-i/2-1];
+			ws.resize([(size.w*heightRatio).lround.to!int, (desktopsHeight[i]*heightRatio).lround.to!int]);
+			ws.move([size.w/2-ws.size.w/2, y]);
+			ws.update;
+			y += ws.size.h;
+		}
+
 	}
 
 	override void onDraw(){
@@ -410,60 +490,16 @@ class WorkspaceDock: ws.wm.Window {
 		draw.finishFrame;
 	}
 
-	void tick(){
-		int targetX = cast(int)screenSize.w-(visible ? size.w : 1);
-		if(pos.x != targetX || pos.y != 0){
-			XMoveWindow(dpy, windowHandle, targetX, 0);
-			//XRaiseWindow(dpy, windowHandle);
-		}
-	}
-
-	bool visible(){
-		return showTime > Clock.currSystemTick.msecs || focus;
-	}
-
-	void update(){
-		XMapWindow(dpy, windowHandle);
-		XSync(dpy, false);
-		foreach(c; children)
-			remove(c);
-		auto count = workspaceCount*2+1;
-		auto ratio = screenSize.w/cast(double)screenSize.h;
-		auto height = cast(int)(size.w/ratio)+6;
-		workspaces = workspaces.init;
-		foreach(c; clients){
-			if(!c.hidden)
-				workspaces[c.workspace] ~= c;
-		}
-		int[] desktopsHeight;
-		foreach(i; 0..count){
-			bool empty = i % 2 == 0;
-			desktopsHeight ~= empty ? (draw.fontHeight/1.4).to!int : height;
-		}
-		int y = size.h/2 - desktopsHeight.reduce!"a+b"/2;
-
-		foreach(i; 0..count){
-			bool empty = i % 2 == 0;
-			auto ws = addNew!WorkspaceView(this, count-1-i, empty);
-			if(i/2 < workspaceNames.length && i/2 >= 0)
-				ws.name = workspaceNames[$-i/2-1];
-			ws.move([0, y]);
-			ws.resize([size.w, desktopsHeight[i]]);
-			ws.update;
-			y += ws.size.h;
-		}
-	}
-
 	override void onMouseFocus(bool focus){
 		this.focus = focus;
-		if(showTime < Clock.currSystemTick.msecs)
-			showTime = Clock.currSystemTick.msecs+300;
+		if(showTime < now)
+			showTime = now+0.3;
 	}
 	
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
 		if((button == Mouse.wheelDown || button == Mouse.wheelUp) && pressed){
 			auto newWorkspace = workspace + (button == Mouse.wheelDown ? 1 : -1);
-			if(newWorkspace >= 0 && newWorkspace+1 < workspaces.length){
+			if(newWorkspace >= 0 && newWorkspace < workspaces.length){
 				canSwitch = false;
 				workspace = newWorkspace;
 				workspaceProperty.request([workspace, CurrentTime]);
@@ -482,6 +518,7 @@ class WorkspaceView: Base {
 	string name = "~";
 	bool preview;
 	bool empty;
+	ubyte[3] color;
 
 	this(WorkspaceDock dock, long id, bool empty){
 		this.dock = dock;
@@ -541,13 +578,16 @@ class WorkspaceView: Base {
 	}
 
 	override void onDraw(){
-		if(preview || (id == dock.workspace && !empty)){
-			if(id == dock.workspace && !empty)
-				draw.setColor([0.867,0.514,0]);
-			else
-				draw.setColor([0.6,0.6,0.6]);
-			dock.draw.rect(pos.a+[3,3], [size.w-6, size.h-6]);
-		}
+		draw.clip(pos, size);
+		if(id == dock.workspace && !empty)
+			draw.setColor([0.867,0.514,0]);
+		else if(preview)
+			draw.setColor([1,1,1]);
+		//else
+		//	draw.setColor([color[0]/400.0, color[1]/400.0, color[2]/400.0]);
+
+		if(id == dock.workspace && !empty || empty && preview)
+			dock.draw.rect(pos.a+[3,3], [size.w-6, size.h.max(8)-6]);
 
 		if(!empty)
 			composite.render(dockWindow.root_picture, pos, size);
@@ -555,16 +595,17 @@ class WorkspaceView: Base {
 		super.onDraw;
 
 		if(!empty){
-			composite.rect([pos.x+6, pos.y+6], [size.w-12, draw.fontHeight], [0,0,0,0.7]);
-			//draw.rect(pos.a+[6,size.h-draw.fontHeight-6], [size.w-12, draw.fontHeight]);
-			draw.setColor([0.1,0.1,0.1]);
-			draw.setColor([0.867,0.867,0.867]);
+			composite.rect([pos.x+6, pos.y+6], [size.w-12, draw.fontHeight], [0,0,0,0.85]);
+			draw.setColor([1,1,1]);
 			dock.draw.text(pos.a+[size.w/2,6], name, 0.5);
+			//draw.setColor([color[0]/255.0, color[1]/255.0, color[2]/255.0]);
+			//draw.rect(pos.a+[6,6], [4,draw.fontHeight]);
 		}
+		draw.noclip;
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.buttonLeft && !pressed){
+		if(button == Mouse.buttonLeft && !pressed && !dragging){
 			dock.workspaceProperty.request([id, CurrentTime, empty ? 1 : 0]);
 		}
 		super.onMouseButton(button, pressed, x, y);

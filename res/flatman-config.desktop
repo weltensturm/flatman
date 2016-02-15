@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=flatman
+Comment=improved dynamic tiling window manager
+Exec=flatman-config
+Type=Application
+DesktopNames=flatman
+Name[en_US]=flatman config
+Comment[en_US]=configuration for flatman

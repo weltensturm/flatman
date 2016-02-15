@@ -6,5 +6,5 @@ set -e
 
 for part in "${parts[@]}"; do
 	echo "Building $part"
-	(cd "$part"; dub build)
+	(cd "$part"; $(rm dub.selections.json || true); dub build > /dev/null)
 done

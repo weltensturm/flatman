@@ -158,7 +158,7 @@ class Split: Container {
 				Client client = tabs.active;
 				remove(client);
 				add(client, clientActive+dir);
-				flatman.focus(client);
+				client.focus;
 			}
 		}
 		lock = false;
@@ -291,13 +291,13 @@ class Split: Container {
 		auto client = dir == 0 ? active : (dir > 0 ? next : prev);
 		if(client){
 			"focus dir %s client %s".format(dir, client.name).log;
-			flatman.focus(client);
+			client.focus;
 		}
 	}
 
 	void focusTabs(int dir){
 		if(clientActive+dir >= 0 && clientActive+dir < children.length){
-			focus(children[clientActive+dir].to!Tabs.active);
+			children[clientActive+dir].to!Tabs.active.focus;
 		}
 	}
 

@@ -4,7 +4,7 @@ keys {
 	alt+d				exec dinu -fn Monospace-9 -c "$(flatman-context -p)"
 	alt+Return			exec cd "$(flatman-context)" && terminator
 	alt+n				exec firefox
-	alt+shift+w			exec i3lock && systemctl suspend
+	alt+shift+w			exec i3lock -c 000000 && systemctl suspend
 	alt+j				focus dir -
 	alt+Left			focus dir -
 	alt+i				focus stack -
@@ -44,24 +44,31 @@ keys {
 }
 
 
+autostart {
+	flatman-dock
+	flatman-menu
+	flatman-compositor
+	flatman-volume-icon
+}
+
+
 split {
-	background 222222
-	border 0 0 2 0
 	paddingElem 0
 	paddingOuter 0 0 2 0
-	border {
+	background 222222
+	background {
 		normal 222222
+		hover 444444
+		active dd8300
+		urgent 222222
+	}
+	border 0 0 2 0
+	border {
+		normal 444444
 		active dd8300
 		urgent ffff00
 		hover 444444
 		fullscreen 005588
-		insert {
-			normal 222222
-			active dd8300
-			urgent ffff00
-			hover 444444
-			fullscreen 005588
-		}
 	}
 	title {
 		font Tahoma
@@ -82,9 +89,26 @@ split {
 	}
 }
 
-bar {
-	background 222222
-	foreground 000000
+tabs {
+	border dd8300
+	background {
+		normal 222222
+		hover 444444
+		activeBg 333333
+		active dd8300
+		urgent 222222
+	}
+	title {
+		font Tahoma
+		font-size 9
+		show 0
+		normal cccccc
+		active ffffff
+		activeBg ffffff
+		urgent 000000
+		hover ffffff
+		fullscreen ffffff
+	}
 }
 
 dock {

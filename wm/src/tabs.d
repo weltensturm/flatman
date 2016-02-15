@@ -44,6 +44,7 @@ class Tabs: Container {
 			currentTabs = XInternAtom(dpy, "_FLATMAN_TABS", false);
 		if(!currentTab)
 			writeln("error");
+
 	}
 
 	void mouse(bool focus){
@@ -52,7 +53,7 @@ class Tabs: Container {
 		foreach(tabs; monitor.workspace.split.children.to!(Tabs[]))
 			tabs.resize(tabs.size);
 		if(focus && active && active != flatman.active)
-			flatman.focus(active);
+			active.focus;
 		monitor.peekTitles = focus;
 	}
 
@@ -74,7 +75,7 @@ class Tabs: Container {
 		if(!client)
 			return;
 		if(button == Mouse.buttonLeft){
-			flatman.focus(client);
+			client.focus;
 		}else if(button == Mouse.buttonMiddle && pressed){
 			killclient(client);
 			onDraw;
@@ -91,10 +92,7 @@ class Tabs: Container {
 		XMapWindow(dpy, window);
 		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
 		if(active)
-			active.show;
-		foreach(c; children.to!(Client[])){
-			XMoveWindow(dpy, c.win, c.pos.x, c.pos.y);
-		}
+			active.configure;
 		resize(size);
 		onDraw;
 		hidden = false;
@@ -104,7 +102,7 @@ class Tabs: Container {
 		if(hidden)
 			return;
 		//XUnmapWindow(dpy, window);
-        XMoveWindow(dpy, window, pos.x, -monitor.size.h);
+        XMoveWindow(dpy, window, pos.x, -monitor.size.h+pos.y);
 		foreach(c; clients){
             XMoveWindow(dpy, c.win, c.pos.x, -monitor.size.h+c.pos.y);
         }
@@ -195,8 +193,10 @@ class Tabs: Container {
 	override void active(Client client){
 		if(active && active != client)
 			active.hide;
-		if(!hidden && client.hidden)
+		if(!hidden && client.hidden){
 			client.show;
+			client.configure;
+		}
 		"tabs focus %s".format(client.name).log;
 		super.active = client;
 		if(!hidden)
@@ -206,18 +206,21 @@ class Tabs: Container {
 	override void resize(int[2] size){
 		super.resize(size);
 		auto padding = config["split paddingOuter"].split.to!(int[4]);
+		draw.setFont(config["tabs title font"], config["tabs title font-size"].to!int);
+		auto bh = (draw.fontHeight*1.2).lround.to!int;
+		writeln(active);
 		if(active){
 			if(active.isfullscreen){
-				active.moveResize(active.monitor.pos, active.monitor.size);
+				active.moveResize(monitor.pos, monitor.size);
 			}else{
 				active.moveResize(
-					pos.a + [padding[0], showTabs ? bh : padding[2]],
+					pos.a + [padding[0], showTabs ? bh : padding[2] - (hidden ? monitor.size.h : 0)],
 					size.a - [padding[0]+padding[1], (showTabs ? bh : padding[2])+padding[3]]
 				);
 			}
 		}
 		//XRaiseWindow(dpy, window);
-		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, (monitor.peekTitles || showTabs) ? bh : padding[2]);
+		XMoveResizeWindow(dpy, window, pos.x, pos.y-(hidden ? monitor.size.h : 0), size.w, (monitor.peekTitles || showTabs) ? bh : padding[2]);
 		draw.resize(size);
 		onDraw;
 	}
@@ -225,78 +228,46 @@ class Tabs: Container {
 	override void onDraw(){
 		if(hidden)
 			return;
+		draw.setFont(config["tabs title font"], config["tabs title font-size"].to!int);
+		auto bh = (draw.fontHeight*1.2).lround.to!int;
 		int offset = 0;
 		bool containerFocused = clients.canFind(flatman.active);
-		draw.setColor(config.color("split background"));
-		draw.rect([0,0], size);
 		foreach(i, c; children.to!(Client[])){
-			auto gap = config["split paddingElem"].to!int;
 			bool hover = mouseFocus && cursorPos.x > offset && cursorPos.x < offset+size.w/cast(int)children.length;
 			auto state = (
 					c.isUrgent ? "urgent"
 					: flatman.active == c ? "active"
 					: hover ? "hover"
+					: !containerFocused && i == clientActive ? "activeBg"
 					: c.isfullscreen ? "fullscreen"
 					: "normal");
-			auto color = config.color("split border "
-					~ (showTabs ? "insert " : "")
-					~ state);
 			draw.clip([offset,0], [size.w/cast(int)children.length,size.h]);
-			if(!containerFocused && i == clientActive){
-				draw.setColor(config.color("split border hover"));
-			}else
-				draw.setColor(color);
+			draw.setColor(config.color("tabs background " ~ state));
 			draw.rect([offset,0], [size.w/cast(int)children.length,size.h]);
 			if(monitor.peekTitles || showTabs){
-				color = config.color("split title "
-						~ (showTabs ? "insert " : "")
-						~ state);
-				draw.setFont(config["split title font"], config["split title font-size"].to!int);
+				auto textOffset = offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh);
 				draw.setColor([0.1,0.1,0.1]);
 				foreach(x; [-1,0,1]){
 					foreach(y; [-1,0,1]){
-						draw.text([x+offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh), y+size.h-bh], bh+2, c.name);
+						draw.text([x+textOffset, y+size.h-bh], bh+2, c.name);
 					}
 				}
-				draw.setColor(color);
-				draw.text([offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh), size.h-bh], bh+2, c.name);
-				if(c.icon){
-					foreach(x; 0..c.iconSize.w){
-						foreach(y; 0..c.iconSize.h){
-							long ii = x+y*c.iconSize.w;
-							draw.setColor([c.icon[ii], c.icon[ii+1], c.icon[ii+2]]);
-							draw.rect([offset+cast(int)x,size.h-bh+cast(int)y], [2,2]);
-						}
+				draw.setColor(config.color("tabs title " ~ state));
+				draw.text([textOffset, size.h-bh], bh+2, c.name);
+				if(c.icon.length){
+					if(!c.xicon){
+						c.xicon = draw.to!XDraw.icon(c.icon, c.iconSize.to!(int[2]));
 					}
-					/+
-					draw.rect([offset,size.h-bh], [c.icon.width, c.icon.height]);
-					draw.to!XDraw.icon(c.icon, offset, size.h-bh);
-					+/
+					auto scale = (bh-4)/c.iconSize.h.to!double;
+					draw.to!XDraw.icon(c.xicon, (textOffset-c.iconSize.w*scale).to!int, 2, scale);
 				}
 			}
-			draw.setColor(config.color("split background"));
-			if(i != 0)
-				draw.rect([offset,0], [gap,size.h]);
-			if(i != children.length-1)
-				draw.rect([offset+size.w-gap,0], [2,size.h]);
 			draw.noclip;
 			offset += size.w/children.length;
 		}
-		if((monitor.peekTitles || showTabs) && containerFocused){
-			draw.setColor(config.color("split border active"));
-			draw.rect([0,size.h-bh], [size.w, 2]);
-		}
+		draw.setColor(config.color("split border active"));
+		draw.rect([0,size.h-bh], [size.w, 2]);
 		draw.finishFrame;
-	}
-
-}
-
-
-
-class TabsWindow {
-
-	this(){
-
 	}
 
 }

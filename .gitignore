@@ -11,6 +11,8 @@ dock/flatman-dock
 menu/flatman-menu
 volume-icon/flatman-volume-icon
 xinput-gui/flatman-input
+wm/flatman-wm
+context/flatman-context
 *.sync-conflict*
 *.swp
 1

@@ -1,5 +1,5 @@
 # flatman
-Flat window manager written in D
+Tiling window manager written in D
 
 ![Main](https://hostr.co/file/3LzpRDDPdQcr/flatman-3.png)
 ![Dock](https://hostr.co/file/e5sW4EXmFP4K/Untitled.png)
@@ -7,24 +7,23 @@ Flat window manager written in D
 ## features
 
 * tiled and tabbed window layout
-* 10 virtual desktops
-* virtual desktop dock
+* variable workspace count
+* workspace dock
+* combined app launcher and file manager
 * integrates well with `weltensturm/dinu`
 * EWMH support
 * support for external bars/docks
+* compositing
 
 Currently only horizontal layouts are supported. To create multiple tab stacks, move a window all the way to the left/right.
 
 ## usage
 
-* compile main and subprojects with `dub`
-* configure in `config.ws`, read order: `$installdir/config.ws`, `/etc/flatman/config.ws`, `~/.config/flatman/config.ws`
+* compile with `./build.sh`, install with `sudo ./install.sh`
+* configure in `~/.config/flatman/config.ws`, see `/etc/flatman/config.ws` for default configuration
 * usage of `weltensturm/dinu` as launcher is recommended
-* if `x11` causes problems, install `weltensturm/x11` and add it with `dub add-local <path-to-x11> <requested version>`
-* `~/.autostart.sh` is run on startup, add bar/dock and wallpaper (feh) there
 
 ## upcoming
 
 * full mouse support
 * vertical layout
-* compositing

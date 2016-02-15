@@ -7,9 +7,9 @@ import menu;
 string[] contexts;
 
 
-void addFiles(DynamicList list, Inotify.WatchStruct* watcher){
+Tree addFiles(DynamicList list, Inotify.WatchStruct* watcher){
 	auto buttonContexts = new RootButton("Files");
-	buttonContexts.resize([5,25]);
+	buttonContexts.resize([5, config["button-tab", "height"].to!int]);
 	auto contexts = list.addNew!FileTree(buttonContexts, false);
 	contexts.inset = 0;
 	contexts.tail = 10;
@@ -53,7 +53,6 @@ void addFiles(DynamicList list, Inotify.WatchStruct* watcher){
 			if(button.isSelectedContext != directory.expanded)
 				button.leftClick();
 		}
-		options.configPath = d;
 	};
 
 	foreach(entry; "~/.flatman/".normalize.dirEntries(SpanMode.breadth))
@@ -65,12 +64,51 @@ void addFiles(DynamicList list, Inotify.WatchStruct* watcher){
 	watcher.add ~= add;
 	watcher.change ~= change;
 	watcher.remove ~= remove;
+
+	return contexts;
 }
 
 
 interface Path {
 	string name();
+	string path();
 	bool isDirectoryTree();
+	void tick();
+}
+
+
+class InputFieldFile: InputField {
+
+	string type;
+
+	this(string type){
+		this.type = type;
+	}
+
+	override void onDraw(){
+		auto color = style.fg.normal;
+		
+		auto t = now;
+
+		auto alpha = (sin(t*PI*2)+0.5).min(1).max(0)*0.9+0.1;
+		draw.setColor([1*alpha,1*alpha,1*alpha]);
+		int x = 10+draw.width(text[0..cursor]);
+		draw.rect(pos.a + [x+4, 2], [1, size.h-4]);
+		
+		if(errorTime+2 > t){
+			alpha = clamp!float(errorTime+2 - t, 0, 1)/1;
+			draw.setColor([1,0,0,alpha]);
+			draw.rect(pos, size);
+			draw.setFont("Consolas", 9);
+			draw.setColor([1,1,1,alpha]);
+			draw.text(pos.a + [2, 0], size.h, error);
+		}
+		draw.setColor(type == "directory" ? (text.startsWith(".") ? [0.4,0.5,0.4] : [0.733,0.933,0.733])
+					: (text.startsWith(".") ? [0.4,0.4,0.4] : [0.933,0.933,0.933]));
+		draw.text(pos.a+[10,0], size.h, text);
+	}
+
+
 }
 
 
@@ -92,7 +130,7 @@ class ButtonFile: ButtonExec, Path {
 	this(string data, bool isDir, bool isContext=false){
 		this.isDir = isDir;
 		this.isContext = isContext;
-		data = data.normalize;
+		//data = data.normalize;
 		if(isDir){
 			auto enter = new Button("→");
 			enter.font = "Arial";
@@ -102,7 +140,7 @@ class ButtonFile: ButtonExec, Path {
 			add(enter);
 		}
 		file = data;
-		type = Type.file;
+		type = "file";
 		if(parentDir.length)
 			parentDir ~= "/";
 		this.parentDir = parentDir;
@@ -114,15 +152,61 @@ class ButtonFile: ButtonExec, Path {
 		return isContext ? file : file.baseName;
 	}
 
+	override string path(){
+		return file;
+	}
+
 	override bool isDirectoryTree(){
 		return isDir;
 	}
 
+	override void tick(){}
+
 	void openPopup(){
 		alias A = ListPopup.Action;
 		A[] buttons;
-		buttons ~= A("Open", { openFile(file.normalize); });
+		buttons ~= A("Open", { contextPath.openFile(file.normalize); });
 		if(isDir){
+			buttons ~= A("Add File", {
+				if(menuWindow.keyboardFocus)
+					menuWindow.keyboardFocus.parent.remove(menuWindow.keyboardFocus);
+				auto input = new InputFieldFile("file");
+				parent.children = parent.children[0..1] ~ input ~ parent.children[1..$];
+				input.parent = parent;
+				parent.keyboardChild = input;
+				input.resize([5, config["button-tree", "height"].to!int]);
+				input.onEnter ~= (s){
+					try {
+						std.file.write(file ~ '/' ~ input.text, "");
+						parent.remove(input);
+						menuWindow.keyboardFocus = null;
+					}catch(Exception e)
+						throw new InputException(input, "Could not create file.");
+				};
+				menuWindow.keyboardFocus = input;
+			});
+
+			buttons ~= A("Add Directory", {
+				if(menuWindow.keyboardFocus)
+					menuWindow.keyboardFocus.parent.remove(menuWindow.keyboardFocus);
+				auto input = new InputFieldFile("directory");
+				parent.children = parent.children[0..1] ~ input ~ parent.children[1..$];
+				input.parent = parent;
+				parent.keyboardChild = input;
+				input.resize([5, config["button-tree", "height"].to!int]);
+				input.onEnter ~= (s){
+					try {
+						mkdir(file ~ '/' ~ input.text);
+						parent.remove(input);
+						menuWindow.keyboardFocus = null;
+					}catch(Exception e)
+						throw new InputException(input, "Could not create file.");
+				};
+				menuWindow.keyboardFocus = input;
+			});
+		
+			buttons ~= A("Set Context", { ["flatman-context", file].execute; });
+
 			if(contexts.canFind(file.normalize)){
 				buttons ~= A("Remove Context", {
 					foreach(entry; "~/.flatman/".normalize.dirEntries(SpanMode.breadth)){
@@ -136,15 +220,12 @@ class ButtonFile: ButtonExec, Path {
 						}
 					}
 				});
-				buttons ~= A("Add File", {
-					auto input = menuWindow.scroller.children[0].addNew!InputField;
-					input.resize([5, 25]);
-					input.onEnter ~= (s){ remove(input); };
-				});
-			}else
-				buttons ~= A("Add Context", { ["flatman-context", file].execute; });
+			}
+		
 		}
-		buttons ~= A("Delete", {});
+		buttons ~= A("Trash", {
+			trash(file);
+		});
 		auto popup = new ListPopup(buttons);
 		menuWindow.popups ~= popup;
 		wm.add(popup);
@@ -159,17 +240,22 @@ class ButtonFile: ButtonExec, Path {
 	}
 
 	override void onDraw(){
+		if(pos.y+size.h<0 || pos.y>menuWindow.size.h)
+			return;
 		if(previewDrop){
 			draw.setColor([0.2, 0.2, 0.2]);
 			draw.rect(pos, size);
-		}else if(mouseFocus){
-			draw.setColor([0.15, 0.15, 0.15]);
-			draw.rect(pos, size);
+		}else{
+			if(isDir && parent.to!Tree.expanded){
+				draw.setColor([0.13,0.13,0.13]);
+				draw.rect(pos.a+[1,0], size.a-[1,0]);
+			}
+			super.onDraw;
 		}
 		if(file == ".")
 			return;
 		auto text = isContext ? file.nice : file.baseName;
-		draw.setFont(font, fontSize);
+		draw.setFont(config["button-tab", "font"], config["button-tab", "font-size"].to!int);
 		if(isContext){
 			int advance = 10;
 			auto parts = text.split("/");
@@ -234,7 +320,7 @@ class ButtonFile: ButtonExec, Path {
 	}
 
 	override Base dropTarget(int x, int y, Base draggable){
-		if(isDir && typeid(draggable) is typeid(ButtonFileGhost))
+		if(isDir && cast(ButtonFileGhost)draggable)
 			return this;
 		return super.dropTarget(x, y, draggable);
 	}
@@ -258,7 +344,7 @@ class ButtonFile: ButtonExec, Path {
 	override void spawnCommand(){
 		if(isDir)
 			return;
-		openFile(file.normalize);
+		contextPath.openFile(file.normalize);
 	}
 
 }
@@ -287,12 +373,12 @@ class FileTree: Tree {
 	}
 
 	override Base add(Base element){
-
 		if(children.length > 1){
 			bool found;
 			foreach(i, c; children){
-				if(c != expander && dirSorter(element.to!Path, c.to!Path)){
-					children = children[0..i] ~ element ~ children[i..$];
+				if(cast(Path)c && cast(Path)element && c != expander && dirSorter(element.to!Path, c.to!Path)){
+					//children = children[0..i] ~ element ~ children[i..$];
+					children.insertInPlace(i, element);
 					found = true;
 					break;
 				}
@@ -303,16 +389,14 @@ class FileTree: Tree {
 			children ~= element;
 
 		element.parent = this;
-		if(!expanded && element != expander)
-			element.hide;
-		else
-			element.show;
-
+		
 		update;
 		return element;
 	}
 
 	override void onDraw(){
+		if(pos.y+size.h<0 || pos.y>menuWindow.size.h)
+			return;
 		if(expanded && drawHint){
 			draw.setColor([0.2,0.2,0]);
 			draw.rect(pos.a+[15,0], [1, size.h-children[0].size.h]);
@@ -338,7 +422,7 @@ class DirectoryTree: FileTree, Path {
 		queue = new shared Queue!string;
 		this.button = button;
 		this.root = root;
-		button.resize([5,20]);
+		button.resize([5,config["button-tree", "height"].to!int]);
 		padding = 0;
 		super(button);
 		bool once;
@@ -357,6 +441,10 @@ class DirectoryTree: FileTree, Path {
 
 	override string name(){
 		return button.name;
+	}
+
+	override string path(){
+		return button.file;
 	}
 
 	override bool isDirectoryTree(){
@@ -378,19 +466,26 @@ class DirectoryTree: FileTree, Path {
 	}
 
 	void remove(string file){
+		writeln("removing " ~ file);
 		foreach(c; children){
-			if(c != expander && typeid(c) == typeid(ButtonFile) && c.to!ButtonFile.file == file){
+			if(c != expander && cast(Path)c && c.to!Path.path == file){
 				super.remove(c);
 				return;
 			}
 		}
 	}
 
-	override void onDraw(){
-		super.onDraw;
-		foreach(i; 0..10)
+	override void tick(){
+		foreach(i;0..10)
 			if(queue.has)
 				add(queue.get);
+		foreach(c; children)
+			if(auto p = cast(Path)c)
+				p.tick;
+	}
+
+	override void onDraw(){
+		super.onDraw;
 	}
 
 }
@@ -412,12 +507,6 @@ class ButtonFileGhost: Base {
 }
 
 
-void sortDir(ref string[] dirs){
-	dirs.sort!("a.toUpper < b.toUpper", SwapStrategy.stable);
-	dirs.sort!("!a.startsWith(\".\") && b.startsWith(\".\")", SwapStrategy.stable);
-}
-
-
 void addDir(FileTree container, string directory, bool isContext=false){
 	auto tree = new DirectoryTree(new ButtonFile(directory, true, isContext), directory);
 	container.add(tree);
@@ -427,16 +516,30 @@ void addDir(FileTree container, string directory, bool isContext=false){
 
 void addFile(FileTree container, string path){
 	auto button = new ButtonFile(path, false);
-	button.resize([5,20]);
+	button.resize([5, config["button-tree", "height"].to!int]);
 	container.add(button);
 }
+
+
+auto dirSorter(DirEntry a, DirEntry b){
+	if(a.name.baseName.startsWith(".") != b.name.baseName.startsWith("."))
+		return b.name.baseName.startsWith(".");
+	if(a.isDir != b.isDir)
+		return a.isDir;
+	return a.name.baseName.toUpper < b.name.baseName.toUpper;
+}
+
 
 
 void loadAddDir(string directory, shared Queue!string queue){
 	directory = (directory.chomp("/") ~ "/");
 	try{
+		DirEntry[] paths;
 		foreach(DirEntry entry; directory.dirEntries(SpanMode.shallow))
-			queue.add(entry.name);
+			paths ~= entry;
+		paths.sort!dirSorter;
+		foreach_reverse(p; paths)
+			queue.add(p.name);
 	}catch(Exception e)
 		e.writeln;
 }
