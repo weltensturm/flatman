@@ -3,6 +3,7 @@ module composite;
 
 public import
 	core.thread,
+	core.sys.posix.signal,
 	std.process,
 	std.algorithm,
 	std.array,

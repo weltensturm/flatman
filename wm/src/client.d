@@ -40,8 +40,8 @@ class Client: Base {
 		
 		XWindowAttributes attr;
 		XGetWindowAttributes(dpy, client, &attr);
-		size = [attr.width, attr.height];
 		pos = [attr.x, attr.y];
+		size = [attr.width, attr.height];
 		posFloating = pos;
 		sizeFloating = size;
 
@@ -66,7 +66,6 @@ class Client: Base {
 		updateWmHints;
 		updateIcon;
 		updateTitle;
-		grabButtons(false);
 
 		if(false){
 			XSetWindowAttributes wa;
@@ -85,6 +84,10 @@ class Client: Base {
 			XReparentWindow(dpy, orig, win, 0, 0);
 			XMapRaised(dpy, win);	
 		}
+	}
+
+	override string toString(){
+		return "(%s)".format(win);
 	}
 
 	void applyRules(){
@@ -129,7 +132,8 @@ class Client: Base {
 	void focus(){
 		if(!monitor || !monitor.workspace)
 			return;
-		if(monitor.active)
+		"%s focus".format(this).log;
+		if(monitor.active && monitor.active != this)
 			monitor.active.unfocus(false);
 		if(isUrgent)
 			clearUrgent;
@@ -143,7 +147,7 @@ class Client: Base {
 	}
 	
 	void configure(){
-		"configure %s %s".format(pos, size).writeln;
+		"%s configure %s %s".format(this, pos, size).log;
 		XMoveResizeWindow(dpy, win, pos.x, pos.y, size.w, size.h);
 		if(win != orig)
 			XMoveResizeWindow(dpy, orig, 0, 0, size.w, size.h);
@@ -226,6 +230,10 @@ class Client: Base {
 		);
 		auto text = to!string(cast(char*)data);
 		XFree(data);
+		if(!text.length){
+			if(!gettextprop(orig, net.name, text))
+				gettextprop(orig, XA_WM_NAME, text);
+		}
 		return text;
 	}
 	
@@ -248,7 +256,7 @@ class Client: Base {
 	}
 	
 	override void hide(){
-		"hide %s".format(name).log;
+		"%s hide".format(this).log;
 		setState(WithdrawnState);
 		hidden = true;
 		ignoreUnmap += 1;
@@ -265,8 +273,8 @@ class Client: Base {
 	}
 
 	void moveResize(int[2] pos, int[2] size, bool force = false){
-		size.w = size.w.max(1);
-		size.h = size.h.max(1);
+		size.w = size.w.max(1).max(sizeMin.w).min(sizeMax.w);
+		size.h = size.h.max(1).max(sizeMin.h).min(sizeMax.h);
 		/+if(isFloating){
 			pos.x = pos.x.max(0).min(monitor.size.w-size.w);
 			pos.y = pos.y.max(0).min(monitor.size.h-size.h);
@@ -277,7 +285,6 @@ class Client: Base {
 		}
 		if(this.pos == pos && this.size == size && !force)
 			return;
-		"moveResize %s %s".format(pos, size);
 		this.pos = pos;
 		this.size = size;
 		configure;
@@ -285,17 +292,19 @@ class Client: Base {
 
 	int originWorkspace(){
 		string env;
+		/+
 		try {
 			XSync(dpy, false);
 			env = "/proc/%d/environ".format(orig.getprop!CARDINAL(net.pid)).readText;
 			auto match = matchFirst(env, r"FLATMAN_WORKSPACE=([0-9]+)");
-			"origin %s: %s".format(name, match).log;
+			"%s origin=%s".format(this, match).log;
 			return match[1].to!int;
 		}catch(Exception e)
 			try
-				"pid error: %s".format(orig.getprop!CARDINAL(net.pid)).log;
+				"%s pid error: %s".format(this, orig.getprop!CARDINAL(net.pid)).log;
 			catch
-				"no pid for %s".format(name).log;
+				"%s pid error".format(this).log;
+		+/
 		try
 			return cast(int)orig.getprop!CARDINAL(net.windowDesktop);
 		catch{}
@@ -308,7 +317,7 @@ class Client: Base {
 			return;
 		}
 		if(!isVisible && this != previousFocus){
-			"%s requests attention".format(name).log;
+			"%s requests attention".format(this).log;
 			["notify-send", "%s requests attention".format(name)].spawnProcess;
 
 		}
@@ -362,51 +371,21 @@ class Client: Base {
 	}
 	
 	void setFullscreen(bool fullscreen){
+		"%s fullscreen=%s".format(this, fullscreen).log;
+		isfullscreen = fullscreen;
 		auto proplist = getPropList(net.state);
 		if(fullscreen){
 			if(!proplist.canFind(net.fullscreen))
 				append(win, net.state, [net.fullscreen]);
-			isfullscreen = true;
-			if(isFloating){
-				monitor.remove(this);
-				monitor.add(this, monitor.workspaceActive);
-			}
-			moveResize(monitor.pos, monitor.size);
-			focus;
 		}else{
 			if(proplist.canFind(net.fullscreen))
-				replace(win, net.state, getPropList(net.state).without(net.fullscreen));
-			isfullscreen = false;
-			if(isFloating){
-				monitor.remove(this);
-				monitor.add(this, monitor.workspaceActive);
-			}
-			if(!isFloating)
-				monitor.workspace.split.rebuild;
-			else
-				moveResize(posFloating, sizeFloating);
+				replace(win, net.state, proplist.without(net.fullscreen));
 		}
-		/+
-		if(isfullscreen == fullscreen)
-			return;
-		auto proplist = getPropList(net.state);
-		if(fullscreen){
-			if(!proplist.canFind(net.fullscreen))
-				orig.append(net.state, [net.fullscreen]);
-		}else{
-			if(proplist.canFind(net.fullscreen))
-				orig.replace(net.state, proplist.without(net.fullscreen));
-		}
-		isfullscreen = fullscreen;
 		if(isFloating){
 			monitor.remove(this);
 			monitor.add(this, monitor.workspaceActive);
-		}else
-			parent.resize(parent.size);
+		}
 		focus;
-		"fullscreen %s".format(fullscreen).log;
-		["notify-send", "Fullscreen " ~ (isfullscreen ? "On" : "Off")].execute;
-		+/
 	}
 	
 	void setState(long state){
@@ -417,7 +396,7 @@ class Client: Base {
 	void setWorkspace(long i){
 		if(i >= 0 && i < monitor.workspaces.length && monitor.workspaces[i].clients.canFind(this))
 			return;
-		"set workspace %s %s".format(name, i).log;
+		"%s set workspace %s".format(this, i).log;
 		monitor.remove(this);
 		monitor.add(this, i < 0 ? monitor.workspaces.length-1 : i);
 		updateWindowDesktop(this, i);
@@ -425,7 +404,7 @@ class Client: Base {
 	}
 
 	override void show(){
-		"show %s".format(name).log;
+		"%s show".format(this).log;
 		setState(NormalState);
 		XMapWindow(dpy, win);
 		if(win != orig)
@@ -434,14 +413,15 @@ class Client: Base {
 	}
 
 	void togglefloating(){
-		if(isFloating && !isfullscreen){
-			posFloating = pos;
-			sizeFloating = size;
-		}
 		if(isfullscreen)
 			setFullscreen(false);
 		else {
 			isFloating = !isFloating;
+			"%s floating=%s".format(this, isFloating).log;
+			if(isFloating){
+				pos = posFloating;
+				size = sizeFloating;
+			}
 			monitor.remove(this);
 			monitor.add(this, monitor.workspaceActive);
 			focus;
@@ -449,17 +429,14 @@ class Client: Base {
 	}
 	
 	void unfocus(bool setfocus){
+		"%s unfocus".format(this).log;
 		grabButtons(false);
 		if(setfocus){
 			XSetInputFocus(dpy, .root, RevertToPointerRoot, CurrentTime);
 			XDeleteProperty(dpy, .root, net.windowActive);
 		}
-		if(isfullscreen){
-			if(!isFloating)
-				parent.resize(parent.size);
-			else {
-				setFullscreen(false);
-			}
+		if(isfullscreen && !isFloating){
+			hide;
 		}
 	}
 	
@@ -520,6 +497,7 @@ class Client: Base {
 			baseh = size.min_height;
 		}else
 			basew = baseh = 0;
+			
 		if(size.flags & PResizeInc){
 			incw = size.width_inc;
 			inch = size.height_inc;
@@ -529,7 +507,8 @@ class Client: Base {
 			sizeMax.w = size.max_width;
 			sizeMax.h = size.max_height;
 		}else
-			sizeMax.w = sizeMax.h = 0;
+			sizeMax.w = sizeMax.h = int.max;
+			
 		if(size.flags & PMinSize){
 			sizeMin.w = size.min_width;
 			sizeMin.h = size.min_height;
@@ -538,6 +517,7 @@ class Client: Base {
 			sizeMin.h = size.base_height;
 		}else
 			sizeMin.w = sizeMin.h = 0;
+			
 		if(size.flags & PAspect){
 			aspectRange = [
 				cast(float)size.min_aspect.y / size.min_aspect.x,
@@ -545,15 +525,19 @@ class Client: Base {
 			];
 		}else
 			aspectRange = [0,0];
+			
 		if(sizeMin.w > int.max || sizeMin.w < 0)
 			sizeMin.w = 0;
-		if(sizeMax.w > int.max || sizeMax.w < 0)
-			sizeMax.w = 0;
 		if(sizeMin.h > int.max || sizeMin.h < 0)
 			sizeMin.h = 0;
+			
+		if(sizeMax.w > int.max || sizeMax.w < 0)
+			sizeMax.w = int.max;
 		if(sizeMax.h > int.max || sizeMax.h < 0)
-			sizeMax.h = 0;
+			sizeMax.h = int.max;
+
 		isfixed = (sizeMax.w && sizeMin.w && sizeMax.h && sizeMin.h && sizeMax.w == sizeMin.w && sizeMax.h == sizeMin.h);
+		"%s sizeMin=%s sizeMax=%s".format(this, sizeMin, sizeMax).log;
 	}
 
 	void updateWmHints(){
@@ -588,15 +572,25 @@ class Client: Base {
 		xicon = null;
 		if(p){
 			long* data = cast(long*)p;
+			long start = 0;
 			long width = data[0];
 			long height = data[1];
+			for(int i=0; i<count;){
+				if(data[i]*data[i+1] > width*height){
+					start = i;
+					width = data[i];
+					height = data[i+1];
+				}
+				i += data[i]*data[i+1]+2;
+			}
 			icon = [];
-			foreach(pixel; data[2..width*height+2]){
+			foreach(argb; data[start+2..start+width*height+2]){
+				auto alpha = (argb >> 24 & 0xff)/255.0;
 				icon ~= [
-					cast(ubyte)(pixel & 0xff),
-					cast(ubyte)(pixel >> 8 & 0xff),
-					cast(ubyte)(pixel >> 16 & 0xff),
-					cast(ubyte)(pixel >> 24)
+					cast(ubyte)((argb & 0xff)*alpha),
+					cast(ubyte)((argb >> 8 & 0xff)*alpha),
+					cast(ubyte)((argb >> 16 & 0xff)*alpha),
+					cast(ubyte)((argb >> 24 & 0xff))
 				];
 			}
 			iconSize = [width,height];
@@ -610,9 +604,8 @@ class Client: Base {
 	}
 
 	void updateTitle(){
-		if(!gettextprop(orig, net.name, name))
-			gettextprop(orig, XA_WM_NAME, name);
-		monitor.draw;
+		name = getTitle;
+		"%s title='%s'".format(this, name).log;
 	}
 	
 };

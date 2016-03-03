@@ -10,6 +10,15 @@ void addTrash(DynamicList list){
 	auto t = list.addNew!Tree(b);
 	b.set(t);
 
+	b.leftClick ~= {
+		foreach(c; list.children){
+			if(auto tr = cast(Tree)c){
+				if(t != tr && tr.expanded)
+					tr.toggle;
+			}
+		}
+	};
+
 	ButtonTrash[] buttons;
 
 	foreach(entry; "~/.local/share/Trash/info".normalize.dirEntries(SpanMode.shallow))
@@ -79,7 +88,7 @@ class ButtonTrash: ButtonExec {
 			if(line.startsWith("Path="))
 				path = line.chompPrefix("Path=").nice;
 			else if(line.startsWith("DeletionDate="))
-				date = line.chompPrefix("DeletionDate=").split("T").join(" ");
+				date = line.chompPrefix("DeletionDate=").split("T").join(" ")[0..$-3];
 		}
 		isDir = ("~/.local/share/Trash/files/" ~ trashPath.baseName.stripExtension).normalize.isDir;
 	}

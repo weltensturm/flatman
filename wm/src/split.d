@@ -23,24 +23,12 @@ void swap(T)(ref T[] array, size_t i1, size_t i2){
 }
 
 
-class Split: Container {
+class Separator: Base {
 
-	enum {
-		horizontal,
-		vertical
-	}
+	x11.X.Window window;
 
-	int mode;
-	Window window;
-
-	long[] sizes;
-	
-	bool lock;
-
-	this(int[2] pos, int[2] size, int mode=horizontal){
-		hidden = true;
-		this.mode = mode;
-
+	this(){
+		size = [10,10];
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
 		wa.background_pixmap = ParentRelative;
@@ -50,18 +38,97 @@ class Split: Container {
 				DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
-		XDefineCursor(dpy, window, flatman.cursor[CurMove].cursor);
 		_draw = new XDraw(dpy, DefaultScreen(dpy), window, size.w, size.h);
 		window.register([
-			Expose: (XEvent* e)=>onDraw()
+			Expose: (XEvent* e)=>onDraw(),
+			/+
+			EnterNotify: (XEvent* e)=>mouse(true),
+			LeaveNotify: (XEvent* e)=>mouse(false),
+			ButtonPress: (XEvent* e)=>mouse(e.xbutton.button, true),
+			ButtonRelease: (XEvent* e)=>mouse(e.xbutton.button, false),
+			MotionNotify: (XEvent* e)=>mouse([e.xmotion.x, e.xmotion.y])
+			+/
 		]);
+		XMapWindow(dpy, window);
+		hide;
+	}
+
+	override void show(){
+		//replace!long(window, net.windowDesktop, monitor.workspaceActive);
+		if(size.w > 0 && size.h > 0){
+			"separator.show".log;
+			hidden = false;
+			XMoveWindow(dpy, window, pos.x, pos.y);
+		}else
+			hide;
+	}
+
+	override void hide(){
+		"separator.hide".log;
+		hidden = true;
+		XMoveWindow(dpy, window, pos.x, pos.y-monitor.size.h);
+		//XUnmapWindow(dpy, window);
+	}
+
+	void destroy(){
+		window.unregister;
+		XDestroyWindow(dpy, window);
+	}
+
+	void moveResize(int[2] pos, int[2] size){
+		"separator.moveResize %s %s".format(pos, size).log;
+		draw.resize([size.w.max(1), size.h.max(1)]);
+		this.pos = pos;
+		this.size = size;
+		if(hidden)
+			XMoveWindow(dpy, window, pos.x, pos.y-monitor.size.h);
+		else
+			XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w.max(1), size.h.max(1));
+	}
+
+	override void onDraw(){
+		draw.setColor(config.color("split background"));
+		draw.rect([0,0], size);
+		draw.finishFrame;
+	}
+
+}
+
+
+class Split: Container {
+
+	enum {
+		horizontal,
+		vertical
+	}
+
+	int mode;
+
+	long[] sizes;
+	
+	Separator[] separators;
+
+	bool lock;
+
+	this(int[2] pos, int[2] size, int mode=horizontal){
+		hidden = true;
+		this.mode = mode;
 
 		move(pos);
 		resize(size);
 	}
 
+	void restack(){
+		if(!children.length)
+			return;
+		"split.restack".log;
+		foreach_reverse(tabs; (children.without(children[clientActive]) ~ children[clientActive]).to!(Tabs[]))
+			tabs.restack;
+		foreach(separator; separators)
+			XLowerWindow(dpy, separator.window);
+	}
+
 	void destroy(){
-		customHandler[window] = customHandler[window].init;
 		foreach(c; children)
 			c.to!Container.destroy;
 	}
@@ -83,11 +150,9 @@ class Split: Container {
 	override void show(){
 		if(!hidden)
 			return;
-		//if(clients.length)
-		//	XMapWindow(dpy, window);
-		"split show".log;
+		"split.show".log;
 		hidden = false;
-		foreach(c; children)
+		foreach(c; children ~ separators.to!(Base[]))
 			c.show;
 		rebuild;
 	}
@@ -95,11 +160,10 @@ class Split: Container {
 	override void hide(){
 		if(hidden)
 			return;
-		XUnmapWindow(dpy, window);
 		hidden = true;
-		foreach(c; children)
+		foreach(c; children ~ separators.to!(Base[]))
 			c.hide;
-		"hide split".log;
+		"split.hide".log;
 	}
 
 	alias add = Base.add;
@@ -112,7 +176,7 @@ class Split: Container {
 		XSync(dpy, false);
 		if(position == long.max)
 			position = clientActive;
-		"split adding %s at %s".format(client.to!Client.name, position).log;
+		"split.add %s pos=%s".format(client, position).log;
 		Tabs tab;
 		if(position >= 0 && position < children.length){
 			tab = children[position].to!Tabs;
@@ -131,8 +195,13 @@ class Split: Container {
 					sizes ~= client.size.w;
 				}
 			}
-			if(!hidden)
+			if(children.length > 1)
+				separators ~= new Separator;
+			if(!hidden){
 				tab.show;
+				if(separators.length)
+					separators[$-1].show;
+			}
 		}
 		tab.add(client);
 		rebuild;
@@ -166,9 +235,8 @@ class Split: Container {
 	}
 
 	override void onDraw(){
-		draw.setColor(config.color("split background"));
-		draw.rect(pos, size);
-		draw.finishFrame;
+		foreach(s; separators)
+			s.onDraw;
 		super.onDraw;
 	}
 
@@ -178,7 +246,7 @@ class Split: Container {
 	}
 
 	override void remove(Client client){
-		"split removing %s".format(client.name).log;
+		"split.remove %s".format(client).log;
 		foreach(i, container; children.to!(Tabs[])){
 			if(container.children.canFind(client)){
 				container.remove(client);
@@ -186,6 +254,10 @@ class Split: Container {
 					container.destroy;
 					remove(container);
 					sizes = sizes[0..i] ~ sizes[i+1..$];
+					if(separators.length){
+						separators[$-1].destroy;
+						separators = separators[0..$-1];
+					}
 					if(clientActive >= children.length)
 						clientActive = cast(int)children.length-1;
 					rebuild;
@@ -208,13 +280,12 @@ class Split: Container {
 	}
 
 	override void resize(int[2] size){
-		"split resize %s".format(size).log;
+		"split.resize %s".format(size).log;
 		if(size.w < 0 || size.h < 0)
 			throw new Exception("workspace size invalid");
 		super.resize(size);
 		if(draw)
 			draw.resize(size);
-		XResizeWindow(dpy, window, size.w, size.h);
 		rebuild;
 	}
 
@@ -239,24 +310,22 @@ class Split: Container {
 			auto old = s;
 			s = (s*max/cur).lround;
 		}
-		"split normalized %s".format(sizes).log;
+		"split.normalize %s".format(sizes).log;
 	}
 
 	void rebuild(){
 		if(lock)
 			return;
-		if(children.length && !hidden){
-			//XMapWindow(dpy, window);
-			//XLowerWindow(dpy, window);
-		}else
-			XUnmapWindow(dpy, window);
+		"split.rebuild".log;
 		normalize;
 		int offset = 0;
+		auto padding = config["split paddingElem"].to!int;
 		foreach(i, c; children){
 			c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
-			XSync(dpy, false);
 			c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);
-			offset += cast(int)sizes[i]+config["split paddingElem"].to!long;
+			offset += cast(int)sizes[i]+padding;
+			if(i != children.length-1)
+				separators[i].moveResize(c.pos.a+[c.size.w,0], [padding, c.size.h]);
 		}
 		onDraw;
 	}
@@ -290,7 +359,7 @@ class Split: Container {
 	void focusDir(int dir){
 		auto client = dir == 0 ? active : (dir > 0 ? next : prev);
 		if(client){
-			"focus dir %s client %s".format(dir, client.name).log;
+			"split.focusDir %s client=%s".format(dir, client).log;
 			client.focus;
 		}
 	}

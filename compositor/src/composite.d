@@ -11,13 +11,22 @@ CompositeManager manager;
 bool running = true;
 
 
+extern(C) nothrow @nogc @system void stop(int){
+	running = false;
+}
+
 void main(){
 	try {
+		signal(SIGINT, &stop);
 		XSetErrorHandler(&xerror);
 		root = XDefaultRootWindow(wm.displayHandle);
 		manager = new CompositeManager;
-		while(true){
+		while(running){
 			wm.processEvents;
+			if(manager.restack){
+				manager.updateStack;
+				manager.restack = false;
+			}
 			auto frameStart = now;
 			manager.draw;
 			auto frameEnd = now;
@@ -45,7 +54,6 @@ enum background_props_str = [
 	"_XSETROOT_ID",
 ];
 
-
 double eerp(double current, double target, double speed){
 	auto dir = current > target ? -1 : 1;
 	auto spd = abs(target-current)*speed+speed;
@@ -63,6 +71,8 @@ void approach(ref double[2] current, double[2] target, double frt){
 class CompositeManager {
 
 	Picture backBuffer;
+	Pixmap backBufferPixmap;
+	GLXPixmap glxPixmap;
 	Picture frontBuffer;
 
 	int width;
@@ -97,6 +107,8 @@ class CompositeManager {
 	CompositeClient currentClient;
 	CompositeClient lastClient;
 
+	bool restack;
+
 	this(){
 
 		//XSynchronize(wm.displayHandle, true);
@@ -130,9 +142,9 @@ class CompositeManager {
 		pa.subwindow_mode = IncludeInferiors;
 		auto format = XRenderFindVisualFormat(wm.displayHandle, visual);
 		frontBuffer = XRenderCreatePicture(wm.displayHandle, root, format, CPSubwindowMode, &pa);
-		Pixmap pixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), DefaultDepth(wm.displayHandle, 0));
-		backBuffer = XRenderCreatePicture(wm.displayHandle, pixmap, format, 0, null);
-		XFreePixmap(wm.displayHandle, pixmap); // The picture owns the pixmap now
+		backBufferPixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), DefaultDepth(wm.displayHandle, 0));
+		backBuffer = XRenderCreatePicture(wm.displayHandle, backBufferPixmap, format, 0, null);
+		//XFreePixmap(wm.displayHandle, backBufferPixmap); // The picture owns the pixmap now
 		XSync(wm.displayHandle, false);
 		"created backbuffer".writeln;
 		
@@ -217,7 +229,7 @@ class CompositeManager {
 			if(c.windowHandle == window && !c.destroyed){
 				c.destroyed = true;
 				c.onHide;
-				updateStack;
+				restack = true;
 				return;
 			}
 		}
@@ -227,7 +239,7 @@ class CompositeManager {
 		foreach(i, c; clients){
 			if(c.windowHandle == e.xconfigure.window){
 				c.processEvent(*e);
-				updateStack;
+				restack = true;
 				return;
 			}
 		}
@@ -268,7 +280,6 @@ class CompositeManager {
 					if(c.windowHandle == e.window){
 						c.workspace = c.workspaceProperty.get;
 						c.workspaceAnimation(workspace, workspace);
-						running = false;
 					}
 				}
 			}
@@ -316,11 +327,11 @@ class CompositeManager {
 		XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &nchildren);
 		if(children){
 			auto clientsOld = clients;
-			clients = [];
-			foreach(window; children[0..nchildren]){
+			clients = new CompositeClient[nchildren];
+			foreach(i, window; children[0..nchildren]){
 				foreach(c; clientsOld){
 					if(c.windowHandle == window && !c.destroyed){
-						clients ~= c;
+						clients[i] = c;
 					}
 				}
 			}
@@ -349,11 +360,47 @@ class CompositeManager {
 		vsyncWindow = XCreateSimpleWindow(wm.displayHandle, root, 0, 0, 1, 1, 0, 0, 0);
 		//XMapWindow(wm.displayHandle, vsyncWindow);
 		glXMakeCurrent(wm.displayHandle, cast(uint)vsyncWindow, cast(__GLXcontextRec*)graphicsContext);
+
+	}
+
+	void setupVerticalSyncPixmap(){
+
+		import derelict.opengl3.glx;
+		import derelict.opengl3.glxext;
+
+	    int[] pixmap_attribs = [
+	        GLX_TEXTURE_TARGET_EXT, GLX_TEXTURE_2D_EXT,
+	        GLX_TEXTURE_FORMAT_EXT, GLX_TEXTURE_FORMAT_RGB_EXT,
+	        None
+	    ];
+	    glxPixmap = glXCreatePixmap(wm.displayHandle, null, cast(uint)backBuffer, pixmap_attribs.ptr);
+
+		GLint[] att = [GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, 0];
+		auto graphicsInfo = glXChooseVisual(wm.displayHandle, 0, att.ptr);
+		auto graphicsContext = glXCreateContext(wm.displayHandle, graphicsInfo, null, True);
+		glXMakeCurrent(wm.displayHandle, cast(uint)glxPixmap, cast(__GLXcontextRec*)graphicsContext);
+
 	}
 
 	void verticalSync(){
 		glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
 		glFinish();
+	}
+
+	void verticalSyncDraw(){
+		glViewport(0,0,width,height);
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		glOrtho(0,1,0,1,0,1);
+		glMatrixMode(GL_MODELVIEW);
+		
+		glBegin(GL_QUADS);
+		glVertex2f(0,0);
+		glVertex2f(1,0);
+		glVertex2f(1,1);
+		glVertex2f(0,1);
+		glEnd();
+		glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
 	}
 
 	void draw(){
@@ -364,28 +411,18 @@ class CompositeManager {
 			if(c.picture && alpha > 0 && c.animation.pos.y.calculate > -height && c.animation.pos.y.calculate < height){
 
 				auto scale = alpha/4+0.75;
-
-				XTransform xform = {[
-				    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-				    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
-				    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
-				]};
-				XRenderSetPictureTransform(wm.displayHandle, c.picture, &xform);
+				c.updateScale(scale);
 
 				if(c.resizeGhost && (!c.animation.size[0].done || !c.animation.size[1].done)){
-					XTransform xf = {[
-						[XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-						[XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
-						[XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
-					]};
-					XRenderSetPictureTransform(wm.displayHandle, c.resizeGhost, &xf);
+					c.updateResizeGhostScale(scale);
 
+					auto ghostAlpha = alpha; // * (1-c.animation.size.x.completion).max(0).min(1);
 					if(c.animation.size.x.completion != 1){
 						XRenderComposite(
 							wm.displayHandle,
-							alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
+							ghostAlpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
 							c.resizeGhost,
-							alpha < 1 ? this.alpha[((1-alpha)*ALPHA_STEPS).to!int] : None,
+							ghostAlpha < 1 ? this.alpha[(ghostAlpha*ALPHA_STEPS).to!int] : None,
 							backBuffer,
 							0,0,0,0,
 							(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
@@ -414,6 +451,8 @@ class CompositeManager {
 		}
 		//XSync(wm.displayHandle, false);
 		//verticalSync;
+		//verticalSyncDraw;
+
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
 	}
 

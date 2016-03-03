@@ -27,3 +27,6 @@ Currently only horizontal layouts are supported. To create multiple tab stacks, 
 
 * full mouse support
 * vertical layout
+
+[![forthebadge](http://forthebadge.com/images/badges/made-with-crayons.svg)](http://forthebadge.com)
+

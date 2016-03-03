@@ -43,6 +43,20 @@ class Monitor {
 		};
 	}
 
+	void restack(){
+		"monitor.restack".log;
+		workspace.floating.restack;
+		foreach(ws; workspaces)
+			if(ws != workspace)
+				ws.floating.restack;
+		foreach_reverse(client; globals)
+			client.lower;
+		workspace.split.restack;
+		foreach(ws; workspaces)
+			if(ws != workspace)
+				ws.split.restack;
+	}
+
 	Client active(){
 		if(focusGlobal)
 			return globals[globalActive];
@@ -51,17 +65,19 @@ class Monitor {
 	}
 
 	void setActive(Client client){
+		"monitor.setActive %s".format(client).log;
 		if(globals.canFind(client)){
 			foreach(i, global; globals){
-				if(global == client)
+				if(global == client){
 					globalActive = cast(int)i;
+					"focus global".log;
+				}
 			}
-			writeln("focus global");
 		}else{
 			foreach(i, ws; workspaces){
 				if(ws.clients.canFind(client)){
 					ws.active = client;
-					workspaceActive = cast(int)i;
+					switchWorkspace(cast(int)i);
 					return;
 				}
 			}
@@ -73,7 +89,7 @@ class Monitor {
 	}
 
 	void newWorkspace(long pos){
-		"create new workspace at %s".format(pos).writeln;
+		"monitor.newWorkspace %s".format(pos).log;
 		auto ws = new Workspace(this.pos, size);
 		if(pos <= 0)
 			workspaces = ws ~ workspaces;
@@ -99,7 +115,6 @@ class Monitor {
 			if(pos > workspaceActive)
 				pos--;
 			updateDesktopCount;
-			updateWorkspaces;
 		}
 		workspaceActive = pos;
 		if(monitor.workspaceActive < 0)
@@ -108,8 +123,9 @@ class Monitor {
 			workspaceActive = 0;
 		"show workspace %s".format(workspaceActive).log;
 		workspace.show;
-		draw;
+		updateWorkspaces;
 		updateCurrentDesktop;
+		draw;
 	}
 
 	void moveWorkspace(int pos){
@@ -150,23 +166,27 @@ class Monitor {
 	void add(Client client, long workspace=-1){
 		if(workspace >= cast(long)workspaces.length || workspace < 0)
 			client.global = true;
-		"monitor adding %s to workspace %s global: %s".format(client.name, workspace, client.global).log;
+		"monitor.add %s workspace=%s".format(client, workspace).log;
 		if(!client.global){
 			if(workspace == -1)
 				this.workspace.add(client);
-			else
+			else{
 				workspaces[workspace].add(client);
+			}
 		}else{
 			globals ~= client;
 			client.moveResize(client.posFloating, client.sizeFloating);
 		}
+		/+
 		if(client.isVisible)
 			client.show;
 		else
 			client.hide;
+		+/
 	}
 
 	void move(Client client, int workspace){
+		"monitor.move %s workspace=%s".format(client, workspace).log;
 		auto l = workspaces.length;
 		auto pos = workspaces.countUntil!(a => a.clients.canFind(client));
 		this.workspace.remove(client);
@@ -179,7 +199,7 @@ class Monitor {
 	}
 
 	void remove(Client client){
-		"removing client %s".format(client.name).log;
+		"monitor.remove %s".format(client).log;
 		foreach(ws; workspaces){
 			if(ws.clients.canFind(client))
 				ws.remove(client);
@@ -213,10 +233,11 @@ class Monitor {
 	}
 
 	void resize(int[2] size){
+		"monitor.resize %s".format(size).log;
 		this.size = size;
 		int[4] reserve;
 		foreach(c; strutList){
-			"monitor using strut %s %s".format(c.client.name, c.strut).log;
+			"monitor strut %s %s".format(c.client, c.strut).log;
 			reserve[] += c.strut[];
 		}
 		foreach(ws; workspaces){
@@ -234,7 +255,7 @@ class Monitor {
 		}
 
 		if(!remove && client.getStrut[0..4].any){
-			"monitor add strut %s %s".format(client.name, client.getStrut).log;
+			"monitor add strut %s %s".format(client, client.getStrut).log;
 			if(!found){
 				auto data = client.getStrut[0..4];
 				foreach(ref d; data){

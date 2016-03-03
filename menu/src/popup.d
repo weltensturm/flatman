@@ -7,7 +7,7 @@ __gshared:
 
 class ListPopup: ws.wm.Window {
 
-	bool allowDestroy;
+	bool hasMouseFocus;
 
 	struct Action {
 		string name;
@@ -15,12 +15,13 @@ class ListPopup: ws.wm.Window {
 	}
 
 	this(Action[] actions){
+		writeln("popup.new");
 		Button[] buttons;
 		foreach(action; actions){
 			auto b = new Button(action.name);
 			b.font = "Arial";
 			b.fontSize = 9;
-			b.style.bg.hover = [0.5,0.5,0.5,1];
+			b.style.bg.hover = [0.3,0.3,0.3,1];
 			b.leftClick ~= action.action;
 			buttons ~= b;
 		}
@@ -49,7 +50,9 @@ class ListPopup: ws.wm.Window {
 		int inull;
 		uint uinull;
 		XQueryPointer(dpy, .root, &ulnull, &ulnull, &x, &y, &inull, &inull, &uinull);
-		XMoveResizeWindow(wm.displayHandle, windowHandle, x+1, y+1, width+4, height+4);
+		x = x.max(0).min(menuWindow.size.w-width);
+		y = y.max(0).min(menuWindow.size.h-height);
+		XMoveResizeWindow(wm.displayHandle, windowHandle, x-1, y-1, width+4, height+4);
 	}
 
 	override void drawInit(){
@@ -77,26 +80,25 @@ class ListPopup: ws.wm.Window {
 		draw.finishFrame;
 	}
 
+	override void onMouseFocus(bool focus){
+		hasMouseFocus = focus;
+		onMouseMove(-5, -5);
+		onDraw;
+	}
+
 	override void onMouseMove(int x, int y){
 		super.onMouseMove(x, y);
 		onDraw;
 	}
 
 	override void hide(){
+		writeln("popup.hide");
 		super.hide();
 		menuWindow.popups = menuWindow.popups.without(this);
 	}
 
-	override void onMouseFocus(bool focus){
-		super.onMouseFocus(focus);
-		if(focus)
-			allowDestroy = true;
-		else if(allowDestroy)
-			hide;
-	}
-
 	override void show(){
-		writeln("showing");
+		writeln("popup.show");
 		new CardinalProperty(windowHandle, "_NET_WM_DESKTOP").set(-1);
 		new AtomProperty(windowHandle, "_NET_WM_WINDOW_TYPE").set(atom("_NET_WM_WINDOW_TYPE_DIALOG"));
 		XSync(dpy,false);

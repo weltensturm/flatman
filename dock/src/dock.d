@@ -204,7 +204,7 @@ class WorkspaceDock: ws.wm.Window {
 		if(names.length)
 			workspaceNames = names[0..$-1];
 
-		w = cast(int)(screenSize.w/10);
+		w = (screenSize.w/10).to!int;
 
 		super(w, cast(int)screenSize.h, title);
 
@@ -349,10 +349,10 @@ class WorkspaceDock: ws.wm.Window {
 					canSwitch = true;
 				if(canSwitch)
 					workspace = ws;
-				showTime = now+0.3;
+				showTime = now+0.5;
 			}else if(e.atom == workspaceCountProperty.property){
 				workspaceCount = workspaceCountProperty.get;
-				showTime = now+0.3;
+				showTime = now+0.5;
 				canSwitch = true;
 			}else if(e.atom == workspaceNamesProperty.property){
 				workspaceNames = workspaceNamesProperty.get.split('\0')[0..$-1];
@@ -419,6 +419,7 @@ class WorkspaceDock: ws.wm.Window {
 	void tick(){
 		int targetX = cast(int)screenSize.w-(visible ? size.w : 1);
 		if(pos.x != targetX || pos.y != 0){
+			//XMoveResizeWindow(dpy, windowHandle, targetX, 0, visible ? (screenSize.w/10).to!int : 2, size.h);
 			XMoveWindow(dpy, windowHandle, targetX, 0);
 			//XRaiseWindow(dpy, windowHandle);
 		}
@@ -492,7 +493,7 @@ class WorkspaceDock: ws.wm.Window {
 
 	override void onMouseFocus(bool focus){
 		this.focus = focus;
-		if(showTime < now)
+		if(focus)
 			showTime = now+0.3;
 	}
 	

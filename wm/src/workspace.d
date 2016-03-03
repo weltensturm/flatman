@@ -19,9 +19,18 @@ class Workspace: Container {
 		split.hide;
 		floating = addNew!Floating(pos, size);
 		floating.hide;
-		["flatman-context", "~"].execute;
+		if(!"~/.flatman/current".expandTilde.exists){
+			["flatman-context", "/"].execute;
+			["flatman-context", "~"].execute;
+		}
 		if("~/.flatman/current".expandTilde.exists)
 			context = "~/.flatman/current".expandTilde.readText;
+	}
+
+	void restack(){
+		"workspace.restack".log;
+		floating.restack;
+		split.restack;
 	}
 
 	void updateContext(string path){
@@ -29,6 +38,7 @@ class Workspace: Container {
 	}
 
 	override void resize(int[2] size){
+		"workspace.resize %s".format(size).log;
 		this.size = size;
 		foreach(c; children)
 			c.resize(size);
@@ -37,12 +47,12 @@ class Workspace: Container {
 	alias add = Base.add;
 
 	override void add(Client client){
-		"adding %s isFloating %s".format(client.name, client.isFloating).log;
+		"workspace.add %s floating=%s fullscreen=%s".format(client, client.isFloating, client.isfullscreen).log;
 		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
 		if(client.isFloating && !client.isfullscreen){
 			floating.add(client);
 		}else{
-			if(monitor.workspace == this)
+			if(monitor.workspace == this && split.hidden)
 				split.show;
 			split.add(client);
 		}
@@ -79,7 +89,7 @@ class Workspace: Container {
 	alias remove = Base.remove;
 
 	override void remove(Client client){
-		"workspace removing %s".format(client.name).log;
+		"workspace.remove %s".format(client).log;
 		foreach(c; children)
 			c.to!Container.remove(client);
 		if(!split.children)
@@ -90,9 +100,9 @@ class Workspace: Container {
 		super.show;
 		if(split.children.length)
 			split.show;
-		"showing workspace, context: %s".format(context).log;
+		"workspace.show context='%s'".format(context).log;
 		if(context.exists){
-			"reset context: %s".format(context.expandTilde.readText);
+			"workspace reset context='%s'".format(context.expandTilde.readText);
 			["flatman-context", context.expandTilde.readText].execute;
 		}
 		floating.show;

@@ -4,6 +4,14 @@ module menu.context;
 import menu;
 
 
+class Context {
+	
+	static string path;
+
+}
+
+
+
 class Entry {
 	int count;
 	string text;
@@ -29,6 +37,10 @@ string historyFile(){
 	return contextPath ~ ".exec";
 }
 
+string logFile(){
+	return contextPath ~ ".log";
+}
+
 
 string[] history(){
 	Entry[string] tmp;
@@ -48,4 +60,32 @@ string[] history(){
 		history.sort!"a.count > b.count";
 	}
 	return history.map!"a.text".array;
+}
+
+
+struct CommandInfo {
+	int pid;
+	string serialized;
+	int status = int.max;
+}
+
+
+CommandInfo[] historyInfo(){
+	CommandInfo[] history;
+	if(historyFile.exists){
+		foreach(line; historyFile.readText.splitLines){
+			auto m = line.matchAll(`([0-9]+) exec(?: (.*))?`);
+			if(!m.empty){
+				history ~= CommandInfo(m.captures[1].to!int, m.captures[2]);
+			}
+			m = line.matchAll(`([0-9]+) exit(?: (.*))?`);
+			if(!m.empty){
+				foreach(ref h; history){
+					if(h.pid == m.captures[1].to!int)
+						h.status = m.captures[2].to!int;
+				}
+			}
+		}
+	}
+	return history;
 }

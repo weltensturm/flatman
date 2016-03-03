@@ -38,7 +38,7 @@ enum categories = [
 void main(string[] args){
 	options.fill(args);
 	XInitThreads();
-	new Menu(400, 500, "flatman-menu");
+	new Menu(300, 500, "flatman-menu");
 	wm.add(menuWindow);
 	while(wm.hasActiveWindows){
 		auto frameStart = now;
@@ -133,9 +133,9 @@ class Menu: ws.wm.Window {
 		list.style.bg = [0.1,0.1,0.1,1];
 		auto watcher = menuWindow.inotify.addWatch("~/.flatman/".normalize, false);
 		list.addApps(appCategories, categories);
+		list.addHistory(watcher);
 		contexts = list.addFiles(watcher);
 		list.addTrash;
-		//list.addHistory(watcher);
 
 		super(w, screen.h.to!int, title);
 
@@ -177,22 +177,42 @@ class Menu: ws.wm.Window {
 
 	override void resize(int[2] size){
 		super.resize(size);
-		scroller.move([0, 1]);
-		scroller.resize(size.a-[2,2]);
+		scroller.move([0,0]);
+		scroller.resize(size.a-[2,0]);
+	}
+
+	override void onHide(){
+		XMapWindow(dpy, windowHandle);
 	}
 
 	override void onDraw(){
 		if(!active)
 			return;
 		Animation.update;
-		draw.setColor([0.867,0.514,0]);
-		draw.rect(pos, size);
+		//draw.setColor([0.867,0.514,0]);
+		draw.setColor([0.2,0.2,0.2]);
+		draw.rect([0,0], size);
 		draw.setColor([0.1,0.1,0.1]);
 		draw.rect(pos.a, size.a-[2,0]);
 		super.onDraw;
 		draw.setColor([0,0,0]);
 		draw.rect(pos.a + [size.w-1,0], [1,size.h]);
 		draw.finishFrame;
+	}
+
+	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+		if(popups.length){
+			while(popups.length)
+				popups[0].hide;
+			return;
+		}
+		super.onMouseButton(button, pressed, x, y);
+	}
+
+	override void onMouseMove(int x, int y){
+		if(popups.length)
+			return;
+		super.onMouseMove(x, y);
 	}
 
 	override void onMouseFocus(bool focus){

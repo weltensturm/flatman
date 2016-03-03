@@ -82,6 +82,34 @@ class CompositeClient: ws.wm.Window {
 		XRenderSetPictureFilter(wm.displayHandle, picture, "best", null, 0);
 	}
 	
+	double scale;
+
+	void updateScale(double scale){
+		if(this.scale == scale)
+			return;
+		this.scale = scale;
+		XTransform xf = {[
+			[XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+			[XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
+			[XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
+		]};
+		XRenderSetPictureTransform(wm.displayHandle, picture, &xf);
+	}
+
+	double resizeGhostScale;
+
+	void updateResizeGhostScale(double scale){
+		if(scale == resizeGhostScale)
+			return;
+		resizeGhostScale = scale;
+		XTransform xf = {[
+			[XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+			[XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
+			[XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
+		]};
+		XRenderSetPictureTransform(wm.displayHandle, resizeGhost, &xf);
+	}
+
 	void destroy(){
 		if(pixmap)
 			XFreePixmap(wm.displayHandle, pixmap);
@@ -94,9 +122,13 @@ class CompositeClient: ws.wm.Window {
 	}
 
 	override void resize(int[2] size){
-		auto spd = (animation.size.x.calculate + animation.size.y.calculate + 0.0).sqrt/1000;
-		animation.size.x.change(size.x);
-		animation.size.y.change(size.y);
+		if(animation.fade.completion < 0.1){
+			animation.size.x.replace(size.x, size.x);
+			animation.size.y.replace(size.y, size.y);
+		}else{
+			animation.size.x.change(size.x);
+			animation.size.y.change(size.y);		
+		}
 		resizeGhostSize = this.size;
 		"resize %s %s old %s".format(getTitle, size, this.size).writeln;
 		this.size = size;
@@ -110,19 +142,25 @@ class CompositeClient: ws.wm.Window {
 			XRenderFreePicture(wm.displayHandle, resizeGhost);
 		resizeGhost = picture;
 		picture = None;
-		
-		createPicture;
+	
+		createPicture;	
 	}
 
 	override void move(int[2] pos){
 		if(pos.y <= this.pos.y-manager.height)
 			return;
-		auto spd = ((
-				(pos.x-animation.pos.x.calculate).abs
-				+ (pos.y-animation.pos.y.calculate).abs
-			).sqrt/100).min(0.3);
-		animation.pos.x.change(pos.x);
-		animation.pos.y.change(pos.y);
+		if(animation.fade.completion < 0.1){
+			animation.pos.x.replace(pos.x, pos.x);
+			animation.pos.y.replace(pos.y, pos.y);
+		}else{
+			if(animation.pos.x.done && animation.pos.y.done){
+				animation.pos.x.change(pos.x);
+				animation.pos.y.change(pos.y);
+			}else{
+				animation.pos.x.end = pos.x;
+				animation.pos.y.end = pos.y;
+			}
+		}
 		this.pos = pos;
 	}
 

@@ -43,8 +43,18 @@ class Tabs: Container {
 		if(!currentTabs)
 			currentTabs = XInternAtom(dpy, "_FLATMAN_TABS", false);
 		if(!currentTab)
-			writeln("error");
+			"error".log;
 
+	}
+
+	void restack(){
+		"tabs.restack".log;
+		XLowerWindow(dpy, window);
+		foreach_reverse(client; clients)
+			if(client.isfullscreen)
+				client.raise;
+			else
+				client.lower;
 	}
 
 	void mouse(bool focus){
@@ -88,7 +98,6 @@ class Tabs: Container {
 	override void show(){
 		if(!hidden)
 			return;
-		replace!long(window, net.windowDesktop, monitor.workspaceActive);
 		XMapWindow(dpy, window);
 		XMoveResizeWindow(dpy, window, pos.x, pos.y, size.w, size.h);
 		if(active)
@@ -102,14 +111,15 @@ class Tabs: Container {
 		if(hidden)
 			return;
 		//XUnmapWindow(dpy, window);
-        XMoveWindow(dpy, window, pos.x, -monitor.size.h+pos.y);
+        XMoveWindow(dpy, window, pos.x, pos.y-monitor.size.h);
 		foreach(c; clients){
-            XMoveWindow(dpy, c.win, c.pos.x, -monitor.size.h+c.pos.y);
+            XMoveWindow(dpy, c.win, c.pos.x, c.pos.y-monitor.size.h);
         }
 		hidden = true;
 	}
 
 	void destroy(){
+		window.unregister;
 		XDestroyWindow(dpy, window);
 	}
 
@@ -130,7 +140,7 @@ class Tabs: Container {
 	alias remove = Base.remove;
 
 	override void remove(Client client){
-		"tabs removing %s".format(client.name).log;
+		"tabs.remove %s".format(client).log;
 		super.remove(client);
 		XSync(dpy, false);
 		auto n = any;
@@ -197,7 +207,7 @@ class Tabs: Container {
 			client.show;
 			client.configure;
 		}
-		"tabs focus %s".format(client.name).log;
+		"tabs.active %s".format(client).log;
 		super.active = client;
 		if(!hidden)
 			resize(size);
@@ -205,10 +215,9 @@ class Tabs: Container {
 
 	override void resize(int[2] size){
 		super.resize(size);
-		auto padding = config["split paddingOuter"].split.to!(int[4]);
+		auto padding = config["tabs paddingOuter"].split.to!(int[4]);
 		draw.setFont(config["tabs title font"], config["tabs title font-size"].to!int);
-		auto bh = (draw.fontHeight*1.2).lround.to!int;
-		writeln(active);
+		auto bh = config["tabs title height"].to!int;
 		if(active){
 			if(active.isfullscreen){
 				active.moveResize(monitor.pos, monitor.size);
@@ -220,54 +229,69 @@ class Tabs: Container {
 			}
 		}
 		//XRaiseWindow(dpy, window);
-		XMoveResizeWindow(dpy, window, pos.x, pos.y-(hidden ? monitor.size.h : 0), size.w, (monitor.peekTitles || showTabs) ? bh : padding[2]);
-		draw.resize(size);
+		int[2] winSize = [size.w, (monitor.peekTitles || showTabs) ? bh : padding[2]];
+		XMoveResizeWindow(dpy, window, pos.x, pos.y-(hidden ? monitor.size.h : 0), winSize.w, winSize.h);
+		draw.resize(winSize);
 		onDraw;
 	}
 
 	override void onDraw(){
-		if(hidden)
+		if(hidden || !children.length)
 			return;
 		draw.setFont(config["tabs title font"], config["tabs title font-size"].to!int);
-		auto bh = (draw.fontHeight*1.2).lround.to!int;
+		auto bh = config["tabs title height"].to!int;
 		int offset = 0;
+		auto childWidth = (size.w/clients.length.to!double).lround.to!int;
 		bool containerFocused = clients.canFind(flatman.active);
+		auto padding = config["tabs paddingOuter"].split.to!(int[4]);
 		foreach(i, c; children.to!(Client[])){
-			bool hover = mouseFocus && cursorPos.x > offset && cursorPos.x < offset+size.w/cast(int)children.length;
-			auto state = (
-					c.isUrgent ? "urgent"
-					: flatman.active == c ? "active"
-					: hover ? "hover"
-					: !containerFocused && i == clientActive ? "activeBg"
-					: c.isfullscreen ? "fullscreen"
-					: "normal");
-			draw.clip([offset,0], [size.w/cast(int)children.length,size.h]);
-			draw.setColor(config.color("tabs background " ~ state));
-			draw.rect([offset,0], [size.w/cast(int)children.length,size.h]);
-			if(monitor.peekTitles || showTabs){
-				auto textOffset = offset + (size.w/cast(int)(clients.length)/2 - draw.width(c.name)/2).max(bh);
-				draw.setColor([0.1,0.1,0.1]);
-				foreach(x; [-1,0,1]){
-					foreach(y; [-1,0,1]){
-						draw.text([x+textOffset, y+size.h-bh], bh+2, c.name);
-					}
-				}
-				draw.setColor(config.color("tabs title " ~ state));
-				draw.text([textOffset, size.h-bh], bh+2, c.name);
-				if(c.icon.length){
-					if(!c.xicon){
-						c.xicon = draw.to!XDraw.icon(c.icon, c.iconSize.to!(int[2]));
-					}
-					auto scale = (bh-4)/c.iconSize.h.to!double;
-					draw.to!XDraw.icon(c.xicon, (textOffset-c.iconSize.w*scale).to!int, 2, scale);
-				}
-			}
-			draw.noclip;
-			offset += size.w/children.length;
+			drawTab(c, [offset, 0], [childWidth, (monitor.peekTitles || showTabs) ? bh : padding[2]], containerFocused);
+			offset += childWidth;
 		}
-		draw.setColor(config.color("split border active"));
-		draw.rect([0,size.h-bh], [size.w, 2]);
 		draw.finishFrame;
+	}
+
+	void drawTab(Client client, int[2] pos, int[2] size, bool containerFocused){
+		bool hover = mouseFocus && cursorPos.x > pos.x && cursorPos.x < pos.x+size.w;
+		auto state = (
+				client.isUrgent ? "urgent"
+				: client.isfullscreen ? "fullscreen"
+				: flatman.active == client ? "active"
+				: hover ? "hover"
+				: !containerFocused && client == active ? "activeBg"
+				: "normal");
+		draw.clip(pos, size);
+
+		draw.setColor(config.color("tabs background " ~ state));
+		draw.rect(pos, size);
+		
+		auto height = config["tabs border %s height".format(state == "active" ? "active" : "normal")].to!int;
+
+		//draw.setColor(config.color("tabs border normal color"));
+		//draw.rect(pos, [size.w, height]);
+		
+		draw.setColor(config.color("tabs border %s color".format(state == "active" ? "active" : "normal")));
+
+		if(state == "active" || state == "activeBg")
+			draw.rect([pos.x, pos.y+size.h-height], [size.x, height]);
+
+		if(monitor.peekTitles || showTabs){
+			auto textOffset = pos.x + (size.w/2 - draw.width(client.name)/2).max(size.h);
+			draw.setColor([0.1,0.1,0.1]);
+			foreach(x; [-1,0,1])
+				foreach(y; [-1,0,1])
+					draw.text([x+textOffset, y], size.h+2, client.name);
+			draw.setColor(config.color("tabs title " ~ state));
+			draw.text([textOffset, 0], size.h, client.name);
+			if(client.icon.length){
+				if(!client.xicon){
+					client.xicon = draw.to!XDraw.icon(client.icon, client.iconSize.to!(int[2]));
+				}
+				auto scale = (size.h-4.0)/client.iconSize.h;
+				draw.to!XDraw.icon(client.xicon, (textOffset-client.iconSize.w*scale).lround.to!int, 2, scale);
+			}
+		}
+		draw.noclip;
 	}
 
 }

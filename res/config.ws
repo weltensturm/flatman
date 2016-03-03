@@ -53,71 +53,51 @@ autostart {
 
 
 split {
-	paddingElem 0
-	paddingOuter 0 0 2 0
+	paddingElem 6
 	background 222222
-	background {
-		normal 222222
-		hover 444444
-		active dd8300
-		urgent 222222
-	}
-	border 0 0 2 0
-	border {
-		normal 444444
-		active dd8300
-		urgent ffff00
-		hover 444444
-		fullscreen 005588
-	}
-	title {
-		font Tahoma
-		font-size 9
-		show 0
-		normal cccccc
-		active ffffff
-		urgent 000000
-		hover ffffff
-		fullscreen ffffff
-		insert {
-			normal ffffff
-			active ffffff
-			urgent 000000
-			hover ffffff
-			fullscreen ffffff
-		}
-	}
 }
 
 tabs {
-	border dd8300
+	border {
+		active {
+			height 1
+			color dd8600
+		}
+		normal {
+			height 1
+			color 333333
+		}
+	}
+	paddingOuter 0 0 2 0
 	background {
 		normal 222222
-		hover 444444
-		activeBg 333333
-		active dd8300
-		urgent 222222
+		fullscreen 005577
+		hover 333333
+		activeBg 222222
+		active 222222
+		urgent 994333
 	}
 	title {
 		font Tahoma
 		font-size 9
+		height 20
 		show 0
-		normal cccccc
+		normal bbbbbb
 		active ffffff
-		activeBg ffffff
-		urgent 000000
+		activeBg bbbbbb
+		urgent ffffff
 		hover ffffff
 		fullscreen ffffff
 	}
 }
 
 dock {
-	background 222222
+	background 333333
 	window {
 		text ffffff
 		background {
-			normal 222222
-			active dd8300
+			normal 333333
+			active 333333
 			urgent ffff00
 		}
 	}

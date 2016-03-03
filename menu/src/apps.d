@@ -6,9 +6,9 @@ import menu;
 
 void addApps(DynamicList list, DesktopEntry[][string] apps, string[string] categories){
 
-	foreach(name; categories.values.sort!"a.toUpper < b.toUpper"){
+	categories.values.sort!"a.toUpper < b.toUpper".each!((string name){
 		if(name !in apps)
-			continue;
+			return;
 		auto buttonCategory = new RootButton(name);
 		buttonCategory.resize([5,25]);
 		auto tree = new Tree(buttonCategory);
@@ -16,6 +16,15 @@ void addApps(DynamicList list, DesktopEntry[][string] apps, string[string] categ
 		tree.expanded = false;
 		list.add(tree);
 
+		buttonCategory.leftClick ~= {
+			foreach(c; list.children){
+				if(auto t = cast(Tree)c){
+					if(t != tree && t.expanded)
+						t.toggle;
+				}
+			}
+		};
+	
 		foreach(app; apps[name].sort!"a.name.toUpper < b.name.toUpper"){
 			auto button = new ButtonDesktop([app.name, app.exec].bangJoin);
 			button.resize([5,20]);
@@ -23,15 +32,18 @@ void addApps(DynamicList list, DesktopEntry[][string] apps, string[string] categ
 		}
 
 		tree.update;
-	}
+	});
 }
 
 
 class ButtonExec: Button {
 
+	string exec;
 	string parameter;
 	string type;
 	double clickTime = 0;
+	int status = int.max;
+	int pid;
 
 	this(){
 		super("");
@@ -57,13 +69,22 @@ class ButtonExec: Button {
 		}
 	}
 
+	void drawStatus(){
+		if(pid != 0 && status != 0){
+			if(status == int.max)
+				draw.setColor([0.6,0.6,0.6]);
+			else
+				draw.setColor([0.6,0,0]);
+			draw.rect(pos.a+[4,4], [2, size.h-8]);
+		}
+	}
+
 }
 
 
 class ButtonDesktop: ButtonExec {
 
 	string name;
-	string exec;
 	bool previewDrop;
 
 	this(string data){
@@ -87,6 +108,7 @@ class ButtonDesktop: ButtonExec {
 		draw.setColor([0.3,0.3,0.3]);
 		draw.text(pos.a + [size.w,0], size.h, exec, 2);
 		draw.noclip;
+		drawStatus;
 	}
 
 	override void spawnCommand(){
@@ -121,8 +143,6 @@ class ButtonDesktop: ButtonExec {
 
 class ButtonScript: ButtonExec {
 
-	string exec;
-
 	this(string data){
 		exec = data;
 		type = "script";
@@ -135,6 +155,7 @@ class ButtonScript: ButtonExec {
 		draw.text(pos.a+[10,0], size.h, exec);
 		draw.setColor([0.6,0.6,0.6]);
 		draw.text(pos.a + [draw.width(exec)+15,0], size.h, parameter);
+		drawStatus;
 	}
 
 	override void spawnCommand(){

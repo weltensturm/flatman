@@ -62,15 +62,20 @@ class Animation {
 	void replace(double end){
 		this.start = end;
 		this.end = end;
-		timeStart = 0;
+		timeStart = time;
 	}
 
 	double completion(){
+		if(done)
+			return 1;
 		return (time - timeStart).min(duration)/duration;
 	}
 
 	double calculate(){
+		if(done)
+			return end;
 		return start + (end-start)*func(completion);
+
 	}
 
 	bool done(){

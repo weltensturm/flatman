@@ -89,14 +89,19 @@ void updateDesktopNames(){
 }
 
 void updateWindowDesktop(Client client, long n){
-	replace(client.win, net.windowDesktop, n);
+	client.win.replace!CARDINAL(net.windowDesktop, n);
 }
 
 void updateWorkspaces(){
 	foreach(n, ws; monitor.workspaces){
-		foreach(t; ws.split.children.to!(Tabs[])){
-			replace(t.window, net.windowDesktop, n);
+		foreach(s; ws.split.separators){
+			s.window.replace!CARDINAL(net.windowDesktop, n);
 		}
+		foreach(t; ws.split.children.to!(Tabs[])){
+			t.window.replace!CARDINAL(net.windowDesktop, n);
+		}
+		foreach(f; ws.floating.frames)
+			f.window.replace!CARDINAL(net.windowDesktop, n);
 		foreach(c; ws.clients)
 			c.updateWindowDesktop(n);
 	}

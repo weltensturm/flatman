@@ -36,6 +36,7 @@ public import
 	x11.keysymdef,
 	ws.math,
 	ws.inotify,
+	ws.time,
 	ws.gui.base,
 	ws.gui.input,
 	ws.x.draw,

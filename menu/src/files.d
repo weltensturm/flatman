@@ -17,9 +17,22 @@ Tree addFiles(DynamicList list, Inotify.WatchStruct* watcher){
 	contexts.expanded = true;
 	contexts.padding = 0;
 
+	buttonContexts.leftClick ~= {
+		foreach(c; list.children){
+			if(auto t = cast(Tree)c){
+				if(t != contexts && t.expanded)
+					t.toggle;
+			}
+		}
+	};
+	
 	auto addContext = (string context){
 		.contexts ~= context;
-		contexts.addDir(context, true);
+		auto tree = contexts.addDir(context, true);
+		//tree.expander.leftClick.unbind;
+		tree.expander.leftClick ~= {
+			setContext(tree.path);
+		};
 	};
 
 	auto add = (string p, string f){
@@ -51,15 +64,13 @@ Tree addFiles(DynamicList list, Inotify.WatchStruct* watcher){
 			auto button = directory.children[0].to!ButtonFile;
 			button.isSelectedContext = c == button.file;
 			if(button.isSelectedContext != directory.expanded)
-				button.leftClick();
+				directory.toggle;
 		}
 	};
 
 	foreach(entry; "~/.flatman/".normalize.dirEntries(SpanMode.breadth))
 		if(entry.name.endsWith(".context"))
 			add(entry.name.dirName, entry.name.baseName);
-
-	addContext("/");
 
 	watcher.add ~= add;
 	watcher.change ~= change;
@@ -115,9 +126,10 @@ class InputFieldFile: InputField {
 class ButtonFile: ButtonExec, Path {
 
 	string file;
+	string context;
 	string parentDir;
 	bool isDir;
-	bool isContext;
+	int display;
 	bool isSelectedContext;
 	bool dirExpanded;
 
@@ -127,9 +139,15 @@ class ButtonFile: ButtonExec, Path {
 	int[2] dragOffset;
 	Base dropWhere;
 
-	this(string data, bool isDir, bool isContext=false){
+	enum:int {
+		BaseName,
+		FullPath,
+		ContextPath
+	}
+
+	this(string data, bool isDir, int display=BaseName){
 		this.isDir = isDir;
-		this.isContext = isContext;
+		this.display = display;
 		//data = data.normalize;
 		if(isDir){
 			auto enter = new Button("→");
@@ -138,18 +156,25 @@ class ButtonFile: ButtonExec, Path {
 			enter.style.bg.hover = [0.5,0.5,0.5,1];
 			enter.leftClick ~= () => setContext(data);
 			add(enter);
+			//if(display == FullPath && context != .context)
+			//	leftClick ~= () => setContext(data);
 		}
 		file = data;
+		context = file.chompPrefix(.context ~ "/");
+		exec = data;
 		type = "file";
 		if(parentDir.length)
 			parentDir ~= "/";
 		this.parentDir = parentDir;
-		isSelectedContext = context == file;
+		isSelectedContext = .context == file;
 		rightClick ~= &openPopup;
 	}
 
 	override string name(){
-		return isContext ? file : file.baseName;
+		return
+			display==BaseName ? file.baseName
+			: display==FullPath ? file.nice
+			: display==ContextPath ? context.nice : "";
 	}
 
 	override string path(){
@@ -166,7 +191,14 @@ class ButtonFile: ButtonExec, Path {
 		alias A = ListPopup.Action;
 		A[] buttons;
 		buttons ~= A("Open", { contextPath.openFile(file.normalize); });
+
 		if(isDir){
+
+			buttons ~= A("Expand", { parent.to!FileTree.toggle; });
+
+			if(display != FullPath)
+				buttons ~= A("Enter", { ["flatman-context", file].execute; });
+
 			buttons ~= A("Add File", {
 				if(menuWindow.keyboardFocus)
 					menuWindow.keyboardFocus.parent.remove(menuWindow.keyboardFocus);
@@ -205,10 +237,8 @@ class ButtonFile: ButtonExec, Path {
 				menuWindow.keyboardFocus = input;
 			});
 		
-			buttons ~= A("Set Context", { ["flatman-context", file].execute; });
-
 			if(contexts.canFind(file.normalize)){
-				buttons ~= A("Remove Context", {
+				buttons ~= A("Remove Bookmark", {
 					foreach(entry; "~/.flatman/".normalize.dirEntries(SpanMode.breadth)){
 						if(entry.name.endsWith(".context")){
 							auto c = entry.name.normalize.readText;
@@ -222,7 +252,18 @@ class ButtonFile: ButtonExec, Path {
 				});
 			}
 		
+		}else{
+
+			if(["file", "-i", file].execute.output.canFind(": image")){
+
+				buttons ~= A("Set Wallpaper", {
+					["feh", "--bg-fill", file].execute;
+				});
+
+			}
+
 		}
+
 		buttons ~= A("Trash", {
 			trash(file);
 		});
@@ -246,7 +287,7 @@ class ButtonFile: ButtonExec, Path {
 			draw.setColor([0.2, 0.2, 0.2]);
 			draw.rect(pos, size);
 		}else{
-			if(isDir && parent.to!Tree.expanded){
+			if(isDir && display == FullPath){
 				draw.setColor([0.13,0.13,0.13]);
 				draw.rect(pos.a+[1,0], size.a-[1,0]);
 			}
@@ -254,30 +295,35 @@ class ButtonFile: ButtonExec, Path {
 		}
 		if(file == ".")
 			return;
-		auto text = isContext ? file.nice : file.baseName;
 		draw.setFont(config["button-tab", "font"], config["button-tab", "font-size"].to!int);
-		if(isContext){
+		if(display != BaseName){
 			int advance = 10;
-			auto parts = text.split("/");
+			auto parts = name.split("/");
 			foreach(i, part; parts){
-				draw.setColor(isSelectedContext ? [1,0.7,.2] : [0.733,0.933,0.733]);
+				draw.setColor(
+						isSelectedContext ? [1,0.7,.2]
+						: i == parts.length-1 && !isDir ? [0.9,0.9,0.9]
+						: [0.733,0.933,0.733]);
 				advance += draw.text([pos.x+advance, pos.y], size.h, part);
-				draw.setColor([0.5,0.5,0.5]);
-				advance += draw.text([pos.x+advance, pos.y], size.h, "/");
+				if(isDir || i < parts.length-1){
+					draw.setColor([0.5,0.5,0.5]);
+					advance += draw.text([pos.x+advance, pos.y], size.h, "/");
+				}
 			}
 		}else{
 			draw.setColor(
 				isDir ?
-					(text.startsWith(".") ? [0.4,0.5,0.4] : [0.733,0.933,0.733])
-					: (text.startsWith(".") ? [0.4,0.4,0.4] : [0.933,0.933,0.933])
+					(name.startsWith(".") ? [0.4,0.5,0.4] : [0.733,0.933,0.733])
+					: (name.startsWith(".") ? [0.4,0.4,0.4] : [0.933,0.933,0.933])
 			);
-			draw.text(pos.a + [10,0], size.h, text);			
+			draw.text(pos.a + [10,0], size.h, name);			
 		}
 
 		draw.setColor([0.6,0.6,0.6]);
 		if(hasMouseFocus)
 			foreach(c; children)
 				c.onDraw;
+		drawStatus;
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -367,7 +413,7 @@ class FileTree: Tree {
 
 	this(Button button, bool drawHint=true){
 		super(button);
-		inset = 15;
+		inset = 7;
 		tail = 0;
 		this.drawHint = drawHint;
 	}
@@ -397,12 +443,14 @@ class FileTree: Tree {
 	override void onDraw(){
 		if(pos.y+size.h<0 || pos.y>menuWindow.size.h)
 			return;
-		if(expanded && drawHint){
-			draw.setColor([0.2,0.2,0]);
-			draw.rect(pos.a+[15,0], [1, size.h-children[0].size.h]);
-			draw.rect(pos.a+[15,0], [size.w-15, 1]);
-		}
 		super.onDraw;
+
+		/+
+		if(expanded && drawHint){
+			draw.setColor([0.2,0.2,0.2]);
+			draw.rect(pos.a+[1,2], [2, size.h-4]);
+		}
+		+/
 	}
 
 }
@@ -416,27 +464,27 @@ class DirectoryTree: FileTree, Path {
 
 	ButtonFile button;
 
-	string root;
+	bool loaded;
 
-	this(ButtonFile button, string directory){
+	this(ButtonFile button){
 		queue = new shared Queue!string;
 		this.button = button;
-		this.root = root;
 		button.resize([5,config["button-tree", "height"].to!int]);
 		padding = 0;
 		super(button);
-		bool once;
-		button.leftClick ~= {
-			if(!once){
-				task({ loadAddDir(directory, queue); }).executeInNewThread;
-				watcher = menuWindow.inotify.addWatch(directory, false);
-				watcher.add ~= (p, f) => add(p ~ '/' ~ f);
-				watcher.remove ~= (p, f) => remove(p ~ '/' ~ f);
-			}
-			once = true;
-		};
-		if(button.isContext && button.isSelectedContext)
-			button.leftClick();
+		if(button.display == ButtonFile.FullPath && button.isSelectedContext)
+			toggle;
+	}
+
+	override void toggle(){
+		if(!loaded){
+			task({ loadAddDir(button.file, queue); }).executeInNewThread;
+			watcher = menuWindow.inotify.addWatch(button.file, false);
+			watcher.add ~= (p, f) => add(p ~ '/' ~ f);
+			watcher.remove ~= (p, f) => remove(p ~ '/' ~ f);
+			loaded = true;
+		}
+		super.toggle;
 	}
 
 	override string name(){
@@ -507,10 +555,11 @@ class ButtonFileGhost: Base {
 }
 
 
-void addDir(FileTree container, string directory, bool isContext=false){
-	auto tree = new DirectoryTree(new ButtonFile(directory, true, isContext), directory);
+auto addDir(FileTree container, string directory, bool isContext=false){
+	auto tree = new DirectoryTree(new ButtonFile(directory, true, isContext));
 	container.add(tree);
 	tree.update;
+	return tree;
 }
 
 
