@@ -5,6 +5,36 @@ import flatman;
 __gshared:
 
 
+Monitor dirtomon(int dir){
+	return monitors[0];
+}
+
+
+void focusmon(int arg){
+	Monitor m = dirtomon(arg);
+	if(!m)
+		return;
+	if(m == monitor)
+		return;
+	monitor.active.unfocus(false); /* s/true/false/ fixes input focus issues
+					in gedit and anjuta */
+	monitor = m;
+	//focus(null);
+}
+
+
+Monitor findMonitor(int[2] pos, int[2] size=[1,1]){
+	Monitor result = monitor;
+	int a, area = 0;
+	foreach(monitor; monitors)
+		if((a = intersectArea(pos.x, pos.y, size.w, size.h, monitor)) > area){
+			area = a;
+			result = monitor;
+		}
+	return result;
+}
+
+
 struct StrutInfo {
 	Client client;
 	int[4] strut;
@@ -24,8 +54,6 @@ class Monitor {
 	int globalActive;
 	bool focusGlobal;
 
-	bool peekTitles;
-
 	this(int[2] pos, int[2] size){
 		this.pos = pos;
 		this.size = size;
@@ -33,28 +61,23 @@ class Monitor {
 		workspace.show;
 		//auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
 		//dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
-		auto watch = inotify.addWatch("~/.flatman".expandTilde, false);
-		watch.change ~= (path, file){
+		Inotify.watch("~/.flatman".expandTilde, (path, file, action){
+			if(action != Inotify.Modify)
+				return;
 			if(workspace && file.endsWith("current")){
 				workspace.updateContext("~/.flatman/current".expandTilde.readText);
 			}
 			if(file.endsWith("current") || file.endsWith(".context"))
 				updateDesktopNames;
-		};
+		});
 	}
 
 	void restack(){
 		"monitor.restack".log;
-		workspace.floating.restack;
-		foreach(ws; workspaces)
-			if(ws != workspace)
-				ws.floating.restack;
-		foreach_reverse(client; globals)
-			client.lower;
 		workspace.split.restack;
-		foreach(ws; workspaces)
-			if(ws != workspace)
-				ws.split.restack;
+		foreach(w; globals)
+			w.raise;
+		workspace.floating.restack;
 	}
 
 	Client active(){
@@ -125,7 +148,7 @@ class Monitor {
 		workspace.show;
 		updateWorkspaces;
 		updateCurrentDesktop;
-		draw;
+		redraw = true;
 	}
 
 	void moveWorkspace(int pos){
@@ -142,23 +165,29 @@ class Monitor {
 	}
 
 	void moveDown(){
-		if(workspaceActive == workspaces.length-1)
-			newWorkspace(workspaces.length);
+		if(workspaceActive == workspaces.length-1){
+			foreach(monitor; monitors)
+				monitor.newWorkspace(workspaces.length);
+		}
 		auto win = active;
 		if(win)
 			win.setWorkspace(workspaceActive+1);
-		switchWorkspace(workspaceActive+1);
+		foreach(monitor; monitors)
+			switchWorkspace(workspaceActive+1);
 		if(win)
 			win.focus;
 	}
 	
 	void moveUp(){
-		if(workspaceActive == 0)
-			newWorkspace(0);
+		if(workspaceActive == 0){
+			foreach(monitor; monitors)
+				monitor.newWorkspace(0);
+		}
 		auto win = active;
 		if(win)
 			win.setWorkspace(workspaceActive-1);
-		switchWorkspace(workspaceActive-1);
+		foreach(monitor; monitors)
+			monitor.switchWorkspace(workspaceActive-1);
 		if(win)
 			win.focus;
 	}
@@ -177,12 +206,6 @@ class Monitor {
 			globals ~= client;
 			client.moveResize(client.posFloating, client.sizeFloating);
 		}
-		/+
-		if(client.isVisible)
-			client.show;
-		else
-			client.hide;
-		+/
 	}
 
 	void move(Client client, int workspace){
@@ -209,7 +232,7 @@ class Monitor {
 		strut(client, true);
 	}
 
-	void draw(){
+	void onDraw(){
 		workspace.onDraw;
 	}
 
@@ -241,7 +264,7 @@ class Monitor {
 			reserve[] += c.strut[];
 		}
 		foreach(ws; workspaces){
-			ws.move([reserve[0].to!int, cast(int)reserve[2]]);
+			ws.move(pos.a + [reserve[0].to!int, cast(int)reserve[2]]);
 			ws.resize([(size.w-reserve[1]-reserve[0]).to!int, (size.h-reserve[2]-reserve[3]).to!int]);
 		}
 	}

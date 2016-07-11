@@ -79,7 +79,7 @@ void updateDesktopNames(){
 	string names;
 	foreach(i, ws; monitor.workspaces){
 		try{
-			names ~= ws.context.expandTilde.readText.baseName;
+			names ~= std.array.replace(ws.context.expandTilde.readText, "~".expandTilde, "~");
 		}catch{
 			names ~= "~";
 		}
@@ -96,9 +96,6 @@ void updateWorkspaces(){
 	foreach(n, ws; monitor.workspaces){
 		foreach(s; ws.split.separators){
 			s.window.replace!CARDINAL(net.windowDesktop, n);
-		}
-		foreach(t; ws.split.children.to!(Tabs[])){
-			t.window.replace!CARDINAL(net.windowDesktop, n);
 		}
 		foreach(f; ws.floating.frames)
 			f.window.replace!CARDINAL(net.windowDesktop, n);
@@ -133,42 +130,36 @@ alias CARDINAL = long;
 
 
 void change(Window window, Atom atom, Atom[] data, int mode){
-	int r = XChangeProperty(dpy, window, atom, XA_ATOM, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
-	if(r)
-		"property change error: Window %s Atom %s data %s mode %s".format(window, atom, data, mode);
+	XChangeProperty(dpy, window, atom, XA_ATOM, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
+	
 }
 
 void change(Window window, Atom atom, CARDINAL[] data, int mode){
-	int r = XChangeProperty(dpy, window, atom, XA_CARDINAL, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
-	if(r)
-		"property change error: Window %s Atom %s data %s mode %s".format(window, atom, data, mode);
+	XChangeProperty(dpy, window, atom, XA_CARDINAL, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
+	
 }
 
 void change(Window window, Atom atom, CARDINAL data, int mode){
-	int r = XChangeProperty(dpy, window, atom, XA_CARDINAL, 32, mode, cast(ubyte*)&data, 1);
-	if(r)
-		"property change error: Window %s Atom %s data %s mode %s".format(window, atom, data, mode);
+	XChangeProperty(dpy, window, atom, XA_CARDINAL, 32, mode, cast(ubyte*)&data, 1);
+	
 }
 
 void change(Window window, Atom atom, string data, int mode){
-	int r = XChangeProperty(dpy, window, atom, XInternAtom(dpy, "UTF8_STRING", False), 8, mode, cast(ubyte*)data.toStringz, cast(int)data.length);
-	if(r)
-		"property change error: Window %s Atom %s data %s mode %s".format(window, atom, data, mode);
+	XChangeProperty(dpy, window, atom, XInternAtom(dpy, "UTF8_STRING", False), 8, mode, cast(ubyte*)data.toStringz, cast(int)data.length);
+	
 }
 
 void change(Window window, Atom atom, Window data, int mode){
-	int r = XChangeProperty(dpy, window, atom, XA_WINDOW, 32, mode, cast(ubyte*)&data, 1);
-	if(r)
-		"property change error: Window %s Atom %s data %s mode %s".format(window, atom, data, mode);
+	XChangeProperty(dpy, window, atom, XA_WINDOW, 32, mode, cast(ubyte*)&data, 1);
+	
 }
 
 void change(Window window, Atom atom, Client[] clients, int mode){
 	Window[] data;
 	foreach(c; clients)
 		data ~= c.win;
-	int r = XChangeProperty(dpy, window, atom, XA_WINDOW, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
-	if(r)
-		"property change error: Window %s Atom %s data %s mode %s".format(window, atom, data, mode);
+	XChangeProperty(dpy, window, atom, XA_WINDOW, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
+	
 }
 
 void replace(T)(Window window, Atom atom, T data){

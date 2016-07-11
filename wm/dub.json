@@ -5,7 +5,7 @@
 	"sourcePaths": ["src"],
 	"includePaths": ["src"],
 	"dependencies" : {
-		"ws": ">=1.0.7"
+		"ws": ">=1.0.8"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"]
 }

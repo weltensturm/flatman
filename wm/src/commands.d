@@ -112,41 +112,43 @@ void toggle(string what){
 }
 
 void workspace(string dir, string how){
-	with(monitor){
-		if(dir == "+"){
-			if(how == "filled"){
-				foreach(i; workspaceActive+1..workspaces.length){
-					if(workspaces[i].clients.length){
-						switchWorkspace(cast(int)i);
-						return;
+	foreach(monitor; monitors){
+		with(monitor){
+			if(dir == "+"){
+				if(how == "filled"){
+					foreach(i; workspaceActive+1..workspaces.length){
+						if(workspaces[i].clients.length){
+							switchWorkspace(cast(int)i);
+							return;
+						}
 					}
-				}
-			}else if(how == "create"){
-				newWorkspace(workspaceActive+1);
+				}else if(how == "create"){
+					newWorkspace(workspaceActive+1);
+					switchWorkspace(workspaceActive+1);
+				}else
 				switchWorkspace(workspaceActive+1);
-			}else
-			switchWorkspace(workspaceActive+1);
-		}else if(dir == "-"){
-			if(how == "filled"){
-				foreach_reverse(i; 0..workspaceActive){
-					if(workspaces[i].clients.length){
-						switchWorkspace(i);
-						return;
+			}else if(dir == "-"){
+				if(how == "filled"){
+					foreach_reverse(i; 0..workspaceActive){
+						if(workspaces[i].clients.length){
+							switchWorkspace(i);
+							return;
+						}
 					}
-				}
-			}else if(how == "create"){
-				newWorkspace(workspaceActive);
-				switchWorkspace(workspaceActive-1);
-			}else
-				switchWorkspace(workspaceActive-1);
-		}else if(dir == "first"){
-			if(how == "create")
-				newWorkspace(0);
-			switchWorkspace(0);
-		}else if(dir == "last"){
-			if(how == "create")
-				newWorkspace(workspaces.length);
-			switchWorkspace(workspaces.length.to!int-1);
+				}else if(how == "create"){
+					newWorkspace(workspaceActive);
+					switchWorkspace(workspaceActive-1);
+				}else
+					switchWorkspace(workspaceActive-1);
+			}else if(dir == "first"){
+				if(how == "create")
+					newWorkspace(0);
+				switchWorkspace(0);
+			}else if(dir == "last"){
+				if(how == "create")
+					newWorkspace(workspaces.length);
+				switchWorkspace(workspaces.length.to!int-1);
+			}
 		}
 	}
 }

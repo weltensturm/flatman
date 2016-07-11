@@ -38,7 +38,7 @@ class Separator: Base {
 				DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
-		_draw = new XDraw(dpy, DefaultScreen(dpy), window, size.w, size.h);
+		_draw = new XDraw(dpy, window);
 		window.register([
 			Expose: (XEvent* e)=>onDraw(),
 			/+
@@ -122,10 +122,10 @@ class Split: Container {
 		if(!children.length)
 			return;
 		"split.restack".log;
-		foreach_reverse(tabs; (children.without(children[clientActive]) ~ children[clientActive]).to!(Tabs[]))
-			tabs.restack;
 		foreach(separator; separators)
-			XLowerWindow(dpy, separator.window);
+			XRaiseWindow(dpy, separator.window);
+		foreach(tabs; (children.without(children[clientActive]) ~ children[clientActive]).to!(Tabs[]))
+			tabs.restack;
 	}
 
 	void destroy(){
@@ -203,6 +203,8 @@ class Split: Container {
 					separators[$-1].show;
 			}
 		}
+		foreach(child; children.to!(Tabs[]))
+			child.updateHints;
 		tab.add(client);
 		rebuild;
 	}
@@ -260,6 +262,8 @@ class Split: Container {
 					}
 					if(clientActive >= children.length)
 						clientActive = cast(int)children.length-1;
+					foreach(child; children.to!(Tabs[]))
+						child.updateHints;
 					rebuild;
 					return;
 				}
@@ -327,7 +331,7 @@ class Split: Container {
 			if(i != children.length-1)
 				separators[i].moveResize(c.pos.a+[c.size.w,0], [padding, c.size.h]);
 		}
-		onDraw;
+		redraw = true;
 	}
 
 	Client next(){

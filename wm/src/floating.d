@@ -48,7 +48,7 @@ class Frame: Base {
 				DefaultVisual(dpy, screen),
 				CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
 		);
-		_draw = new XDraw(dpy, DefaultScreen(dpy), window, size.w, size.h);
+		_draw = new XDraw(dpy, window);
 		window.register([
 			Expose: (XEvent* e)=>onDraw(),
 			EnterNotify: (XEvent* e)=>mouse(true),
@@ -68,12 +68,7 @@ class Frame: Base {
 
 	void mouse(int button, bool pressed){
 		if(pressed && button == Mouse.buttonLeft && dragMode != DragMode.resizing){
-			dragMode = DragMode.moving;
-			dragStart = cursorPos;
-			if(clickTime+0.3 > now){
-				client.togglefloating;
-			}else
-				clickTime = now;
+			.drag(client, client.pos.a - cursorPos - pos);
 		}else if(pressed && button == Mouse.buttonRight && dragMode != DragMode.moving){
 			dragMode = DragMode.resizing;
 			dragStart = cursorPos;
@@ -86,7 +81,7 @@ class Frame: Base {
 		if(dragMode == DragMode.moving){
 			this.pos = this.pos.a + pos - dragStart;
 			XMoveWindow(dpy, window, this.pos.x, this.pos.y);
-			client.moveResize(this.pos.a + [0,20], client.sizeFloating);
+			client.moveResize(this.pos.a + [0,cfg.tabsTitleHeight], client.sizeFloating);
 			XEvent ev;
 			while(XCheckMaskEvent(dpy, PointerMotionMask|SubstructureRedirectMask, &ev)){}
 		}else if(dragMode == DragMode.resizing){
@@ -98,7 +93,7 @@ class Frame: Base {
 			dragStart.w = pos.w;
 			XMoveResizeWindow(dpy, window, this.pos.x, this.pos.y, size.w, size.h);
 			draw.resize(this.size);
-			client.moveResize(this.pos.a + [0,20], [size.w, client.size.h]);
+			client.moveResize(this.pos.a + [0,cfg.tabsTitleHeight], [size.w, client.size.h]);
 			XEvent ev;
 			while(XCheckMaskEvent(dpy, PointerMotionMask|SubstructureRedirectMask, &ev)){}
 		}
@@ -119,6 +114,7 @@ class Frame: Base {
 	}
 
 	void destroy(){
+		draw.destroy;
 		window.unregister;
 		XDestroyWindow(dpy, window);
 	}
@@ -140,7 +136,7 @@ class Frame: Base {
 		draw.rect([0,0], size);
 		draw.setFont("Consolas", 10);
 		draw.setColor(config.color("tabs title normal"));
-		draw.text([size.w/2, size.h-20], 20, client.name, 0.5);
+		draw.text([size.w/2, size.h-cfg.tabsTitleHeight], cfg.tabsTitleHeight, client.name, 0.5);
 		draw.finishFrame;
 		+/
 		draw.setFont(config["tabs title font"], config["tabs title font-size"].to!int);
@@ -161,9 +157,11 @@ class Frame: Base {
 
 		auto textOffset = (size.w/2 - draw.width(client.name)/2).max(size.h);
 		draw.setColor([0.1,0.1,0.1]);
+		/+
 		foreach(x; [-1,0,1])
 			foreach(y; [-1,0,1])
 				draw.text([x+textOffset, y], size.h+2, client.name);
+		+/
 		draw.setColor(config.color("tabs title " ~ state));
 		draw.text([textOffset, 0], size.h, client.name);
 		if(client.icon.length){
@@ -190,11 +188,9 @@ class Floating: Container {
 
 	void restack(){
 		"floating.restack".log;
-		foreach_reverse(i, client; clients){
-			//if(client != flatman.active){
-				client.lower;
-				XLowerWindow(dpy, frames[i].window);
-			//}
+		foreach(i, client; clients){
+			client.raise;
+			XRaiseWindow(dpy, frames[i].window);
 		}
 	}
 
@@ -241,7 +237,7 @@ class Floating: Container {
 			client.moveResize(client.posFloating, client.sizeFloating);
 			foreach(frame; frames){
 				if(frame.client == client){
-					frame.moveResize(client.pos.a-[0,20], [client.size.w,20]);
+					frame.moveResize(client.pos.a-[0,cfg.tabsTitleHeight], [client.size.w,cfg.tabsTitleHeight]);
 				}
 			}
 		}
@@ -252,7 +248,8 @@ class Floating: Container {
 	override void add(Client client){
 		"floating.add %s fullscreen=%s".format(client, client.isfullscreen).log;
 		add(client.to!Base);
-		frames ~= new Frame(client, client.posFloating.a - [0,20], [client.sizeFloating.w,20]);
+		client.frame = new Frame(client, client.posFloating.a - [0,cfg.tabsTitleHeight], [client.sizeFloating.w,cfg.tabsTitleHeight]);
+		frames ~= client.frame;
 		if(client.isfullscreen)
  			client.moveResize(monitor.pos, monitor.size);
 		else if(!client.posFloating.x && !client.posFloating.y || client.posFloating.x < 0 || client.posFloating.y < 0){
@@ -270,6 +267,7 @@ class Floating: Container {
 			frame.destroy;
 			break;
 		}
+		client.frame = null;
 		super.remove(client);
 	}
 	alias active = Container.active;

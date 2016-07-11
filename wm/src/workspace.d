@@ -19,10 +19,8 @@ class Workspace: Container {
 		split.hide;
 		floating = addNew!Floating(pos, size);
 		floating.hide;
-		if(!"~/.flatman/current".expandTilde.exists){
-			["flatman-context", "/"].execute;
-			["flatman-context", "~"].execute;
-		}
+		["flatman-context", "-c", "/"].execute;
+		["flatman-context", "-c", "~"].execute;
 		if("~/.flatman/current".expandTilde.exists)
 			context = "~/.flatman/current".expandTilde.readText;
 	}

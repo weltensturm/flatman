@@ -26,6 +26,7 @@ class Client: Base {
 	flatman.Monitor monitor;
 	Window win;
 	Window orig;
+	Frame frame;
 
 	Pixmap mPixmap;
 	ubyte[] icon;
@@ -140,8 +141,7 @@ class Client: Base {
 		grabButtons(true);
 		setFocus;
 		monitor.setActive(this);
-		foreach(m; monitors)
-			m.draw;
+		redraw = true;
 		previousFocus = this;
 		restack;
 	}
@@ -288,6 +288,9 @@ class Client: Base {
 		this.pos = pos;
 		this.size = size;
 		configure;
+		if(frame){
+			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
+		}
 	}
 
 	int originWorkspace(){
@@ -322,6 +325,7 @@ class Client: Base {
 
 		}
 		isUrgent = true;
+		redraw = true;
 	}
 
 	void raise(){
@@ -418,10 +422,6 @@ class Client: Base {
 		else {
 			isFloating = !isFloating;
 			"%s floating=%s".format(this, isFloating).log;
-			if(isFloating){
-				pos = posFloating;
-				size = sizeFloating;
-			}
 			monitor.remove(this);
 			monitor.add(this, monitor.workspaceActive);
 			focus;
@@ -611,8 +611,28 @@ class Client: Base {
 };
 
 
+template AtomType(int Format){
 
-CARDINAL getprop(CARDINAL)(Window window, Atom atom){
+	static if(Format == XA_CARDINAL || Format == XA_PIXMAP)
+		alias AtomType = long;
+	static if(Format == XA_ATOM)
+		alias AtomType = Atom;
+	static if(Format == XA_WINDOW)
+		alias AtomType = x11.X.Window;
+	static if(Format == XA_STRING)
+		alias AtomType = string;
+
+}
+
+
+auto getprop(int T)(Window window, Atom atom){
+	auto raw = _rawget(window, atom, T);
+	auto data = *(cast(AtomType!T*)raw);
+	XFree(raw);
+	return data;
+}
+
+CARDINAL getprop(T: CARDINAL)(Window window, Atom atom){
 	auto p = _rawget(window, atom, XA_CARDINAL);
 	auto d = *(cast(CARDINAL*)p);
 	XFree(p);

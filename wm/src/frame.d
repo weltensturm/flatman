@@ -30,7 +30,7 @@ class Frame {
 		);
 		XReparentWindow(dpy, client.win, window, client.pos.x-pos.x, client.pos.y-pos.y);
 		XMapRaised(dpy, window);
-		draw = new XDraw(dpy, DefaultScreen(dpy), window, size.w, size.h);
+		draw = new XDraw(dpy, window);
 	}
 
 	void onDraw(){

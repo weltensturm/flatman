@@ -20,89 +20,32 @@ struct ConfigColor {
 
 }
 
+struct ConfigInt4 {
+
+	int[4] value;
+	alias value this;
+
+	this(string text){
+		value = text.split.to!(int[4]);
+	}
+
+}
+
 
 struct WmConfig {
-
-	void value(string name, string value){
-		foreach(field; FieldNameTuple!WmConfig){
-			string splitName;
-			foreach(c; field){
-				if(c.toUpper == c.to!dchar && c != '_')
-					splitName ~= " " ~ c.toLower.to!string;
-				else if(c == '_')
-					splitName ~= "-";
-				else
-					splitName ~= c;
-			}
-			if(splitName == name){
-				mixin("
-					static if(is(typeof(" ~ field ~ ") == string[])){
-						foreach(line; value.splitLines){
-							if(line.strip.length)
-								" ~ field ~ " ~= line;
-						}
-					}else{
-						" ~ field ~ " = value.to!(typeof(" ~ field ~ "));
-					}
-				");
-				return;
-			}
-		}
-	}
-
-	void loadBlock(string block, string namespace){
-		Decode.text(block, (name, value, isBlock){
-			if(isBlock && !isList(name))
-				loadBlock(value, namespace ~ " " ~ name);
-			else
-				this.value((namespace ~ " " ~ name).strip, value.strip);
-		});
-	}
-
-	bool isList(string name){
-		foreach(field; FieldNameTuple!WmConfig){
-			string splitName;
-			foreach(c; field){
-				if(c.toUpper == c.to!dchar && c != '_')
-					splitName ~= " " ~ c.toLower.to!string;
-				else if(c == '_')
-					splitName ~= "-";
-				else
-					splitName ~= c;
-			}
-			if(splitName == name){
-				mixin("return is(typeof(" ~ field ~ ") == string[]);");
-			}
-		}
-		return false;
-	}
-
-	void load(){
-		auto prioritizedPaths = [
-			"/etc/flatman/config.ws",
-			"~/.config/flatman/config.ws".expandTilde,
-		];
-		foreach(path; prioritizedPaths){
-			try{
-				loadBlock(path.readText, "");
-				"loaded config %s".format(path).log;
-			}catch(Exception e)
-				e.toString.log;
-		}
-	}
 
 	string[] keys;
 	string[] autostart;
 
-	int splitPaddingElem;
-	ConfigColor splitBackground;
-
-	ConfigColor tabsBorder;
-	ConfigColor tabsBorderActive;
+	int tabsTitleHeight;
+	int tabsWidth;
+	ConfigInt4 tabsPadding;
+	ConfigColor tabsBorderNormalColor;
+	ConfigColor tabsBorderActiveColor;
+	ConfigColor tabsBorderFullscreenColor;
 	ConfigColor tabsBackgroundNormal;
 	ConfigColor tabsBackgroundFullscreen;
 	ConfigColor tabsBackgroundHover;
-	ConfigColor tabsBackgroundActiveBg;
 	ConfigColor tabsBackgroundActive;
 	ConfigColor tabsBackgroundUrgent;
 	string tabsTitleFont;
@@ -110,10 +53,148 @@ struct WmConfig {
 	int tabsTitleShow;
 	ConfigColor tabsTitleNormal;
 	ConfigColor tabsTitleActive;
-	ConfigColor tabsTitleActiveBg;
 	ConfigColor tabsTitleUrgent;
 	ConfigColor tabsTitleHover;
 	ConfigColor tabsTitleFullscreen;
+
+	void load(){
+
+		"loading config".log;
+
+		auto prioritizedPaths = [
+			"/etc/flatman/config.ws",
+			"~/.config/flatman/config.ws".expandTilde,
+		];
+
+		struct Entry {
+			string name;
+			string value;
+		}
+
+		Entry[] values;
+
+		bool endpoint(string name){
+			foreach(field; FieldNameTuple!WmConfig){
+				string splitName;
+				foreach(c; field){
+					if(c.toUpper == c.to!dchar && c != '_')
+						splitName ~= " " ~ c.toLower.to!string;
+					else if(c == '_')
+						splitName ~= "-";
+					else
+						splitName ~= c;
+				}
+				if(splitName == name){
+					mixin("return is(typeof(" ~ field ~ ") == string[]);");
+				}
+			}
+			return false;
+		}
+
+		void loadBlock(string block, string namespace){
+			Decode.text(block, (name, value, isBlock){
+				if(isBlock && !endpoint(name))
+					loadBlock(value, namespace ~ " " ~ name);
+				else
+					foreach(l; value.splitLines)
+						values ~= Entry((namespace ~ " " ~ name).strip, l.strip);
+			});
+		}
+
+		foreach(path; prioritizedPaths){
+			try{
+				loadBlock(path.readText, "");
+				"loaded config %s".format(path).log;
+			}catch(Exception e)
+				e.toString.log;
+		}
+
+		foreach(field; FieldNameTuple!WmConfig){
+			string splitName;
+			foreach(c; field){
+				if(c.toUpper == c.to!dchar && c != '_')
+					splitName ~= " " ~ c.toLower.to!string;
+				else if(c == '_')
+					splitName ~= "-";
+				else
+					splitName ~= c;
+			}
+			auto filtered = values.filter!(a => a.name == splitName && a.value.strip.length).array;
+
+			if(!filtered.length)
+				throw new Exception("Error in config: could not find value " ~ splitName);
+			
+			mixin("enum isList = is(typeof(" ~ field ~ ") == string[]);");
+			
+			try {
+				static if(isList){
+					foreach(entry; filtered)
+						mixin(field ~ " ~= entry.value;");
+				}else{
+					mixin(field ~ " = filtered[$-1].value.to!(typeof(" ~ field ~ "));");
+				}
+			}catch(Exception e){
+				throw new Exception("Error in config at \"%s\", matches \"%s\"".format(splitName, filtered), e);
+			}
+		}
+	}
+
+}
+
+WmConfig cfg;
+
+
+class ConfigNode {
+
+	this(string context){
+		this.context = context;
+	}
+
+	string context;
+
+	string value(){
+		return config[context];
+	}
+
+	alias value this;
+
+	T opCast(T)() if(is(T == int[4])) {
+		return value.split.to!(int[4]);
+	}
+
+	T opCast(T)() if(is(T == float[3])) {
+		if(context !in config.colors){
+			auto clr = value;
+			config.colors[context] = [
+					clr[0..2].to!int(16)/255.0,
+					clr[2..4].to!int(16)/255.0,
+					clr[4..6].to!int(16)/255.0
+			]; 
+		}
+		return config.colors[context];
+	}
+
+	T opCast(T)() if(is(T == int)) {
+		return value.to!int;
+	}
+
+	T opCast(T)() if(is(T == string)) {
+		return value;
+	}
+
+	ConfigNode opIndex(string s){
+		return new ConfigNode(context ~ " " ~ s);
+	}
+
+	ConfigNode opDispatch(string s)() if(s != "to") {
+		return new ConfigNode(context ~ " " ~ s.replace("_", "-"));
+	}
+
+	/+
+	float[3] color(){
+		return opCast!(float[3]);
+	}
+	+/
 
 }
 
@@ -123,6 +204,8 @@ class Config {
 	string[string] values;
 	string[] autostart;
 
+	float[3][string] colors;
+
 	string opIndex(string name){
 		if(name in values)
 			return values[name];
@@ -131,12 +214,15 @@ class Config {
 	}
 
 	float[3] color(string name){
-		auto clr = this[name];
-		return [
-				clr[0..2].to!int(16)/255.0,
-				clr[2..4].to!int(16)/255.0,
-				clr[4..6].to!int(16)/255.0
-		]; 
+		if(name !in colors){
+			auto clr = this[name];
+			colors[name] = [
+					clr[0..2].to!int(16)/255.0,
+					clr[2..4].to!int(16)/255.0,
+					clr[4..6].to!int(16)/255.0
+			];
+		}
+		return colors[name];
 	}
 
 	string key(string name){
@@ -180,14 +266,16 @@ class Config {
 		}
 	}
 
+	ConfigNode opDispatch(string s)(){
+		return new ConfigNode(s);
+	}
+
 }
 
 Config config;
 
 
 shared static this(){
-	WmConfig cfg;
-	cfg.load;
 	config = new Config;
 	config.load;
 }

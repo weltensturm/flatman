@@ -32,9 +32,12 @@ class Container: Base {
 	alias remove = Base.remove;
 
 	void remove(Client client){
+		bool decrease = children.countUntil(client) <= clientActive;
 		remove(cast(Base)client);
 		if(clientActive >= children.length)
 			clientActive = children.length-1;
+		else if(decrease)
+			clientActive = (clientActive-1).max(0);
 	}
 
 	override void show(){
