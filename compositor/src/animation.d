@@ -74,7 +74,7 @@ class Animation {
 	double calculate(){
 		if(done)
 			return end;
-		return start + (end-start)*func(completion);
+		return start + (end-start)*func(completion).min(1).max(0);
 
 	}
 

@@ -20,24 +20,27 @@ void main(){
 		signal(SIGINT, &stop);
 		XSetErrorHandler(&xerror);
 		root = XDefaultRootWindow(wm.displayHandle);
-		manager = new CompositeManager;
+		new CompositeManager;
+		double lastFrame = now;
 		while(running){
+			//XSync(wm.displayHandle, false);
 			wm.processEvents;
 			if(manager.restack){
 				manager.updateStack;
 				manager.restack = false;
 			}
-			auto frameStart = now;
 			manager.draw;
-			auto frameEnd = now;
-			if(frameEnd - frameStart > 1.0/58)
-				writeln(frameEnd - frameStart);
-			Thread.sleep(((frameStart + 1.0/60.0 - frameEnd).max(0)*1000).lround.msecs);
+			auto frame = now;
+			if(lastFrame-frame > 0)
+				Thread.sleep((((lastFrame-frame))*1000).lround.msecs);
+			lastFrame += 1.0/61;
 		}
 	}catch(Throwable t){
 		writeln(t);
 	}
+	manager.cleanup;
 }
+
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	try {
@@ -66,6 +69,16 @@ void approach(ref double[2] current, double[2] target, double frt){
 	current[0] = eerp(current[0], target[0], frt);
 	current[1] = eerp(current[1], target[1], frt);
 }
+
+
+Atom[string] atoms;
+
+Atom atom(string n){
+	if(n !in atoms)
+		atoms[n] = XInternAtom(wm.displayHandle, n.toStringz, false);
+	return atoms[n];
+}
+
 
 
 class CompositeManager {
@@ -111,6 +124,8 @@ class CompositeManager {
 
 	this(){
 
+		manager = this;
+
 		//XSynchronize(wm.displayHandle, true);
 		XInitThreads;
 		width = DisplayWidth(wm.displayHandle, DefaultScreen(wm.displayHandle));
@@ -142,13 +157,15 @@ class CompositeManager {
 		pa.subwindow_mode = IncludeInferiors;
 		auto format = XRenderFindVisualFormat(wm.displayHandle, visual);
 		frontBuffer = XRenderCreatePicture(wm.displayHandle, root, format, CPSubwindowMode, &pa);
-		backBufferPixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), DefaultDepth(wm.displayHandle, 0));
+		backBufferPixmap = XCreatePixmap(wm.displayHandle, root, DisplayWidth(wm.displayHandle, 0), DisplayHeight(wm.displayHandle, 0), depth);
 		backBuffer = XRenderCreatePicture(wm.displayHandle, backBufferPixmap, format, 0, null);
 		//XFreePixmap(wm.displayHandle, backBufferPixmap); // The picture owns the pixmap now
+
 		XSync(wm.displayHandle, false);
 		"created backbuffer".writeln;
 		
 		workspaceProperty = new Property!(XA_CARDINAL, false)(root, "_NET_CURRENT_DESKTOP");
+		workspace = workspaceProperty.get;
 		
 		rootmapId = new Property!(XA_PIXMAP, false)(root, "_XROOTPMAP_ID");
 		setrootId = new Property!(XA_PIXMAP, false)(root, "_XSETROOT_ID");
@@ -179,12 +196,66 @@ class CompositeManager {
 		XUngrabServer(wm.displayHandle);
 		XFlush(wm.displayHandle);
 
-		get_root_tile;
+		updateWallpaper;
 
 		initAlpha;
-		setupVerticalSync;
+		//setupVerticalSync;
+		shadowT = shadow(0, -1, 30);
+		shadowB = shadow(0, 1, 30);
+		shadowL = shadow(-1, 0, 30);
+		shadowR = shadow(1, 0, 30);
+		shadowTl = shadow(-1, -1, 30);
+		shadowTr = shadow(1, -1, 30);
+		shadowBl = shadow(-1, 1, 30);
+		shadowBr = shadow(1, 1, 30);
 	}
-	
+
+	void cleanup(){
+		foreach(client; clients)
+			client.cleanup;
+		XRenderFreePicture(wm.displayHandle, frontBuffer);
+		XRenderFreePicture(wm.displayHandle, backBuffer);
+	}
+		
+	Picture shadowT;
+	Picture shadowB;
+	Picture shadowL;
+	Picture shadowR;
+	Picture shadowTl;
+	Picture shadowTr;
+	Picture shadowBl;
+	Picture shadowBr;
+
+
+	Picture shadow(int x, int y, int width){
+		auto id = width*100 + x*10 + y;
+		auto pixmap = XCreatePixmap(wm.displayHandle, root, x ? width : 1, y ? width : 1, 32);
+		XRenderPictureAttributes pa;
+		pa.repeat = true;
+		auto picture = XRenderCreatePicture(wm.displayHandle, pixmap, XRenderFindStandardFormat(wm.displayHandle, PictStandardARGB32), CPRepeat, &pa);
+		XRenderColor c;
+		c.red =   0;
+		c.green = 0;
+		c.blue =  0;
+		if(x && y){
+			foreach(x1; 0..width){
+				foreach(y1; 0..width){
+					double[2] dir = [(-x).max(0)*width-x1, (-y).max(0)*width-y1];
+					auto len = asqrt(dir[0]*dir[0] + dir[1]*dir[1]).min(width);
+					c.alpha = ((1-len/width).pow(3)/6*0xffff).to!ushort;
+					XRenderFillRectangle(wm.displayHandle, PictOpSrc, picture, &c, x1, y1, 1, 1);
+				}
+			}
+		}else{
+			foreach(i; 0..width){
+				c.alpha = ((i.to!double/width).pow(3)/6 * 0xffff).to!ushort;
+				XRenderFillRectangle(wm.displayHandle, PictOpSrc, picture, &c, x ? (x > 0 ? width-i: i) : 0, y ? (y > 0 ? width-i : i) : 0, 1, 1);
+			}
+		}
+		XFreePixmap(wm.displayHandle, pixmap);
+		return picture;
+	}
+
 	Picture colorPicture(bool argb, double a, double r, double g, double b){
 		auto pixmap = XCreatePixmap(wm.displayHandle, root, 1, 1, argb ? 32 : 8);
 		if(!pixmap)
@@ -220,6 +291,8 @@ class CompositeManager {
 		if(!XGetWindowAttributes(wm.displayHandle, window, &wa))
 			return;
 		auto client = new CompositeClient(window, [wa.x,wa.y], [wa.width,wa.height], wa);
+		client.workspace = client.workspaceProperty.get;
+		client.workspaceAnimation(client.workspace, client.workspace);
 		"found window %s".format(window).writeln;
 		clients ~= client;
 	}
@@ -236,9 +309,14 @@ class CompositeManager {
 	}
 
 	void evConfigure(XEvent* e){
+		if(e.xconfigure.window == .root){
+			width = e.xconfigure.width;
+			height = e.xconfigure.height;
+			return;
+		}
 		foreach(i, c; clients){
 			if(c.windowHandle == e.xconfigure.window){
-				c.processEvent(*e);
+				c.processEvent(e);
 				restack = true;
 				return;
 			}
@@ -273,21 +351,39 @@ class CompositeManager {
 				foreach(c; clients){
 					c.workspaceAnimation(workspace, oldWorkspace);
 				}
-			}
-		}else{
-			if(clients.length && e.atom == clients[0].workspaceProperty.property){
-				foreach(c; clients){
-					if(c.windowHandle == e.window){
-						c.workspace = c.workspaceProperty.get;
-						c.workspaceAnimation(workspace, workspace);
+			}else{
+				foreach(bg; background_props_str){
+					if(e.atom == bg.atom){
+						updateWallpaper;
 					}
 				}
+			}
+		}else{
+			if(!clients.length)
+				return;
+			if(![clients[0].workspaceProperty.property, clients[0].tabDirectionProperty.property].canFind(e.atom))
+				return;
+			CompositeClient client;
+			foreach(c; clients){
+				if(e.window == c.windowHandle){
+					client = c;
+					break;
+				}
+			}
+			if(!client)
+				return;
+			if(e.atom == client.workspaceProperty.property){
+				client.workspace = client.workspaceProperty.get;
+				client.workspaceAnimation(workspace, workspace);
+			}else if(e.atom == client.tabDirectionProperty.property){
+				client.tabDirection = client.tabDirectionProperty.get.to!int;
 			}
 		}
 	}
 
-	void get_root_tile(){
-		assert(!root_pixmap);
+	void updateWallpaper(){
+		if(root_pixmap)
+			XFreePixmap(wm.displayHandle, root_pixmap);
 		root_tile_fill = false;
 		bool fill = false;
 		Pixmap pixmap = None;
@@ -403,57 +499,165 @@ class CompositeManager {
 		glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
 	}
 
-	void draw(){
-		Animation.update;
-		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
-		foreach(c; clients ~ destroyed){
-			auto alpha = c.animation.fade.calculate;
-			if(c.picture && alpha > 0 && c.animation.pos.y.calculate > -height && c.animation.pos.y.calculate < height){
+	void drawClient(CompositeClient c){
 
-				auto scale = alpha/4+0.75;
-				c.updateScale(scale);
+		auto alpha = c.animation.fade.calculate;
+		auto animPos = [c.animation.pos.x.calculate, c.animation.pos.y.calculate];
+		auto animOffset = [c.animation.renderOffset.x.calculate, c.animation.renderOffset.y.calculate];
+		auto animSize = [c.animation.size.x.calculate, c.animation.size.y.calculate];
 
-				if(c.resizeGhost && (!c.animation.size[0].done || !c.animation.size[1].done)){
-					c.updateResizeGhostScale(scale);
+		auto scale = alpha/4+0.75;
 
-					auto ghostAlpha = alpha; // * (1-c.animation.size.x.completion).max(0).min(1);
-					if(c.animation.size.x.completion != 1){
-						XRenderComposite(
-							wm.displayHandle,
-							ghostAlpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
-							c.resizeGhost,
-							ghostAlpha < 1 ? this.alpha[(ghostAlpha*ALPHA_STEPS).to!int] : None,
-							backBuffer,
-							0,0,0,0,
-							(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
-							(c.animation.pos.y.calculate + (1-scale)*c.size.y/2).lround.to!int,
-							(c.animation.size[0].calculate*scale).lround.to!int,
-							(c.animation.size[1].calculate*scale).lround.to!int
-						);
-					}
-				}
+		int[2] pos = [
+			(animPos.x + (1-scale)*c.size.x/2).lround.to!int,
+			(animPos.y + (1-scale)*c.size.y/2).lround.to!int
+		];
 
-				alpha = alpha*(c.animation.size.x.completion).max(0);
+		int[2] size = [
+			(animSize.w.min(c.size.w)*scale).lround.to!int,
+			(animSize.h.min(c.size.h)*scale).lround.to!int 
+		];
+
+		c.updateScale(scale);
+
+		if(c.resizeGhost && (!c.animation.size[0].done || !c.animation.size[1].done)){
+			c.updateResizeGhostScale(scale);
+
+			auto ghostAlpha = alpha; // * (1-c.animation.size.x.completion).max(0).min(1);
+			if(c.animation.size.x.completion != 1){
 				XRenderComposite(
 					wm.displayHandle,
-					alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
-					c.picture,
-					alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
+					ghostAlpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
+					c.resizeGhost,
+					ghostAlpha < 1 ? this.alpha[(ghostAlpha*ALPHA_STEPS).to!int] : None,
 					backBuffer,
-					0,0,0,0,
-					(c.animation.pos.x.calculate + (1-scale)*c.size.x/2).lround.to!int,
-					(c.animation.pos.y.calculate + (1-scale)*c.size.y/2).lround.to!int,
-					(c.animation.size[0].calculate.min(c.size.x)*scale).lround.to!int,
-					(c.animation.size[1].calculate.min(c.size.y)*scale).lround.to!int
+					animOffset.x.lround.to!int,
+					animOffset.y.lround.to!int,
+					0,
+					0,
+					pos.x,
+					pos.y,
+					(animSize.w*scale).lround.to!int,
+					(animSize.h*scale).lround.to!int
 				);
-
 			}
 		}
-		//XSync(wm.displayHandle, false);
+
+		alpha = alpha*(c.resizeGhost ? c.animation.size.x.completion : 1).max(0);
+		XRenderComposite(
+			wm.displayHandle,
+			alpha < 1 || c.hasAlpha ? PictOpOver : PictOpSrc,
+			c.picture,
+			alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None,
+			backBuffer,
+			animOffset.x.lround.to!int,
+			animOffset.y.lround.to!int,
+			0,0,
+			pos.x,
+			pos.y,
+			size.w,
+			size.h
+		);
+		if(false)
+			drawShadow(pos, size);
+	}
+
+	void drawShadow(int[2] pos, int[2] size){
+		foreach(x; [-1, 0, 1]){
+			if(x < 0 && pos.x<=0 || x > 0 && pos.x+size.w>=width)
+				continue;
+			foreach(y; [-1, 0, 1]){
+				if(y < 0 && pos.y<=0 || y > 0 && pos.y+size.h>=height)
+					continue;
+				if(x == 0 && y == 0)
+					continue;
+				Picture s;
+				final switch(10*x+y){
+					case 10*0 + -1:
+						s = shadowT;
+						break;
+					case 10*0 + 1:
+						s = shadowB;
+						break;
+					case 10*-1 + 0:
+						s = shadowL;
+						break;
+					case 10*1 + 0:
+						s = shadowR;
+						break;
+					case 10*-1 + -1:
+						s = shadowTl;
+						break;
+					case 10*1 + -1:
+						s = shadowTr;
+						break;
+					case 10*-1 + 1:
+						s = shadowBl;
+						break;
+					case 10*1 + 1:
+						s = shadowBr;
+						break;
+				}
+				XRenderComposite(
+					wm.displayHandle,
+					PictOpOver,
+					s,
+					None,
+					backBuffer,
+					0,
+					0,
+					0,0,
+					pos.x + (x > 0 ? size.w-1 : 30*x),
+					pos.y + (y > 0 ? size.h-1 : 30*y),
+					x == 0 ? size.w-1 : 30,
+					y == 0 ? size.h-1 : 30
+				);
+			}
+		}
+	}
+
+	void draw(){
+		CompositeClient[] windowsDraw;
+
+		foreach(c; clients ~ destroyed){
+			auto animPos = [c.animation.pos.x.calculate, c.animation.pos.y.calculate];
+			auto animSize = [c.animation.size.x.calculate, c.animation.size.y.calculate];
+			if(
+				!c.picture
+				|| c.animation.fade.calculate == 0
+				|| animPos.x+animSize.w <= 0
+				|| animPos.y+animSize.h <= 0
+				|| animPos.x >= width
+				|| animPos.y >= height)
+				continue;
+			/+
+			if(!c.hasAlpha && c.animation.fade.calculate == 1)
+				foreach(cq; windowsDraw.dup){
+					auto cqAnimPos = [cq.animation.pos.x.calculate, cq.animation.pos.y.calculate];
+					auto cqAnimSize = [cq.animation.size.x.calculate, cq.animation.size.y.calculate];
+					if(
+							cqAnimPos.x.max(0) - animPos.x >= 0
+							&& cqAnimPos.y - animPos.y >= 0
+							&& cqAnimPos.x+cqAnimSize.w <= animPos.x+animSize.w
+							&& cqAnimPos.y+cqAnimSize.h <= animPos.y+animSize.h
+							)
+						windowsDraw = windowsDraw.filter!(a => a != cq).array;
+				}
+			+/
+			windowsDraw ~= c;
+		}		
+
+		Animation.update;
+		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
+
+		foreach(c; windowsDraw){
+			drawClient(c);
+		}
 		//verticalSync;
 		//verticalSyncDraw;
 
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
+
 	}
 
 }

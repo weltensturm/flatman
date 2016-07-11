@@ -4,6 +4,7 @@ module composite;
 public import
 	core.thread,
 	core.sys.posix.signal,
+	core.memory,
 	std.process,
 	std.algorithm,
 	std.array,
@@ -22,6 +23,7 @@ public import
 	x11.Xproto,
 	x11.Xatom,
 	x11.extensions.Xcomposite,
+	x11.extensions.Xdamage,
 	x11.extensions.Xfixes,
 	x11.extensions.XInput,
 	x11.extensions.render,
