@@ -33,6 +33,7 @@ public import
 	ws.x.draw,
 	ws.wm,
 	ws.decode,
+	ws.event,
 	ws.inotify,
 	ws.animation,
 	ws.gui.base,

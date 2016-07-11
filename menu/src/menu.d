@@ -9,7 +9,6 @@ ulong root;
 
 Menu menuWindow;
 
-CardinalListProperty screenSize;
 CardinalProperty currentDesktop;
 
 
@@ -38,7 +37,7 @@ enum categories = [
 void main(string[] args){
 	options.fill(args);
 	XInitThreads();
-	new Menu(300, 500, "flatman-menu");
+	new Menu(600, 500, "flatman-menu");
 	wm.add(menuWindow);
 	while(wm.hasActiveWindows){
 		auto frameStart = now;
@@ -93,6 +92,7 @@ class Menu: ws.wm.Window {
 	Inotify inotify;
 
 	Scroller scroller;
+	Scroller appScroller;
 
 	Tree contexts;
 
@@ -102,7 +102,6 @@ class Menu: ws.wm.Window {
 		menuWindow = this;
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
-		screenSize = new CardinalListProperty(.root, "_NET_DESKTOP_GEOMETRY");
 		currentDesktop = new CardinalProperty(.root, "_NET_CURRENT_DESKTOP");
 		auto screens = screens;
 		auto screen = [screens[options.screen].w, screens[options.screen].h];
@@ -127,26 +126,41 @@ class Menu: ws.wm.Window {
 		}
 
 		scroller = addNew!Scroller;
+		appScroller = addNew!Scroller;
 
 		auto list = scroller.addNew!DynamicList;
 		list.padding = 0;
 		list.style.bg = [0.1,0.1,0.1,1];
-		auto watcher = menuWindow.inotify.addWatch("~/.flatman/".normalize, false);
-		list.addApps(appCategories, categories);
-		list.addHistory(watcher);
-		contexts = list.addFiles(watcher);
+		//list.addApps(appCategories, categories);
+		contexts = list.addFiles;
 		list.addTrash;
 
-		super(w, screen.h.to!int, title);
+		auto appList = appScroller.addNew!DynamicList;
+		appList.padding = 0;
+		appList.style.bg = [0.1,0.1,0.1,1];
+		appList.addHistory;
+		appList.addApps(appCategories, categories);
+
+		super(w, screen.h/2, title);
+		updateSize;
 
 		draw.setColor([0,0,0]);
 		draw.rect(pos,size);
 		draw.finishFrame;
 
+		wm.on(.root, [
+			ConfigureNotify: (XEvent* ev) => updateSize
+		]);
+	}
+
+	void updateSize(){
+		auto screens = screens;
+		auto screen = [screens[options.screen].w, screens[options.screen].h];
+		XResizeWindow(wm.displayHandle, windowHandle, size.w, screen.h);
 	}
 
 	override void drawInit(){
-		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
+		_draw = new XDraw(this);
 		_draw.setFont(config["font"], config["font-size"].to!int);
 	}
 
@@ -159,16 +173,16 @@ class Menu: ws.wm.Window {
 	}
 
 	void tick(){
-		auto target = [active ? 0 : -size.w+1, 0];
+		auto target = [active ? 0 : -size.w+1, active ? 0 : -size.h+1];
 		if(target != pos){
 			pos = target;
 			XMoveWindow(dpy, windowHandle, pos.x, pos.y);
 			XSync(dpy, false);
 		}
 		if(active){
-			try
-				inotify.update;
-			catch(Exception e)
+			try {
+				Inotify.update;
+			}catch(Exception e)
 				writeln(e);
 			foreach(c; contexts.children[1..$].to!(Path[]))
 				c.tick;
@@ -178,7 +192,9 @@ class Menu: ws.wm.Window {
 	override void resize(int[2] size){
 		super.resize(size);
 		scroller.move([0,0]);
-		scroller.resize(size.a-[2,0]);
+		scroller.resize([size.w/2-1,size.h-2]);
+		appScroller.move([size.w/2,0]);
+		appScroller.resize([size.w/2-2, size.h-2]);
 	}
 
 	override void onHide(){
@@ -193,7 +209,9 @@ class Menu: ws.wm.Window {
 		draw.setColor([0.2,0.2,0.2]);
 		draw.rect([0,0], size);
 		draw.setColor([0.1,0.1,0.1]);
-		draw.rect(pos.a, size.a-[2,0]);
+		draw.rect(pos.a+[0,1], size.a-[2,1]);
+		draw.setColor([0.2,0.2,0.2]);
+		draw.rect([size.w/2-1,0], [1, size.h]);
 		super.onDraw;
 		draw.setColor([0,0,0]);
 		draw.rect(pos.a + [size.w-1,0], [1,size.h]);
@@ -239,6 +257,10 @@ class Menu: ws.wm.Window {
 		}
 		if(keyboardFocus)
 			keyboardFocus.onKeyboard(key, pressed);
+		else if(key == 'q'){
+			hide;
+			wm.remove(this);
+		}
 	}
 
 	override void onKeyboardFocus(bool focus){
@@ -254,6 +276,8 @@ class RootButton: Button {
 	string name;
 
 	Tree tree;
+
+	bool mouseDown;
 
 	this(string name, Button[] buttons = []){
 		this.name = name;
@@ -276,14 +300,25 @@ class RootButton: Button {
 		}
 	}
 
+	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+		if(button == Mouse.buttonLeft)
+			mouseDown = pressed;
+		super.onMouseButton(button, pressed, x, y);
+	}
+
 	override void onDraw(){
 		if(pos.y+size.h<0 || pos.y>menuWindow.size.h)
 			return;
+		/+
 		double mod = (hasMouseFocus ? 1.1 : 1) * (tree && tree.expanded ? 1.3 : 1);
-		draw.setColor([0.15*mod,0.15*mod,0.15*mod]);
-		draw.rect(pos, size);
+		+/
+		if(pressed){
+			draw.setColor([0.15,0.15,0.15]);
+			draw.rect(pos, size);
+		}
 		draw.setFont(config["button-tab", "font"], config["button-tab", "font-size"].to!int);
-		draw.setColor([0.9,0.9,0.9]);
+		auto mod = (tree && tree.expanded ? 1 : 0.7);
+		draw.setColor([0.9*mod,0.9*mod,0.9*mod]);
 		draw.text(pos.a + [10, 0], size.h, name);
 	}
 

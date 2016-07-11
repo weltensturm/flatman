@@ -4,9 +4,29 @@ module menu.context;
 import menu;
 
 
+__gshared:
+
+
 class Context {
 	
-	static string path;
+	static string current;
+	static string currentPath;
+
+	static ws.event.Event!(string) change;
+
+	shared static this(){
+		change = new ws.event.Event!string;
+		string currentContext = "";
+		Inotify.watch("~/.flatman/current".normalize, (path, file, action){
+			current = "~/.flatman/current".normalize.readText;
+			currentPath = current.readText;
+			if(currentContext != currentPath){
+				change(current);
+				writeln("context = " ~ currentPath);
+				currentContext = currentPath;
+			}
+		});
+	}
 
 }
 
@@ -72,18 +92,16 @@ struct CommandInfo {
 
 CommandInfo[] historyInfo(){
 	CommandInfo[] history;
-	if(historyFile.exists){
-		foreach(line; historyFile.readText.splitLines){
-			auto m = line.matchAll(`([0-9]+) exec(?: (.*))?`);
-			if(!m.empty){
-				history ~= CommandInfo(m.captures[1].to!int, m.captures[2]);
-			}
-			m = line.matchAll(`([0-9]+) exit(?: (.*))?`);
-			if(!m.empty){
-				foreach(ref h; history){
-					if(h.pid == m.captures[1].to!int)
-						h.status = m.captures[2].to!int;
-				}
+	foreach(line; historyFile.readText.splitLines){
+		auto m = line.matchAll(`([0-9]+) exec(?: (.*))?`);
+		if(!m.empty){
+			history ~= CommandInfo(m.captures[1].to!int, m.captures[2]);
+		}
+		m = line.matchAll(`([0-9]+) exit(?: (.*))?`);
+		if(!m.empty){
+			foreach(ref h; history){
+				if(h.pid == m.captures[1].to!int)
+					h.status = m.captures[2].to!int;
 			}
 		}
 	}

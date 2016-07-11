@@ -1,11 +1,33 @@
 module menu.history;
 
-
 import menu;
 
 
-
 ButtonExec[][string] histories;
+
+
+void addHistory(DynamicList list){
+
+	auto expander = new HistoryRootButton;
+	expander.resize([5, config["button-tab", "height"].to!int]);
+	auto tree = list.addNew!Tree(expander);
+	tree.inset = 0;
+	tree.tail = 10;
+	expander.set(tree);
+	tree.expanded = true;
+	tree.padding = 0;
+
+	auto watch = (string path, string file, int action){
+		if(file.endsWith(".exec") || file.endsWith("current")){
+			tree.children = [expander];
+			expander.update = true;
+		}
+	};
+	
+	Inotify.watch("~/.flatman/".expandTilde, watch);
+
+	watch("", ".exec", Inotify.Add);
+}
 
 
 private ButtonExec add(string contextPath, CommandInfo h){
@@ -20,7 +42,7 @@ private ButtonExec add(string contextPath, CommandInfo h){
 			break;
 		case "file":
 		case "directory":
-			button = new ButtonFile(split[1], split[0]=="directory", ButtonFile.ContextPath);
+			//button = new ButtonFile(split[1], split[0]=="directory", ButtonFile.ContextPath);
 			break;
 		default:
 			writeln("unknown type: ", split[0]);
@@ -28,8 +50,8 @@ private ButtonExec add(string contextPath, CommandInfo h){
 	if(button){
 		button.resize([5,20]);
 		button.parameter = split[2];
-		button.status = h.status;
-		button.pid = h.pid;
+		//button.status = h.status;
+		//button.pid = h.pid;
 	}
 	if(contextPath !in histories)
 		histories[contextPath] = [button];
@@ -39,44 +61,12 @@ private ButtonExec add(string contextPath, CommandInfo h){
 }
 
 
-void addHistory(DynamicList list, Inotify.WatchStruct* watcher){
-
-	auto expander = new HistoryRootButton;
-	expander.resize([5, config["button-tab", "height"].to!int]);
-	auto tree = list.addNew!Tree(expander);
-	tree.inset = 0;
-	tree.tail = 10;
-	expander.set(tree);
-	tree.expanded = false;
-	tree.padding = 0;
-
-	expander.leftClick ~= {
-		foreach(c; list.children){
-			if(auto t = cast(Tree)c){
-				if(t != tree && t.expanded)
-					t.toggle;
-			}
-		}
-	};
-	
-	auto changeHistory = (string p, string f){
-		if(f.endsWith(".exec") || f.endsWith("current")){
-			tree.children = [expander];
-			expander.update = true;
-		}
-	};
-	watcher.change ~= changeHistory;
-	changeHistory("", ".exec");
-}
-
 class HistoryRootButton: RootButton {
 
 	shared Queue!CommandInfo queue;
 
 	bool update;
 	string context;
-
-	int[] preview;
 
 	this(){
 		queue = new Queue!CommandInfo;
@@ -85,22 +75,10 @@ class HistoryRootButton: RootButton {
 
 	override void onDraw(){
 		super.onDraw;
-		foreach(i, status; preview){
-			if(i*2 >= size.h)
-				continue;
-			if(status == int.max)
-				draw.setColor([0.7,0.7,0.7]);
-			else if(status != 0)
-				draw.setColor([1,0,0]);
-			else
-				draw.setColor([0.4,0.4,0.4]);
-			draw.rect(pos.a+[0, size.h-i*2-2], [2,2]);
-		}
 		draw.setColor([0.6,0.6,0.6]);
 		draw.text(pos.a+[size.w,0], size.h, context, 1.75);
 		if(update){
 			shared auto queue = new Queue!CommandInfo;
-			preview = [];
 			parent.children = [this];
 			update = false;
 			task({
@@ -118,12 +96,28 @@ class HistoryRootButton: RootButton {
 			this.queue = queue;
 		}
 
-		if(queue.has){
+		while(queue.has){
 			auto h = queue.get;
 			auto btn = .add(contextPath, h);
 			if(btn){
-				parent.add(btn);
-				preview ~= h.status;
+				parent.to!Tree.add(btn, (e){
+					if(!e)
+						return true;
+					if(typeid(e) == typeid(btn)){
+						string a = e.to!ButtonExec.sortName;
+						string b = btn.sortName;
+						if(a.startsWith(".") != b.startsWith("."))
+							return b.startsWith(".");
+						//if(a.isDirectoryTree != b.isDirectoryTree)
+						//	return a.isDirectoryTree;
+						return a.toUpper > b.toUpper;	
+					}
+					if(typeid(btn) == typeid(ButtonDesktop) && (typeid(e) == typeid(ButtonFile) || typeid(e) == typeid(ButtonScript)))
+						return true;
+					if(typeid(btn) == typeid(ButtonScript) && (typeid(e) == typeid(ButtonFile)))
+						return true;
+					return false;
+				});
 			}
 		}
 

@@ -11,11 +11,18 @@ void addApps(DynamicList list, DesktopEntry[][string] apps, string[string] categ
 			return;
 		auto buttonCategory = new RootButton(name);
 		buttonCategory.resize([5,25]);
+		buttonCategory.rightClick ~= {
+			alias A = ListPopup.Action;
+			A[] buttons;
+			buttons ~= A("Add", {
+			});
+		};
 		auto tree = new Tree(buttonCategory);
 		buttonCategory.set(tree);
-		tree.expanded = false;
+		tree.expanded = true;
 		list.add(tree);
 
+		/+
 		buttonCategory.leftClick ~= {
 			foreach(c; list.children){
 				if(auto t = cast(Tree)c){
@@ -24,6 +31,7 @@ void addApps(DynamicList list, DesktopEntry[][string] apps, string[string] categ
 				}
 			}
 		};
+		+/
 	
 		foreach(app; apps[name].sort!"a.name.toUpper < b.name.toUpper"){
 			auto button = new ButtonDesktop([app.name, app.exec].bangJoin);
@@ -72,13 +80,27 @@ class ButtonExec: Button {
 	void drawStatus(){
 		if(pid != 0 && status != 0){
 			if(status == int.max)
-				draw.setColor([0.6,0.6,0.6]);
+				draw.setColor([0.15,0.15,0.15]);
 			else
-				draw.setColor([0.6,0,0]);
-			draw.rect(pos.a+[4,4], [2, size.h-8]);
+				draw.setColor([0.15,0.1,0.1]);
+			draw.rect(pos, size);
 		}
 	}
 
+	string sortName(){
+		return exec ~ " " ~ parameter;
+	}
+
+}
+
+
+DesktopEntry findApp(string command){
+	auto all = getAll;
+	foreach(entry; all){
+		if(entry.exec == command)
+			return entry;
+	}
+	return null;
 }
 
 
@@ -92,9 +114,11 @@ class ButtonDesktop: ButtonExec {
 		name = split[0];
 		exec = split[1];
 		type = "desktop";
+		rightClick ~= &openPopup;
 	}
 
 	override void onDraw(){
+		drawStatus;
 		if(mouseFocus || previewDrop){
 			auto mul = 1.2-(now-clickTime-0.2).min(0.2);
 			draw.setColor([0.15*mul, 0.15*mul, 0.15*mul]);
@@ -108,7 +132,22 @@ class ButtonDesktop: ButtonExec {
 		draw.setColor([0.3,0.3,0.3]);
 		draw.text(pos.a + [size.w,0], size.h, exec, 2);
 		draw.noclip;
-		drawStatus;
+	}
+
+	void openPopup(){
+		alias A = ListPopup.Action;
+		A[] buttons;
+		buttons ~= A("Edit", {
+			auto app = findApp(exec);
+			if(app){
+				["subl3", "-n", app.path].execute;
+			}
+		});
+
+		buttons ~= A("Trash", {  });
+		auto popup = new ListPopup(buttons);
+		menuWindow.popups ~= popup;
+		wm.add(popup);
 	}
 
 	override void spawnCommand(){
@@ -138,6 +177,10 @@ class ButtonDesktop: ButtonExec {
 		previewDrop = false;
 	}
 
+	override string sortName(){
+		return name ~ " " ~ super.sortName;
+	}
+
 }
 
 
@@ -149,13 +192,13 @@ class ButtonScript: ButtonExec {
 	}
 
 	override void onDraw(){
+		drawStatus;
 		draw.setFont(config["button-tree", "font"], config["button-tree", "font-size"].to!int);
 		super.onDraw;
 		draw.setColor([187/255.0,187/255.0,255/255.0]);
 		draw.text(pos.a+[10,0], size.h, exec);
 		draw.setColor([0.6,0.6,0.6]);
 		draw.text(pos.a + [draw.width(exec)+15,0], size.h, parameter);
-		drawStatus;
 	}
 
 	override void spawnCommand(){

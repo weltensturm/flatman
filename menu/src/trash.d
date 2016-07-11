@@ -66,12 +66,12 @@ void addTrash(DynamicList list){
 		addButton(button);
 	}
 
-	auto watcher = menuWindow.inotify.addWatch("~/.local/share/Trash/info/".normalize, false);
-	watcher.add ~= (p, f){
-		try
-			addButton(new ButtonTrash(p ~ '/' ~ f));
-		catch{}
-	};
+	Inotify.watch("~/.local/share/Trash/info/".normalize, (path, file, action){
+		if(action == Inotify.Add)
+			try
+				addButton(new ButtonTrash(path ~ '/' ~ file));
+			catch{}
+	});
 }
 
 

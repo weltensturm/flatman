@@ -56,7 +56,7 @@ class ListPopup: ws.wm.Window {
 	}
 
 	override void drawInit(){
-		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
+		_draw = new XDraw(this);
 		_draw.setFont("Arial", 9);
 	}
 
@@ -76,6 +76,8 @@ class ListPopup: ws.wm.Window {
 		//draw.setColor([0.1,0.1,0.1]);
 		draw.setColor([0.867,0.514,0]);
 		draw.rect([0,0], size);
+		draw.setColor([0, 0, 0, 1]);
+		draw.rect([1,1], size.a-[2,2]);
 		super.onDraw;
 		draw.finishFrame;
 	}
