@@ -7,5 +7,5 @@
 		"ws": ">=1.0.7",
 		"gtk-d": ">=3.2.0"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama", "Xdamage"]
 }

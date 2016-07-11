@@ -2,6 +2,7 @@ module dock;
 
 public import
 	core.thread,
+	core.sys.posix.signal,
 	std.process,
 	std.algorithm,
 	std.array,
@@ -18,15 +19,16 @@ public import
 	x11.Xproto,
 	x11.Xatom,
 	x11.extensions.Xcomposite,
+	x11.extensions.Xdamage,
 	x11.extensions.Xfixes,
 	x11.extensions.XInput,
 	x11.extensions.render,
 	x11.extensions.Xrender,
 	x11.keysymdef,
+	x11.extensions.Xinerama,
 	gtk.Widget,
 	gtk.Window,
 	gtk.Label,
-	x11.extensions.Xinerama,
 	ws.bindings.xft,
 	ws.bindings.fontconfig,
 	ws.gl.gl,
@@ -39,6 +41,8 @@ public import
 	ws.gui.point,
 	dock.draw,
 	dock.dock,
+	dock.windowView,
+	dock.workspaceView,
 	dock.compositeClient,
 	dock.watcher;
 	

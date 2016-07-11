@@ -8,6 +8,7 @@ class CompositeClient: ws.wm.Window {
 	bool hasAlpha;
 	Picture picture;
 	Pixmap pixmap;
+	Damage damage;
 	Property!(XA_CARDINAL, false) workspaceProperty;
 	long workspace;
 	XWindowAttributes a;
@@ -25,10 +26,11 @@ class CompositeClient: ws.wm.Window {
 		XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
 		workspaceProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 		workspace = workspaceProperty.get;
+		damage = XDamageCreate(wm.displayHandle, window, XDamageReportNonEmpty);
 	}
 	
     override void gcInit(){}
-    
+
 	void createPicture(){
 		if(hidden)
 			return;
@@ -59,15 +61,6 @@ class CompositeClient: ws.wm.Window {
 		}
 
 		picture = XRenderCreatePicture(dpy, pixmap, format, CPSubwindowMode, &pa);
-		auto screen = dockWindow.screenSize;
-		auto scale = (dockWindow.size.w-12).to!double/screen.w;
-		// Scaling matrix
-		XTransform xform = {[
-		    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
-		    [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed(     0 )],
-		    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
-		]};
-		XRenderSetPictureTransform(dpy, picture, &xform);
 		XRenderSetPictureFilter(dpy, picture, "best", null, 0);
 	}
 	
@@ -76,6 +69,7 @@ class CompositeClient: ws.wm.Window {
 			XFreePixmap(wm.displayHandle, pixmap);
 		if(picture)
 			XRenderFreePicture(wm.displayHandle, picture);
+		XDamageDestroy(dpy, damage);
 	}
 
 	override void resize(int[2] size){

@@ -15,15 +15,32 @@ WorkspaceDock dockWindow;
 
 Composite composite;
 
+Rect[x11.X.Window] damage;
+
+
+enum wallpaperAtoms = [
+	"_XROOTPMAP_ID",
+	"_XSETROOT_ID",
+];
+
+
+bool running = true;
+
+
+extern(C) nothrow @nogc @system void stop(int){
+	running = false;
+}
+
 
 void main(){
 	try {
+		signal(SIGINT, &stop);
 		xerrorxlib = XSetErrorHandler(&xerror);
 		dockWindow = new WorkspaceDock(400, 300, "flatman-dock");
 		dockWindow.init;
 		composite = new Composite;
 		wm.add(dockWindow);
-		while(wm.hasActiveWindows){
+		while(wm.hasActiveWindows && running){
 			auto frameStart = now;
 			wm.processEvents;
 			dockWindow.onDraw;
@@ -89,6 +106,14 @@ class Composite {
 	}
 
 	void draw(CompositeClient window, int[2] pos, int[2] size, bool ghost=false){
+
+		XTransform xform = {[
+		    [XDoubleToFixed( window.size.w.to!double/size.w ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
+		    [XDoubleToFixed( 0 ), XDoubleToFixed( window.size.h.to!double/size.h ), XDoubleToFixed(     0 )],
+		    [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( 1 )]
+		]};
+		XRenderSetPictureTransform(dpy, window.picture, &xform);
+
 		XRenderComposite(
 			dpy,
 			window.hasAlpha || ghost ? PictOpOver : PictOpSrc,
@@ -102,19 +127,19 @@ class Composite {
         );
 	}
 
-	void rect(int[2] pos, int[2] size, float[4] color){
+	void rect(int[2] pos, int[2] size, float[4] color, bool src=false){
 		XRenderColor c = {
 			(color[0]*0xffff).to!ushort,
 			(color[1]*0xffff).to!ushort,
 			(color[2]*0xffff).to!ushort,
 			(color[3]*0xffff).to!ushort
 		};
-		XRenderFillRectangle(wm.displayHandle, PictOpOver, picture, &c, pos.x, dockWindow.size.h-size.h-pos.y, size.w, size.h);
+		XRenderFillRectangle(wm.displayHandle, src ? PictOpSrc : PictOpOver, picture, &c, pos.x, dockWindow.size.h-size.h-pos.y, size.w, size.h);
 	}
 
 	void render(Picture p, int[2] pos, int[2] size){
 
-		XRenderComposite(wm.displayHandle, PictOpSrc, p, None, picture, 0,0,0,0,pos.x+6,dockWindow.size.h-size.h-pos.y+6,size.x-12,size.y-12);
+		XRenderComposite(wm.displayHandle, PictOpSrc, p, None, picture, 0,0,0,0,pos.x,dockWindow.size.h-size.h-pos.y,size.x,size.y);
 	}
 
 	Picture colorPicture(bool argb, double a, double r, double g, double b){
@@ -140,6 +165,11 @@ class Composite {
 
 }
 
+
+struct Rect {
+	int[2] pos;
+	int[2] size;
+}
 
 
 struct Screen {
@@ -186,14 +216,19 @@ class WorkspaceDock: ws.wm.Window {
 
 	long activeBgPos = 0;
 
+	int damage_event, damage_error;
+
 	this(int w, int h, string title){
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
+
+		XDamageQueryExtension(dpy, &damage_event, &damage_error);
 		
 		auto screens = screens;
 		screenSize = [screens[0].w, screens[0].h];
 		
 		workspaceProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_CURRENT_DESKTOP");
+		workspace = workspaceProperty.get;
 		canSwitch = true;
 
 		workspaceCountProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_NUMBER_OF_DESKTOPS");
@@ -204,7 +239,7 @@ class WorkspaceDock: ws.wm.Window {
 		if(names.length)
 			workspaceNames = names[0..$-1];
 
-		w = (screenSize.w/10).to!int;
+		w = (screenSize.w/8).to!int;
 
 		super(w, cast(int)screenSize.h, title);
 
@@ -214,12 +249,13 @@ class WorkspaceDock: ws.wm.Window {
 		wm.handlerAll[MapNotify] ~= e => evMap(&e.xmap);
 		wm.handlerAll[UnmapNotify] ~= e => evUnmap(&e.xunmap);
 		wm.handlerAll[PropertyNotify] ~= e => evProperty(&e.xproperty);
+		wm.handlerAll[damage_event+XDamageNotify] ~= e => evDamage(cast(XDamageNotifyEvent*)e);
 
 		XSelectInput(wm.displayHandle, .root,
 		    SubstructureNotifyMask
 		    | ExposureMask
 		    | PropertyChangeMask);
-		get_root_tile;
+		updateWallpaper;
 
 	}
 
@@ -241,8 +277,10 @@ class WorkspaceDock: ws.wm.Window {
 		XFlush(wm.displayHandle);
 	}
 
-	void get_root_tile(){
+	void updateWallpaper(){
 		bool fill = false;
+		if(root_picture)
+			XRenderFreePicture(dpy, root_picture);
 		Pixmap pixmap = None;
 		// Get the values of background attributes
 		auto rootmapId = new Property!(XA_PIXMAP, false)(.root, "_XROOTPMAP_ID");
@@ -266,17 +304,13 @@ class WorkspaceDock: ws.wm.Window {
 		XRenderPictureAttributes pa;
 		pa.repeat = True,
 		root_picture = XRenderCreatePicture(wm.displayHandle, pixmap, XRenderFindVisualFormat(wm.displayHandle, DefaultVisual(wm.displayHandle, 0)), CPRepeat, &pa);
+		//XFreePixmap(dpy, pixmap);
 		// Fill pixmap if needed
 		if(fill){
 			XRenderColor c;
 			c.red = c.green = c.blue = 0x8080;
 			c.alpha = 0xffff;
 			XRenderFillRectangle(wm.displayHandle, PictOpSrc, root_picture, &c, 0, 0, 1, 1);
-		}
-		auto root_pixmap = pixmap;
-		version(CONFIG_VSYNC_OPENGL){
-			if (BKEND_GLX == ps.o.backend)
-				return glx_bind_pixmap(ps, &root_tile_paint.ptex, root_pixmap, 0, 0, 0);
 		}
 		XTransform xform = {[
 		    [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed(     0 )],
@@ -308,12 +342,17 @@ class WorkspaceDock: ws.wm.Window {
 		}
 	}
 
+	void evDamage(XDamageNotifyEvent* e){
+		damage[e.drawable] = Rect([e.area.x, e.area.y], [e.area.width, e.area.height]);
+        XDamageSubtract(dpy, e.damage, None, None);
+	}
+
 	void evConfigure(XEvent* e){
 		if(e.xconfigure.window == windowHandle)
 			return;
 		foreach(i, c; clients){
 			if(c.windowHandle == e.xconfigure.window){
-				c.processEvent(*e);
+				c.processEvent(e);
 				updateStack;
 				return;
 			}
@@ -360,6 +399,8 @@ class WorkspaceDock: ws.wm.Window {
 				workspaceColors = [];
 				foreach(i, n; workspaceNames)
 					workspaceColors ~= digest!MD5(n)[0..3];
+			}else if(wallpaperAtoms.map!(s => s.atom).canFind(e.atom)){
+				updateWallpaper;
 			}else
 				return;
 			update;
@@ -407,7 +448,7 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	override void drawInit(){
-		_draw = new XDraw(dpy, DefaultScreen(dpy), windowHandle, size.w, size.h);
+		_draw = new XDraw(this);
 		_draw.setFont("Consolas", 9);
 	}
 
@@ -436,7 +477,7 @@ class WorkspaceDock: ws.wm.Window {
 			remove(c);
 		auto count = workspaceCount*2+1;
 		auto ratio = screenSize.w/cast(double)screenSize.h;
-		auto height = cast(int)(size.w/ratio)+6;
+		auto height = cast(int)(size.w/ratio)-3;
 		workspaces = workspaces.init;
 		foreach(c; clients){
 			if(!c.hidden){
@@ -450,11 +491,12 @@ class WorkspaceDock: ws.wm.Window {
 		int[] desktopsHeight;
 		foreach(i; 0..count){
 			bool empty = i % 2 == 0;
-			desktopsHeight ~= empty ? (draw.fontHeight/1.4).to!int : height;
+			bool combined = ((i+1)/2 > 0 && (i+1)/2 < workspaceNames.length && workspaceNames[$-(i+1)/2-1] == workspaceNames[$-(i+1)/2]);
+			desktopsHeight ~= empty ? (combined ? 2 : (draw.fontHeight).to!int) : height;
 		}
 
 		auto heightSum = desktopsHeight.reduce!"a+b";
-		auto heightRatio = ((size.h-draw.fontHeight*2-10).to!double/heightSum).min(1);
+		auto resizeRatio = ((size.h-draw.fontHeight*2-10).to!double/heightSum).min(1);
 
 		int y = size.h/2 - heightSum.min(size.h-draw.fontHeight*2-10)/2;
 
@@ -465,8 +507,9 @@ class WorkspaceDock: ws.wm.Window {
 				ws.name = workspaceNames[$-i/2-1];
 			if(i/2 < workspaceColors.length && i/2 >= 0)
 				ws.color = workspaceColors[$-i/2-1];
-			ws.resize([(size.w*heightRatio).lround.to!int, (desktopsHeight[i]*heightRatio).lround.to!int]);
+			ws.resize([(height*ratio*resizeRatio).lround.to!int, (desktopsHeight[i]*resizeRatio).lround.to!int]);
 			ws.move([size.w/2-ws.size.w/2, y]);
+			ws.combined = (i/2 > 0 && i/2 < workspaceNames.length && workspaceNames[$-i/2-1] == workspaceNames[$-i/2]);
 			ws.update;
 			y += ws.size.h;
 		}
@@ -476,13 +519,14 @@ class WorkspaceDock: ws.wm.Window {
 	override void onDraw(){
 		if(!visible)
 			return;
-		draw.setColor([0.05,0.05,0.05]);
+		//composite.rect([0,0], size, [0.05,0.05,0.05,0.5], true);
+		draw.setColor(0x222222);
 		draw.rect([0,0], size);
 
 		auto ratio = screenSize.w/cast(double)screenSize.h;
 		auto height = cast(int)(size.w/ratio)+6;
-		draw.setColor([0.867,0.514,0]);
-		draw.rect(pos.a+[3,activeBgPos], [size.w-6, height-6]);
+		//draw.setColor([0.867,0.514,0]);
+		//draw.rect(pos.a+[3,activeBgPos], [size.w-6, height-6]);
 
 		super.onDraw;
 		draw.setColor([0.6,0.6,0.6]);
@@ -499,10 +543,10 @@ class WorkspaceDock: ws.wm.Window {
 	
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
 		if((button == Mouse.wheelDown || button == Mouse.wheelUp) && pressed){
-			auto newWorkspace = workspace + (button == Mouse.wheelDown ? 1 : -1);
-			if(newWorkspace >= 0 && newWorkspace < workspaces.length){
+			auto selectedWorkspace = workspace + (button == Mouse.wheelDown ? 1 : -1);
+			if(selectedWorkspace >= 0 && selectedWorkspace < workspaces.length){
 				canSwitch = false;
-				workspace = newWorkspace;
+				workspace = selectedWorkspace;
 				workspaceProperty.request([workspace, CurrentTime]);
 			}
 		}else
@@ -510,173 +554,6 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 }
-
-
-class WorkspaceView: Base {
-
-	long id;
-	WorkspaceDock dock;
-	string name = "~";
-	bool preview;
-	bool empty;
-	ubyte[3] color;
-
-	this(WorkspaceDock dock, long id, bool empty){
-		this.dock = dock;
-		this.id = id/2;
-		this.empty = empty;
-	}
-
-	override void resize(int[2] size){
-		super.resize(size);
-	}
-
-	void update(){
-		foreach(c; children)
-			remove(c);
-		auto scale = (size.w-12) / cast(double)dock.screenSize.w;
-		if(id in dock.workspaces && !empty)
-			foreach_reverse(w; dock.workspaces[id]){
-				auto wv = addNew!WindowIcon(w, cast(int)id);
-				auto y = w.pos.y;
-				auto sh = dock.screenSize.y;
-				while(y > sh)
-					y -= sh;
-				while(y < 0)
-					y += sh;
-				wv.moveLocal([
-					6+cast(int)(w.pos.x*scale).lround,
-					6+cast(int)((dock.screenSize.h-y-w.size.h)*scale).lround
-				]);
-				wv.resize([
-					cast(int)(w.size.w*scale).lround,
-					cast(int)(w.size.h*scale).lround
-				]);
-			}
-	}
-
-	override Base dropTarget(int x, int y, Base draggable){
-		if(typeid(draggable) is typeid(Ghost))
-			return this;
-		return super.dropTarget(x, y, draggable);
-	}
-
-	override void dropPreview(int x, int y, Base draggable, bool start){
-		preview = start;
-	}
-
-	override void drop(int x, int y, Base draggable){
-		auto ghost = cast(Ghost)draggable;
-		if(ghost.window.workspaceProperty.get != id){
-			writeln("requesting window move to ", id);
-			new Property!(XA_CARDINAL, false)(ghost.window.windowHandle, "_NET_WM_DESKTOP").request([id, 2, empty ? 1 : 0]);
-		}
-		preview = false;
-	}
-
-	override void onMouseFocus(bool focus){
-		preview = focus;
-	}
-
-	override void onDraw(){
-		draw.clip(pos, size);
-		if(id == dock.workspace && !empty)
-			draw.setColor([0.867,0.514,0]);
-		else if(preview)
-			draw.setColor([1,1,1]);
-		//else
-		//	draw.setColor([color[0]/400.0, color[1]/400.0, color[2]/400.0]);
-
-		if(id == dock.workspace && !empty || empty && preview)
-			dock.draw.rect(pos.a+[3,3], [size.w-6, size.h.max(8)-6]);
-
-		if(!empty)
-			composite.render(dockWindow.root_picture, pos, size);
-
-		super.onDraw;
-
-		if(!empty){
-			composite.rect([pos.x+6, pos.y+6], [size.w-12, draw.fontHeight], [0,0,0,0.85]);
-			draw.setColor([1,1,1]);
-			dock.draw.text(pos.a+[size.w/2,6], name, 0.5);
-			//draw.setColor([color[0]/255.0, color[1]/255.0, color[2]/255.0]);
-			//draw.rect(pos.a+[6,6], [4,draw.fontHeight]);
-		}
-		draw.noclip;
-	}
-
-	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.buttonLeft && !pressed && !dragging){
-			dock.workspaceProperty.request([id, CurrentTime, empty ? 1 : 0]);
-		}
-		super.onMouseButton(button, pressed, x, y);
-	}
-
-}
-
-
-class WindowIcon: Base {
-
-	Base dragGhost;
-	int[2] dragOffset;
-	Base dropTarget;
-
-	CompositeClient window;
-	int desktop;
-
-	this(CompositeClient window, int desktop){
-		this.window = window;
-		this.desktop = desktop;
-	}
-
-	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.buttonLeft){
-			if(!pressed && dragGhost){
-				root.remove(dragGhost);
-				if(dropTarget)
-					dropTarget.drop(x, y, dragGhost);
-				dragGhost = null;
-			}
-		}
-		super.onMouseButton(button, pressed, x, y);
-	}
-
-	override Base drag(int[2] offset){
-		dragOffset = offset;
-		return new Ghost(window, desktop);
-	}
-
-	override void onMouseMove(int x, int y){
-		if(buttons.get(Mouse.buttonLeft, false) && !dragGhost){
-			dragGhost = drag([x,y].a - pos);
-			root.add(dragGhost);
-			root.setTop(dragGhost);
-			dragGhost.resize(size);
-			writeln("dragStart");
-		}
-		if(dragGhost){
-			dragGhost.move([x,y].a - dragOffset);
-			if(root.dropTarget(x, y, dragGhost) != dropTarget){
-				if(dropTarget)
-					dropTarget.dropPreview(x, y, dragGhost, false);
-				dropTarget = root.dropTarget(x, y, dragGhost);
-				if(dropTarget)
-					dropTarget.dropPreview(x, y, dragGhost, true);
-			}
-		}
-		super.onMouseMove(x, y);
-	}
-
-	override void onDraw(){
-		if(dragGhost)
-			return;
-		if(window.picture)
-			composite.draw(window, pos, size);
-		super.onDraw;
-	}
-
-}
-
 
 class Ghost: Base {
 
