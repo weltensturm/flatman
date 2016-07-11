@@ -1,0 +1,10 @@
+{
+	"name" : "flatman-bar",
+	"description" : "bar for flatman",
+	"targetType": "executable",
+	"sourcePaths": ["src"],
+	"dependencies" : {
+		"ws": ">=1.0.8"
+	},
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama"]
+}
