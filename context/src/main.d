@@ -22,10 +22,16 @@ void main(string[] args){
 		getContext.writeln;
 	else if(args[1] == "-p")
 		getContextPath.writeln;
+	else if(args[1] == "-c")
+		args[2].clean.createContext;
 	else
-		args[1].setContext;
+		args[1].clean.setContext;
 }
 
+
+string clean(string path){
+	return path.expandTilde.buildNormalizedPath.absolutePath;
+}
 
 string getContext(){
 	auto cur = (PATH ~ "current").expandTilde;
@@ -41,11 +47,14 @@ string getContextPath(){
 
 
 void setContext(string context){
-	context = context.expandTilde.buildNormalizedPath.absolutePath;
+	context.createContext;
+	auto path = context.replace("/", "-") ~ ".context";
+	std.file.write(PATH.expandTilde ~ "current", PATH.expandTilde ~ path);
+}
+
+void createContext(string context){
 	if(!PATH.expandTilde.exists)
 		mkdir(PATH.expandTilde);
 	auto path = context.replace("/", "-") ~ ".context";
-	std.file.write(PATH.expandTilde ~ "current", PATH.expandTilde ~ path);
 	std.file.write(PATH.expandTilde ~ path, context);
 }
-
