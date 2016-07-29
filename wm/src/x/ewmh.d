@@ -1,4 +1,4 @@
-module flatman.ewmh;
+module flatman.x.ewmh;
 
 import flatman;
 
@@ -38,6 +38,7 @@ struct NetAtoms {
 	@("_NET_WM_WINDOW_TYPE_DOCK") Atom windowTypeDock;
 	@("_NET_WM_WINDOW_TYPE_SPLASH") Atom windowTypeSplash;
 	@("_NET_WM_DESKTOP") Atom windowDesktop;
+	@("_NET_WM_USER_TIME") Atom userTime;
 
 	@("_NET_SUPPORTING_WM_CHECK") Atom supportingWm;
 }
@@ -93,14 +94,16 @@ void updateWindowDesktop(Client client, long n){
 }
 
 void updateWorkspaces(){
-	foreach(n, ws; monitor.workspaces){
-		foreach(s; ws.split.separators){
-			s.window.replace!CARDINAL(net.windowDesktop, n);
+	foreach(monitor; monitors){
+		foreach(n, ws; monitor.workspaces){
+			foreach(s; ws.split.separators){
+				s.window.replace!CARDINAL(net.windowDesktop, n);
+			}
+			foreach(f; ws.floating.frames)
+				f.window.replace!CARDINAL(net.windowDesktop, n);
+			foreach(c; ws.clients)
+				c.updateWindowDesktop(n);
 		}
-		foreach(f; ws.floating.frames)
-			f.window.replace!CARDINAL(net.windowDesktop, n);
-		foreach(c; ws.clients)
-			c.updateWindowDesktop(n);
 	}
 	updateDesktopNames;
 }
@@ -125,63 +128,3 @@ void updateClientList(){
 	net.clientListStacking.replace(clients);
 }
 
-
-alias CARDINAL = long;
-
-
-void change(Window window, Atom atom, Atom[] data, int mode){
-	XChangeProperty(dpy, window, atom, XA_ATOM, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
-	
-}
-
-void change(Window window, Atom atom, CARDINAL[] data, int mode){
-	XChangeProperty(dpy, window, atom, XA_CARDINAL, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
-	
-}
-
-void change(Window window, Atom atom, CARDINAL data, int mode){
-	XChangeProperty(dpy, window, atom, XA_CARDINAL, 32, mode, cast(ubyte*)&data, 1);
-	
-}
-
-void change(Window window, Atom atom, string data, int mode){
-	XChangeProperty(dpy, window, atom, XInternAtom(dpy, "UTF8_STRING", False), 8, mode, cast(ubyte*)data.toStringz, cast(int)data.length);
-	
-}
-
-void change(Window window, Atom atom, Window data, int mode){
-	XChangeProperty(dpy, window, atom, XA_WINDOW, 32, mode, cast(ubyte*)&data, 1);
-	
-}
-
-void change(Window window, Atom atom, Client[] clients, int mode){
-	Window[] data;
-	foreach(c; clients)
-		data ~= c.win;
-	XChangeProperty(dpy, window, atom, XA_WINDOW, 32, mode, cast(ubyte*)data.ptr, cast(int)data.length);
-	
-}
-
-void replace(T)(Window window, Atom atom, T data){
-	change(window, atom, data, PropModeReplace);
-}
-
-void append(T)(Window window, Atom atom, T data){
-	change(window, atom, data, PropModeAppend);
-}
-
-void remove(Window window, Atom atom){
-	XDeleteProperty(dpy, window, atom);
-}
-
-void append(T)(Atom atom, T data){
-	replace(root, atom, data);
-}
-
-void replace(T)(Atom atom, T data){
-	replace(root, atom, data);
-}
-
-void remove(Atom atom){
-	remove(root, atom);
-}

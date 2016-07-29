@@ -1,4 +1,4 @@
-module flatman.screens;
+module flatman.x.screens;
 
 import flatman;
 

@@ -27,6 +27,8 @@ class Client {
 
 	x11.X.Window window;	
 
+	int screen;
+
 	Property!(XA_CARDINAL, false) workspace;
 	Property!(XA_CARDINAL, false) flatmanTab;
 	Property!(XA_CARDINAL, false) flatmanTabs;
@@ -63,29 +65,26 @@ class Client {
 		XEvent ev;
 		ev.type = ClientMessage;
 		ev.xclient.window = window;
-		ev.xclient.message_type = wm_.protocols;
+		ev.xclient.message_type = atoms.WM_PROTOCOLS;
 		ev.xclient.format = 32;
-		ev.xclient.data.l[0] = wm_.delete_;
+		ev.xclient.data.l[0] = atoms.WM_DELETE_WINDOW;
 		ev.xclient.data.l[1] = CurrentTime;
 		XSendEvent(wm.displayHandle, window, false, NoEventMask, &ev);
 	}
     
 	string getTitle(){
-		Atom netWmName, utf8, actType;
+		Atom actType;
 		size_t nItems, bytes;
 		int actFormat;
 		ubyte* data;
-		netWmName = XInternAtom(dpy, "_NET_WM_NAME".toStringz, False);
-		utf8 = XInternAtom(dpy, "UTF8_STRING".toStringz, False);
 		XGetWindowProperty(
-				dpy, window, netWmName, 0, 0x77777777, False, utf8,
+				dpy, window, atoms._NET_WM_NAME, 0, 0x77777777, False, atoms.UTF8_STRING,
 				&actType, &actFormat, &nItems, &bytes, &data
 		);
 		auto text = to!string(cast(char*)data);
 		XFree(data);
 		if(!text.length){
-			auto netName = XInternAtom(dpy, "NET_NAME".toStringz, False);
-			if(!gettextprop(window, netName, text))
+			if(!gettextprop(window, atoms.NET_NAME, text))
 				gettextprop(window, XA_WM_NAME, text);
 		}
 		return text;

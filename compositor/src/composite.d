@@ -146,7 +146,8 @@ class CompositeManager {
 		visual = DefaultVisual(wm.displayHandle, 0);
 		depth = DefaultDepth(wm.displayHandle, 0);
 		XSelectInput(wm.displayHandle, root,
-		    SubstructureNotifyMask
+			StructureNotifyMask
+		    | SubstructureNotifyMask
 		    | ExposureMask
 		    | PropertyChangeMask);
 

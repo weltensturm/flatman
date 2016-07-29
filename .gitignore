@@ -13,6 +13,7 @@ volume-icon/flatman-volume-icon
 xinput-gui/flatman-input
 wm/flatman-wm
 context/flatman-context
+bar/flatman-bar
 *.sync-conflict*
 *.swp
 1

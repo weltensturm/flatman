@@ -2,7 +2,7 @@
 	"name" : "flatman-bar",
 	"description" : "bar for flatman",
 	"targetType": "executable",
-	"sourcePaths": ["src"],
+	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
 		"ws": ">=1.0.8"
 	},

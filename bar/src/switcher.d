@@ -3,7 +3,7 @@ module bar.switcher;
 
 import bar;
 
-
+/+
 class Switcher: ws.wm.Window {
 
 	Bar bar;
@@ -113,3 +113,4 @@ class Switcher: ws.wm.Window {
 
 }
 
++/

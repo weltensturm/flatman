@@ -1,4 +1,4 @@
-module flatman.tabs;
+module flatman.layout.tabs;
 
 import flatman;
 
@@ -66,10 +66,11 @@ class Tabs: Container {
 			children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
 		else
 			add(client.to!Base);
-		active = client;
+		foreach(c; clients)
+			if(c != client)
+				c.hide;
 		updateHints;
 		resize(size);
-		XSync(dpy, false);
 	}
 
 	alias remove = Base.remove;
@@ -79,7 +80,6 @@ class Tabs: Container {
 		super.remove(client);
 		if(any)
 			active = any;
-		XSync(dpy, false);
 		client.win.replace(currentTabs, 0L);
 		updateHints;
 	}
@@ -143,7 +143,6 @@ class Tabs: Container {
 			else
 				c.win.replace(tabDirection, newPassed && activePassed ? 1L : -1L);
 		}
-		XSync(dpy, false);
 		if(active && active != client)
 			active.hide;
 		if(!hidden && client.hidden){
@@ -154,18 +153,18 @@ class Tabs: Container {
 		super.active = client;
 		if(!hidden)
 			resize(size);
+		XSync(dpy, false);
 	}
 
 	override void resize(int[2] size){
 		super.resize(size);
-		auto bh = 0;
 		auto padding = cfg.tabsPadding;
 		if(active){
-			if(!hidden && active.isfullscreen){
-				active.moveResize(monitor.pos, monitor.size);
+			if(active.isfullscreen){
+				active.moveResize(active.monitor.pos.a + [0, hidden ? -active.monitor.size.h : 0], active.monitor.size);
 			}else{
 				active.moveResize(
-					pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? monitor.size.h : 0)],
+					pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? active.monitor.size.h : 0)],
 					size.a - [padding[0]+padding[1], (showTabs ? 0 : padding[2])+padding[3]]
 				);
 			}

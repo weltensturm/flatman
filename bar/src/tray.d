@@ -12,9 +12,6 @@ enum _NET_SYSTEM_TRAY_ORIENTATION_HORZ = 0;
 enum _NET_SYSTEM_TRAY_ORIENTATION_VERT = 1;
 
 
-Atom systrayOpcode;
-
-
 class TrayClient: Base {
     
     this(x11.X.Window window){
@@ -48,28 +45,24 @@ class Tray: Base {
         ]);
         this.bar = bar;
         iconSize = [bar.size.h, bar.size.h-1];
-        selectionAtom = XInternAtom(wm.displayHandle, "_NET_SYSTEM_TRAY_S0", false);
-        auto trayOrientation = XInternAtom(wm.displayHandle, "_NET_SYSTEM_TRAY_ORIENTATION", false);
-        systrayOpcode =  XInternAtom(wm.displayHandle, "_NET_SYSTEM_TRAY_OPCODE", false);
-        xembedInfo = XInternAtom(wm.displayHandle, "_XEMBED_INFO", false);
-        if(XGetSelectionOwner(wm.displayHandle, selectionAtom) != None)
+        if(XGetSelectionOwner(wm.displayHandle, atoms._NET_SYSTEM_TRAY_S0) != None)
             throw new Exception("another systray already running");
-        if(XSetSelectionOwner(wm.displayHandle, selectionAtom, bar.windowHandle, CurrentTime)){
+        if(XSetSelectionOwner(wm.displayHandle, atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle, CurrentTime)){
             auto data = _NET_SYSTEM_TRAY_ORIENTATION_HORZ;
             XChangeProperty(
                 wm.displayHandle,
                 bar.windowHandle,
-                trayOrientation,
+                atoms._NET_SYSTEM_TRAY_ORIENTATION,
                 XA_CARDINAL, 32,
                 PropModeReplace,
                 cast(ubyte*)&data, 1);
             XClientMessageEvent xev;
             xev.type = ClientMessage;
             xev.window = .root;
-            xev.message_type = XInternAtom(wm.displayHandle, "MANAGER", false);
+            xev.message_type = atoms.MANAGER;
             xev.format = 32;
             xev.data.l[0] = CurrentTime;
-            xev.data.l[1] = selectionAtom;
+            xev.data.l[1] = atoms._NET_SYSTEM_TRAY_S0;
             xev.data.l[2] = bar.windowHandle;
             xev.data.l[3] = 0;
             xev.data.l[4] = 0;
@@ -80,7 +73,7 @@ class Tray: Base {
     }
 
     void evClientMessage(XClientMessageEvent* e){
-        if (e.message_type == systrayOpcode){
+        if (e.message_type == atoms._NET_SYSTEM_TRAY_OPCODE){
             switch (e.data.l[1]){
                 case SYSTEM_TRAY_REQUEST_DOCK:
                     if (e.window == bar.windowHandle){
@@ -89,7 +82,7 @@ class Tray: Base {
                     break;
                 default: break;
             }
-        }else if(e.message_type == XInternAtom(wm.displayHandle, "_XEMBED", false)){
+        }else if(e.message_type == atoms._XEMBED){
             switch(e.data.l[1]){
                 case XEMBED_REQUEST_FOCUS:
                     writeln("focus ", e.window);
@@ -162,9 +155,9 @@ class Tray: Base {
         foreach(client; clients){
             XMoveResizeWindow(wm.displayHandle, client.window, offset, 0, iconSize.w, iconSize.h);
             XColor color;
-            color.red = (0xffff*0.133333).to!ushort;
-            color.green = (0xffff*0.133333).to!ushort;
-            color.blue = (0xffff*0.133333).to!ushort;
+            color.red = (0xffff*config.background[0]).to!ushort;
+            color.green = (0xffff*config.background[0]).to!ushort;
+            color.blue = (0xffff*config.background[0]).to!ushort;
             XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
             XSetWindowBackground(wm.displayHandle, client.window, color.pixel);
             XClearArea(wm.displayHandle, client.window, 0, 0, 0, 0, true);

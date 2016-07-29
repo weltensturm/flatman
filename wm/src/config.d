@@ -57,88 +57,6 @@ struct WmConfig {
 	ConfigColor tabsTitleHover;
 	ConfigColor tabsTitleFullscreen;
 
-	void load(){
-
-		"loading config".log;
-
-		auto prioritizedPaths = [
-			"/etc/flatman/config.ws",
-			"~/.config/flatman/config.ws".expandTilde,
-		];
-
-		struct Entry {
-			string name;
-			string value;
-		}
-
-		Entry[] values;
-
-		bool endpoint(string name){
-			foreach(field; FieldNameTuple!WmConfig){
-				string splitName;
-				foreach(c; field){
-					if(c.toUpper == c.to!dchar && c != '_')
-						splitName ~= " " ~ c.toLower.to!string;
-					else if(c == '_')
-						splitName ~= "-";
-					else
-						splitName ~= c;
-				}
-				if(splitName == name){
-					mixin("return is(typeof(" ~ field ~ ") == string[]);");
-				}
-			}
-			return false;
-		}
-
-		void loadBlock(string block, string namespace){
-			Decode.text(block, (name, value, isBlock){
-				if(isBlock && !endpoint(name))
-					loadBlock(value, namespace ~ " " ~ name);
-				else
-					foreach(l; value.splitLines)
-						values ~= Entry((namespace ~ " " ~ name).strip, l.strip);
-			});
-		}
-
-		foreach(path; prioritizedPaths){
-			try{
-				loadBlock(path.readText, "");
-				"loaded config %s".format(path).log;
-			}catch(Exception e)
-				e.toString.log;
-		}
-
-		foreach(field; FieldNameTuple!WmConfig){
-			string splitName;
-			foreach(c; field){
-				if(c.toUpper == c.to!dchar && c != '_')
-					splitName ~= " " ~ c.toLower.to!string;
-				else if(c == '_')
-					splitName ~= "-";
-				else
-					splitName ~= c;
-			}
-			auto filtered = values.filter!(a => a.name == splitName && a.value.strip.length).array;
-
-			if(!filtered.length)
-				throw new Exception("Error in config: could not find value " ~ splitName);
-			
-			mixin("enum isList = is(typeof(" ~ field ~ ") == string[]);");
-			
-			try {
-				static if(isList){
-					foreach(entry; filtered)
-						mixin(field ~ " ~= entry.value;");
-				}else{
-					mixin(field ~ " = filtered[$-1].value.to!(typeof(" ~ field ~ "));");
-				}
-			}catch(Exception e){
-				throw new Exception("Error in config at \"%s\", matches \"%s\"".format(splitName, filtered), e);
-			}
-		}
-	}
-
 }
 
 WmConfig cfg;
@@ -164,11 +82,11 @@ class ConfigNode {
 
 	T opCast(T)() if(is(T == float[3])) {
 		if(context !in config.colors){
-			auto clr = value;
+			auto color = value;
 			config.colors[context] = [
-					clr[0..2].to!int(16)/255.0,
-					clr[2..4].to!int(16)/255.0,
-					clr[4..6].to!int(16)/255.0
+					color[0..2].to!int(16)/255.0,
+					color[2..4].to!int(16)/255.0,
+					color[4..6].to!int(16)/255.0
 			]; 
 		}
 		return config.colors[context];
@@ -215,11 +133,11 @@ class Config {
 
 	float[3] color(string name){
 		if(name !in colors){
-			auto clr = this[name];
+			auto color = this[name];
 			colors[name] = [
-					clr[0..2].to!int(16)/255.0,
-					clr[2..4].to!int(16)/255.0,
-					clr[4..6].to!int(16)/255.0
+					color[0..2].to!int(16)/255.0,
+					color[2..4].to!int(16)/255.0,
+					color[4..6].to!int(16)/255.0
 			];
 		}
 		return colors[name];
@@ -289,9 +207,4 @@ static const Rule[] rules = [
 	{ "Gimp",     "",       "",       0,            true,        -1 },
 	{ "Firefox",  "",       "",       1 << 8,       false,       -1 },
 ];
-
-enum MODKEY = Mod1Mask;
-
-static Key[] keys;
-static Button[] buttons;
 

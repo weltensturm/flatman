@@ -197,6 +197,7 @@ class WorkspaceDock: ws.wm.Window {
 	long workspace;
 	bool canSwitch;
 	int[2] screenSize;
+	int[2] screenPos;
 	
 	Property!(XA_STRING, false) workspaceNamesProperty;
 	string[] workspaceNames;
@@ -226,6 +227,7 @@ class WorkspaceDock: ws.wm.Window {
 		
 		auto screens = screens;
 		screenSize = [screens[0].w, screens[0].h];
+		screenPos = [screens[0].x, screens[0].y];
 		
 		workspaceProperty = new Property!(XA_CARDINAL, false)(dock.root, "_NET_CURRENT_DESKTOP");
 		workspace = workspaceProperty.get;
@@ -242,6 +244,7 @@ class WorkspaceDock: ws.wm.Window {
 		w = (screenSize.w/8).to!int;
 
 		super(w, cast(int)screenSize.h, title);
+		move([screens[0].x, screens[0].y]);
 
 		wm.handlerAll[CreateNotify] ~= e => evCreate(e.xcreatewindow.window);
 		wm.handlerAll[DestroyNotify] ~= e => evDestroy(e.xdestroywindow.window);
@@ -252,7 +255,8 @@ class WorkspaceDock: ws.wm.Window {
 		wm.handlerAll[damage_event+XDamageNotify] ~= e => evDamage(cast(XDamageNotifyEvent*)e);
 
 		XSelectInput(wm.displayHandle, .root,
-		    SubstructureNotifyMask
+			StructureNotifyMask
+		    | SubstructureNotifyMask
 		    | ExposureMask
 		    | PropertyChangeMask);
 		updateWallpaper;
@@ -348,7 +352,12 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	void evConfigure(XEvent* e){
-		if(e.xconfigure.window == windowHandle)
+		if(e.xconfigure.window == .root){
+			screenSize = [screens[0].w, screens[0].h];
+			screenPos = [screens[0].x, screens[0].y];
+			resize([size.w, screenSize.h]);
+		}
+		else if(e.xconfigure.window == windowHandle)
 			return;
 		foreach(i, c; clients){
 			if(c.windowHandle == e.xconfigure.window){
@@ -458,7 +467,7 @@ class WorkspaceDock: ws.wm.Window {
 	}
 
 	void tick(){
-		int targetX = cast(int)screenSize.w-(visible ? size.w : 1);
+		int targetX = cast(int)screenSize.w-(visible ? size.w : 1)+screenPos.x.to!int;
 		if(pos.x != targetX || pos.y != 0){
 			//XMoveResizeWindow(dpy, windowHandle, targetX, 0, visible ? (screenSize.w/10).to!int : 2, size.h);
 			XMoveWindow(dpy, windowHandle, targetX, 0);

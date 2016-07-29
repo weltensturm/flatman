@@ -1,4 +1,4 @@
-module flatman.workspace;
+module flatman.layout.workspace;
 
 import flatman;
 
@@ -56,6 +56,15 @@ class Workspace: Container {
 		}
 	}
 
+	void update(Client client){
+		if((client.isFloating && !client.isfullscreen) != floating.clients.canFind(client)){
+			remove(client);
+			add(client);
+		}else{
+			split.resize(split.size);
+		}
+	}
+
 	@property
 	override Client active(){
 		if(focusFloating)
@@ -98,14 +107,13 @@ class Workspace: Container {
 		super.show;
 		if(split.children.length)
 			split.show;
-		"workspace.show context='%s'".format(context).log;
-		if(context.exists){
-			"workspace reset context='%s'".format(context.expandTilde.readText);
-			["flatman-context", context.expandTilde.readText].execute;
+		with(Log("workspace.show context='%s'".format(context))){
+			if(context.exists){
+				"workspace reset context='%s'".format(context.expandTilde.readText);
+				["flatman-context", context.expandTilde.readText].execute;
+			}
+			floating.show;
 		}
-		floating.show;
-		if(active)
-			active.focus;
 	}
 
 	override void hide(){

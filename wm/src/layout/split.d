@@ -1,4 +1,4 @@
-module flatman.split;
+module flatman.layout.split;
 
 import flatman;
 
@@ -121,11 +121,14 @@ class Split: Container {
 	void restack(){
 		if(!children.length)
 			return;
-		"split.restack".log;
-		foreach(separator; separators)
-			XRaiseWindow(dpy, separator.window);
-		foreach(tabs; (children.without(children[clientActive]) ~ children[clientActive]).to!(Tabs[]))
-			tabs.restack;
+		with(Log("split.restack")){
+			foreach(separator; separators)
+				XRaiseWindow(dpy, separator.window);
+			if(!children.length)
+				return;
+			foreach(tabs; (children.without(children[clientActive]) ~ children[clientActive]).to!(Tabs[]))
+				tabs.restack;
+		}
 	}
 
 	void destroy(){
@@ -150,20 +153,22 @@ class Split: Container {
 	override void show(){
 		if(!hidden)
 			return;
-		"split.show".log;
-		hidden = false;
-		foreach(c; children ~ separators.to!(Base[]))
-			c.show;
-		rebuild;
+		with(Log("split.show")){
+			hidden = false;
+			foreach(c; children ~ separators.to!(Base[]))
+				c.show;
+			rebuild;
+		}
 	}
 
 	override void hide(){
 		if(hidden)
 			return;
-		hidden = true;
-		foreach(c; children ~ separators.to!(Base[]))
-			c.hide;
-		"split.hide".log;
+		with(Log("split.hide")){
+			hidden = true;
+			foreach(c; children ~ separators.to!(Base[]))
+				c.hide;
+		}
 	}
 
 	alias add = Base.add;
@@ -176,37 +181,38 @@ class Split: Container {
 		XSync(dpy, false);
 		if(position == long.max)
 			position = clientActive;
-		"split.add %s pos=%s".format(client, position).log;
-		Tabs tab;
-		if(position >= 0 && position < children.length){
-			tab = children[position].to!Tabs;
-		}else{
-			tab = new Tabs;
-			tab.parent = this;
-			if(position >= 0 && position < children.length.to!long){
-				children = children[0..position+1] ~ tab ~ children[position+1..$];
-				sizes = sizes[0..position+1] ~ client.size.w ~ sizes[position+1..$];
+		with(Log("split.add %s pos=%s".format(client, position))){
+			Tabs tab;
+			if(position >= 0 && position < children.length){
+				tab = children[position].to!Tabs;
 			}else{
-				if(position < 0){
-					children = tab ~ children;
-					sizes = client.size.w ~ sizes;
+				tab = new Tabs;
+				tab.parent = this;
+				if(position >= 0 && position < children.length.to!long){
+					children = children[0..position+1] ~ tab ~ children[position+1..$];
+					sizes = sizes[0..position+1] ~ client.size.w ~ sizes[position+1..$];
 				}else{
-					children ~= tab;
-					sizes ~= client.size.w;
+					if(position < 0){
+						children = tab ~ children;
+						sizes = client.size.w ~ sizes;
+					}else{
+						children ~= tab;
+						sizes ~= client.size.w;
+					}
+				}
+				if(children.length > 1)
+					separators ~= new Separator;
+				if(!hidden){
+					tab.show;
+					if(separators.length)
+						separators[$-1].show;
 				}
 			}
-			if(children.length > 1)
-				separators ~= new Separator;
-			if(!hidden){
-				tab.show;
-				if(separators.length)
-					separators[$-1].show;
-			}
+			foreach(child; children.to!(Tabs[]))
+				child.updateHints;
+			tab.add(client);
+			rebuild;
 		}
-		foreach(child; children.to!(Tabs[]))
-			child.updateHints;
-		tab.add(client);
-		rebuild;
 	}
 
 	void moveClient(int dir){
@@ -248,24 +254,25 @@ class Split: Container {
 	}
 
 	override void remove(Client client){
-		"split.remove %s".format(client).log;
-		foreach(i, container; children.to!(Tabs[])){
-			if(container.children.canFind(client)){
-				container.remove(client);
-				if(!container.children.length){
-					container.destroy;
-					remove(container);
-					sizes = sizes[0..i] ~ sizes[i+1..$];
-					if(separators.length){
-						separators[$-1].destroy;
-						separators = separators[0..$-1];
+		with(Log("split.remove %s".format(client))){
+			foreach(i, container; children.to!(Tabs[])){
+				if(container.children.canFind(client)){
+					container.remove(client);
+					if(!container.children.length){
+						container.destroy;
+						remove(container);
+						sizes = sizes[0..i] ~ sizes[i+1..$];
+						if(separators.length){
+							separators[$-1].destroy;
+							separators = separators[0..$-1];
+						}
+						if(clientActive >= children.length)
+							clientActive = cast(int)children.length-1;
+						foreach(child; children.to!(Tabs[]))
+							child.updateHints;
+						rebuild;
+						return;
 					}
-					if(clientActive >= children.length)
-						clientActive = cast(int)children.length-1;
-					foreach(child; children.to!(Tabs[]))
-						child.updateHints;
-					rebuild;
-					return;
 				}
 			}
 		}
@@ -284,13 +291,14 @@ class Split: Container {
 	}
 
 	override void resize(int[2] size){
-		"split.resize %s".format(size).log;
-		if(size.w < 0 || size.h < 0)
-			throw new Exception("workspace size invalid");
-		super.resize(size);
-		if(draw)
-			draw.resize(size);
-		rebuild;
+		with(Log("split.resize %s".format(size))){
+			if(size.w < 0 || size.h < 0)
+				throw new Exception("workspace size invalid");
+			super.resize(size);
+			if(draw)
+				draw.resize(size);
+			rebuild;
+		}
 	}
 
 	void normalize(){
@@ -320,18 +328,19 @@ class Split: Container {
 	void rebuild(){
 		if(lock)
 			return;
-		"split.rebuild".log;
-		normalize;
-		int offset = 0;
-		auto padding = config["split paddingElem"].to!int;
-		foreach(i, c; children){
-			c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
-			c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);
-			offset += cast(int)sizes[i]+padding;
-			if(i != children.length-1)
-				separators[i].moveResize(c.pos.a+[c.size.w,0], [padding, c.size.h]);
+		with(Log("split.rebuild")){
+			normalize;
+			int offset = 0;
+			auto padding = config["split paddingElem"].to!int;
+			foreach(i, c; children){
+				c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
+				c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);
+				offset += cast(int)sizes[i]+padding;
+				if(i != children.length-1)
+					separators[i].moveResize(c.pos.a+[c.size.w,0], [padding, c.size.h]);
+			}
+			redraw = true;
 		}
-		redraw = true;
 	}
 
 	Client next(){
@@ -363,8 +372,9 @@ class Split: Container {
 	void focusDir(int dir){
 		auto client = dir == 0 ? active : (dir > 0 ? next : prev);
 		if(client){
-			"split.focusDir %s client=%s".format(dir, client).log;
-			client.focus;
+			with(Log("split.focusDir %s client=%s".format(dir, client))){
+				client.focus;
+			}
 		}
 	}
 

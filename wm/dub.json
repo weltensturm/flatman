@@ -2,8 +2,7 @@
 	"name" : "flatman-wm",
 	"description" : "window manager",
 	"targetType": "executable",
-	"sourcePaths": ["src"],
-	"includePaths": ["src"],
+	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
 		"ws": ">=1.0.8"
 	},

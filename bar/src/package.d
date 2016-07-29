@@ -27,7 +27,10 @@ public import
 	ws.math.vector,
     ws.wm,
 
+	common.configLoader,
+
     bar.bar,
+	bar.config,
     bar.main,
 	bar.powerButton,
 	bar.taskList,

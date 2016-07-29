@@ -1,4 +1,4 @@
-module flatman.container;
+module flatman.layout.container;
 
 import flatman;
 

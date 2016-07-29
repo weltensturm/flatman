@@ -1,15 +1,17 @@
 
 
 keys {
-	alt+d				exec dinu -fn Monospace-9 -c "$(flatman-context -p)"
+	alt+d				exec dinu -f -fn Monospace-9 -c "$(flatman-context -p)"
 	alt+Return			exec cd "$(flatman-context)" && terminator
 	alt+n				exec firefox
 	alt+shift+w			exec i3lock -c 000000 && systemctl suspend
 	alt+j				focus dir -
 	alt+Left			focus dir -
+	alt+shift+Tab		focus dir -
 	alt+i				focus stack -
 	alt+semicolon		focus dir +
 	alt+Right			focus dir +
+	alt+Tab				focus dir +
 	alt+o				focus stack +
 	alt+ctrl+j			resize -
 	alt+ctrl+semicolon	resize +
@@ -17,8 +19,10 @@ keys {
 	alt+m				move mouse
 	alt+k				workspace + filled
 	alt+Down			workspace + filled
+	alt+asciitilde			workspace + filled
 	alt+l				workspace - filled
 	alt+Up				workspace - filled
+	alt+shift+asciitilde		workspace - filled
 	alt+ctrl+l			workspace - create
 	alt+ctrl+k			workspace + create
 	alt+0				workspace last s
@@ -45,6 +49,7 @@ keys {
 
 
 autostart {
+	flatman-bar
 	flatman-dock
 	flatman-menu
 	flatman-compositor
@@ -58,36 +63,41 @@ split {
 }
 
 tabs {
+	width 120
 	border {
 		active {
 			height 1
-			color dd8600
+			color 222222
 		}
 		normal {
 			height 1
-			color 333333
+			color 222222
+		}
+		fullscreen {
+			height 1
+			color 005577
 		}
 	}
-	paddingOuter 0 0 2 0
+	padding 0 0 1 0
 	background {
 		normal 222222
-		fullscreen 005577
-		hover 333333
+		fullscreen aaaaff
+		hover 222222
 		activeBg 222222
 		active 222222
-		urgent 994333
+		urgent 222222
 	}
 	title {
 		font Tahoma
-		font-size 9
-		height 20
+		font-size 10
+		height 24
 		show 0
 		normal bbbbbb
 		active ffffff
-		activeBg bbbbbb
-		urgent ffffff
+		activeBg ffffff
+		urgent dd8600
 		hover ffffff
-		fullscreen ffffff
+		fullscreen 888888
 	}
 }
 

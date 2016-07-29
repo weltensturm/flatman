@@ -17,7 +17,8 @@ string call(Args...)(string fn, Args args){
 
 string call()(string fn, string[] args){
 	if(fn in functions)
-		return functions[fn](args);
+		with(Log(`calling "%s" with "%s"`.format(fn, args)))
+			return functions[fn](args);
 	`ERROR: Function not found "%s"`.format(fn).log;
 	return "";
 }
@@ -52,7 +53,7 @@ void registerFunctions(){
 	register("resize", &resize);
 	register("move", &move);
 	register("toggle", &toggle);
-	register("killclient", {killclient;});
+	register("killclient", {killClient;});
 	register("quit", &quit);
 	register("workspace", &workspace);
 	register("reload", &reload);
@@ -69,29 +70,29 @@ void focus(string what, string dir){
 
 void resize(string what){
 	if(what == "+")
-		sizeInc;
+		monitor.workspace.split.sizeInc;
 	else if(what == "-")
-		sizeDec;
+		monitor.workspace.split.sizeDec;
 	else if(what == "mouse")
-		mouseresize;
+		mouseResize;
 }
 
 void move(string what){
 	final switch(what){
 		case "+":
-			monitor.moveRight;
+			moveRight;
 			break;
 		case "-":
-			monitor.moveLeft;
+			moveLeft;
 			break;
 		case "up":
-			monitor.moveUp;
+			moveUp;
 			break;
 		case "down":
-			monitor.moveDown;
+			moveDown;
 			break;
 		case "mouse":
-			mousemove;
+			mouseMove;
 			break;
 	}
 }
@@ -106,50 +107,36 @@ void toggle(string what){
 				active.togglefloating;
 			break;
 		case "fullscreen":
-			togglefullscreen;
+			toggleFullscreen;
 			break;
 	}
 }
 
 void workspace(string dir, string how){
-	foreach(monitor; monitors){
-		with(monitor){
-			if(dir == "+"){
-				if(how == "filled"){
-					foreach(i; workspaceActive+1..workspaces.length){
-						if(workspaces[i].clients.length){
-							switchWorkspace(cast(int)i);
-							return;
-						}
-					}
-				}else if(how == "create"){
-					newWorkspace(workspaceActive+1);
-					switchWorkspace(workspaceActive+1);
-				}else
-				switchWorkspace(workspaceActive+1);
-			}else if(dir == "-"){
-				if(how == "filled"){
-					foreach_reverse(i; 0..workspaceActive){
-						if(workspaces[i].clients.length){
-							switchWorkspace(i);
-							return;
-						}
-					}
-				}else if(how == "create"){
-					newWorkspace(workspaceActive);
-					switchWorkspace(workspaceActive-1);
-				}else
-					switchWorkspace(workspaceActive-1);
-			}else if(dir == "first"){
-				if(how == "create")
-					newWorkspace(0);
-				switchWorkspace(0);
-			}else if(dir == "last"){
-				if(how == "create")
-					newWorkspace(workspaces.length);
-				switchWorkspace(workspaces.length.to!int-1);
-			}
-		}
+	if(dir == "+"){
+		if(how == "filled"){
+			switchWorkspace(monitor.workspaceActive+1);
+		}else if(how == "create"){
+			newWorkspace(monitor.workspaceActive+1);
+			switchWorkspace(monitor.workspaceActive+1);
+		}else
+		switchWorkspace(monitor.workspaceActive+1);
+	}else if(dir == "-"){
+		if(how == "filled"){
+			switchWorkspace(monitor.workspaceActive-1);
+		}else if(how == "create"){
+			newWorkspace(monitor.workspaceActive);
+			switchWorkspace(monitor.workspaceActive-1);
+		}else
+			switchWorkspace(monitor.workspaceActive-1);
+	}else if(dir == "first"){
+		if(how == "create")
+			newWorkspace(0);
+		switchWorkspace(0);
+	}else if(dir == "last"){
+		if(how == "create")
+			newWorkspace(monitor.workspaces.length);
+		switchWorkspace(monitor.workspaces.length.to!int-1);
 	}
 }
 

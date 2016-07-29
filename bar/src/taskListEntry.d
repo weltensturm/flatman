@@ -17,9 +17,9 @@ class TaskListEntry: Base {
         draw.clip(pos, size);
 
         if(!client.hidden)
-            draw.setColor([0.9,0.9,0.9]);
+            draw.setColor(config.titleTextNormal);
         else
-            draw.setColor([0.5,0.5,0.5]);
+            draw.setColor(config.titleTextHidden);
         auto txt = client.title;
 
         if(client == bar.currentClient){
@@ -39,7 +39,7 @@ class TaskListEntry: Base {
             );
             //draw.setColor([0.85,0.85,0.85]);
             //draw.rect(pos.a + [offset, 0], [size.w, 24]);
-            draw.setColor([1,1,1]);
+            draw.setColor(config.titleTextActive);
         }
 
         auto centerOffset = size.w/2.0 - draw.width(txt)/2.0;
@@ -68,7 +68,7 @@ class TaskListEntry: Base {
             XClientMessageEvent xev;
             xev.type = ClientMessage;
             xev.window = client.window;
-            xev.message_type = XInternAtom(wm.displayHandle, "_NET_ACTIVE_WINDOW", false);
+            xev.message_type = atoms._NET_ACTIVE_WINDOW;
             xev.format = 32;
             xev.data.l[0] = 2;
             xev.data.l[1] = CurrentTime;

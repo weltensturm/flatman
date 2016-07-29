@@ -7,22 +7,6 @@ Display* dpy;
 x11.X.Window root;
 PropertyList properties;
 
-struct Screen {
-	int x, y, w, h;
-}
-
-Screen[int] screens(){
-	int count;
-	auto screenInfo = XineramaQueryScreens(dpy, &count);
-	Screen[int] res;
-	foreach(screen; screenInfo[0..count])
-		res[screen.screen_number] = Screen(screen.x_org, screen.y_org, screen.width, screen.height);
-	XFree(screenInfo);
-	return res;
-
-}
-
-
 Picture generateGlow(float[3] color){
 	auto pixmap = XCreatePixmap(dpy, root, 200, 40, 32);
 	XRenderPictureAttributes pa;
@@ -44,23 +28,9 @@ Picture generateGlow(float[3] color){
 	return picture;
 }
 
-void fillAtoms(T)(ref T data){
-	foreach(n; FieldNameTuple!T){
-		mixin("data." ~ n ~ " = XInternAtom(wm.displayHandle, __traits(getAttributes, data."~n~")[0], false);");
-	}
-}
-
-struct WmAtoms {
-	@("WM_PROTOCOLS") Atom protocols;
-	@("WM_DELETE_WINDOW") Atom delete_;
-}
-
-WmAtoms wm_;
-
-
 class Bar: ws.wm.Window {
 
-	Client[] clients;
+	int screen;
 
 	Property!(XA_CARDINAL, false) workspace;
 	Property!(XA_CARDINAL, false) currentWorkspace;
@@ -87,27 +57,12 @@ class Bar: ws.wm.Window {
 
 	//Switcher switcher;
 
-	this(){
+	App app;
+
+	this(App app){
+		this.app = app;
 		properties = new PropertyList;
-		dpy = wm.displayHandle;
-		.root = XDefaultRootWindow(dpy);
 		auto screens = screens;
-
-		wm_.fillAtoms;
-
-		wm.on([
-			CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
-			DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
-			ConfigureNotify: (XEvent* e) => evConfigure(e),
-			MapNotify: (XEvent* e) => evMap(&e.xmap),
-			UnmapNotify: (XEvent* e) => evUnmap(&e.xunmap),
-			PropertyNotify: (XEvent* e) => evProperty(&e.xproperty)
-		]);
-
-		XSelectInput(wm.displayHandle, .root,
-		    SubstructureNotifyMask
-		    | ExposureMask
-		    | PropertyChangeMask);
 
 		taskList = addNew!TaskList(this);
 		powerButton = addNew!PowerButton(this);
@@ -125,7 +80,6 @@ class Bar: ws.wm.Window {
 			hidden = true;
 		}
 
-		scan;
 	}
 
 	override void show(){
@@ -139,7 +93,7 @@ class Bar: ws.wm.Window {
 
 		currentWindow = new Property!(XA_WINDOW, false)(.root, "_NET_ACTIVE_WINDOW", properties);
 		currentWindow ~= (x11.X.Window window){
-			foreach(client; clients){
+			foreach(client; app.clients){
 				if(client.window == window){
 					currentClient = client;
 					break;
@@ -168,21 +122,21 @@ class Bar: ws.wm.Window {
 		auto time = Clock.currTime;
 		if(update || time.second != second){
 			if(update)
-				taskList.update(clients);
+				taskList.update(app.clients);
 			
-			draw.setColor([0.13333,0.13333,0.13333]);
+			draw.setColor(config.background);
 			draw.rect([0,0], size);
 
 			left = 200;
 			auto names = workspaceNames.value.split('\0');
 			if(currentWorkspace.value < names.length){
-				draw.setColor([0.8,0.8,0.8]);
+				draw.setColor(config.foreground);
 				draw.text([5,5], names[currentWorkspace]);
 			}
-			draw.setColor([0.25,0.25,0.25]);
+			draw.setColor(config.border);
 			draw.rect([0,0], [size.w,1]);
 
-			draw.setColor([0.8,0.8,0.8]);
+			draw.setColor(config.foreground);
 			auto right = draw.width("00:00:00")+10;
 			draw.text([size.w-right, 5], "%02d:%02d:%02d".format(time.hour, time.minute, time.second), 0);
 
@@ -201,93 +155,10 @@ class Bar: ws.wm.Window {
 		powerButton.move([size.w-size.h, 0]);
 		taskList.resize(size.a - [size.h*2, 0]);
 		taskList.move([size.h, 0]);
-		tray.resize(size);
-	}
-
-	void scan(){
-		XFlush(wm.displayHandle);
-		XGrabServer(wm.displayHandle);
-		x11.X.Window root_return, parent_return;
-		x11.X.Window* children;
-		uint nchildren;
-		XQueryTree(dpy, .root, &root_return, &parent_return, &children, &nchildren);
-		if(children){
-			foreach(window; children[0..nchildren]){
-				if(.root == root_return)
-					evCreate(window);
-			}
-			XFree(children);
+		if(tray){
+			tray.resize(size);
+			tray.move([size.w-tray.clients.length.to!int*size.h - draw.width("00:00:00") - 20, 0]);
 		}
-		XUngrabServer(wm.displayHandle);
-		XFlush(wm.displayHandle);
-	}
-
-	void evCreate(x11.X.Window window){
-		XWindowAttributes wa;
-		if(window == windowHandle || !XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly){
-			return;
-		}
-		auto client = new Client(window);
-		if(wa.map_state != IsViewable)
-			client.hidden = true;
-		clients ~= client;
-		update = true;
-	}
-
-	void evDestroy(x11.X.Window window){
-		properties.remove(window);
-		foreach(i, c; clients){
-			if(c.window == window){
-				clients = clients.without(c);
-				return;
-			}
-		}
-		update = true;
-	}
-
-	void evConfigure(XEvent* e){
-		if(e.xconfigure.window == .root)
-			resize([e.xconfigure.width, size.h]);
-		if(e.xconfigure.window == windowHandle)
-			return;
-		foreach(i, c; clients){
-			if(c.window == e.xconfigure.window){
-				return;
-			}
-		}
-	}
-
-	void evMap(XMapEvent* e){
-		foreach(i, c; clients){
-			if(c.window == e.window){
-				c.hidden = false;
-				return;
-			}
-		}
-		evCreate(e.window);
-		update = true;
-	}
-
-	void evUnmap(XUnmapEvent* e){
-		foreach(c; clients){
-			if(c.window == e.window){
-				c.hidden = true;
-				return;
-			}
-		}
-		update = true;
-	}
-
-	void evProperty(XPropertyEvent* e){
-		properties.update(e);
-		if(e.atom == XA_WM_NAME){
-			foreach(client; clients){
-				if(client.window == e.window){
-					client.title = client.getTitle;
-				}
-			}
-		}
-		update = true;
 	}
 
 }
