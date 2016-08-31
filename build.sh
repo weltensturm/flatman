@@ -1,6 +1,6 @@
 #!/bin/bash
 
-parts=(wm compositor dock menu context volume-icon)
+parts=(wm compositor dock menu context volume-icon bar)
 
 set -e
 

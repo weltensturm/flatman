@@ -28,8 +28,7 @@ echo "Installing res/flatman.desktop"
 cp -f res/flatman.desktop "$installdir/usr/share/xsessions/"
 
 echo "Installing flatman config"
-cp -f res/flatman-wm-system.desktop "$installdir/usr/share/applications/"
-cp -f res/flatman-wm-user.desktop "$installdir/usr/share/applications/"
+cp -f res/flatman.desktop "$installdir/usr/share/applications/"
 
 chmod -R 755 "$installdir/etc/flatman/"*
 chmod -R 755 "$installdir/usr/bin/flatman"*
