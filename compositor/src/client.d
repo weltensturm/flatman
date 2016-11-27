@@ -33,17 +33,14 @@ class CompositeClient: ws.wm.Window {
 		this.a = a;
 		animation = new ClientAnimation(pos, size);
 		isActive = true;
-		if(a.map_state & IsViewable){
-			hidden = false;
-			animation.fade.replace(0, 1);
-			createPicture;
-		}
 		XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
 		currentTab = new Property!(XA_CARDINAL, false)(windowHandle, "_FLATMAN_TAB");
 		currentTabs = new Property!(XA_CARDINAL, false)(windowHandle, "_FLATMAN_TABS");
 		tabDirectionProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_FLATMAN_TAB_DIR");
 		workspaceProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 		workspace = workspaceProperty.get;
+		if(a.map_state & IsViewable)
+			onShow;
 	}
 	
 	void createPicture(){
@@ -136,10 +133,7 @@ class CompositeClient: ws.wm.Window {
 			XRenderFreePicture(wm.displayHandle, resizeGhost);
 	}
 
-	override void resize(int[2] size){
-		if(size == this.size)
-			return;
-
+	override void resized(int[2] size){
 		if(animation.fade.completion < 0.1){
 			animation.size.x.replace(size.x, size.x);
 			animation.size.y.replace(size.y, size.y);
@@ -165,11 +159,10 @@ class CompositeClient: ws.wm.Window {
 			XRenderFreePicture(wm.displayHandle, resizeGhost);
 		resizeGhost = picture;
 		picture = None;
-	
 		createPicture;	
 	}
 
-	override void move(int[2] pos){
+	override void moved(int[2] pos){
 		if(pos.y <= this.pos.y-manager.height || pos == this.pos)
 			return;
 		if(a.override_redirect || workspace == manager.workspace || workspace < 0){

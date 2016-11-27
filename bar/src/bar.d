@@ -79,7 +79,7 @@ class Bar: ws.wm.Window {
 			resize([size.w, 1]);
 			hidden = true;
 		}
-
+		resize(size);
 	}
 
 	override void show(){
@@ -131,7 +131,12 @@ class Bar: ws.wm.Window {
 			auto names = workspaceNames.value.split('\0');
 			if(currentWorkspace.value < names.length){
 				draw.setColor(config.foreground);
-				draw.text([5,5], names[currentWorkspace]);
+				auto parts = names[currentWorkspace].split("/");
+				auto x = draw.text([5,5], parts[0..$-1].join("/"));
+				if(parts.length > 1)
+					x += draw.text([5+x, 5], "/");
+				draw.setColor(config.foregroundMain);
+				draw.text([5+x, 5], parts[$-1]);
 			}
 			draw.setColor(config.border);
 			draw.rect([0,0], [size.w,1]);
@@ -149,10 +154,11 @@ class Bar: ws.wm.Window {
 		}
 	}
 
-	override void resize(int[2] size){
-		super.resize(size);
-		powerButton.resize([size.h, size.h]);
+	override void resized(int[2] size){
+		super.resized(size);
+		writeln("resized ", size);
 		powerButton.move([size.w-size.h, 0]);
+		powerButton.resize([size.h, size.h]);
 		taskList.resize(size.a - [size.h*2, 0]);
 		taskList.move([size.h, 0]);
 		if(tray){

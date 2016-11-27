@@ -125,6 +125,9 @@ void newWorkspace(long pos){
 }
 
 void switchWorkspace(int pos){
+	if(!config.workspaceWrap){
+		pos = pos.min(monitor.workspaces.length.to!int-1).max(0);
+	}
 	if(pos == monitor.workspaceActive)
 		return;
 	with(Log("workspace = %s".format(pos))){

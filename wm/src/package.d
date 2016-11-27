@@ -53,10 +53,12 @@ public import
 	ws.bindings.xft,
 
 	common.configLoader,
+	common.screens,
+
 	flatman.x.atoms,
-	flatman.x.screens,
 	flatman.x.ewmh,
 	flatman.x.icccm,
+	flatman.x.motif,
 	flatman.x.properties,
 	flatman.layout.monitor,
 	flatman.layout.workspace,

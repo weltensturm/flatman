@@ -1,5 +1,8 @@
 
 foreground aaaaaa
+foreground {
+	main eeeeee	
+}
 background 222222
 border 111111
 
@@ -13,5 +16,5 @@ title {
 
 separator {
     color cccccc
-    width 40
+    width 200
 }

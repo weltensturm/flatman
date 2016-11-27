@@ -30,7 +30,7 @@ void main(string[] args){
 
 
 string clean(string path){
-	return path.expandTilde.buildNormalizedPath.absolutePath;
+	return path.expandTilde.absolutePath.buildNormalizedPath;
 }
 
 string getContext(){

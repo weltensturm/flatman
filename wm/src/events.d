@@ -152,6 +152,12 @@ void onClientMessage(XClientMessageEvent* cme){
 				return;
 			c.requestAttention;
 		},
+		net.drag: {
+			if(!c)
+				return;
+			if(cme.data.l[2] == 8)
+				drag(c, c.pos.a - cme.data.l[0..2].to!(int[2]));
+		},
 		wm.state: {
 			if(cme.data.l[0] == IconicState){
 				"iconify %s".format(c).log;
@@ -177,6 +183,7 @@ void onProperty(XPropertyEvent* ev){
 }
 
 void onConfigure(Window window, int x, int y, int width, int height){
+	"%s onConfigure %s %s".format(wintoclient(window), [x,y], [width,height]);
 	if(window == root){
 		bool dirty = (sw != width || sh != height);
 		sw = width;
@@ -192,7 +199,7 @@ void onConfigureRequest(XEvent* e){
 	XConfigureRequestEvent* ev = &e.xconfigurerequest;
 	Client c = wintoclient(ev.window);
 	if(c){
-		c.configureRequest([ev.x, ev.y], [ev.width, ev.height]);
+		c.onConfigureRequest(ev);
 	}else{
 		XWindowChanges wc;
 		wc.x = ev.x;
@@ -283,16 +290,19 @@ void onMapping(XEvent *e){
 void onMapRequest(XEvent *e){
 	static XWindowAttributes wa;
 	XMapRequestEvent *ev = &e.xmaprequest;
-	if(!XGetWindowAttributes(dpy, ev.window, &wa) || wa.override_redirect){
+	if(!XGetWindowAttributes(dpy, ev.window, &wa)){
+		return;
+	}
+	if(wa.override_redirect){
+		XMapWindow(dpy, ev.window);
 		return;
 	}
 	if(!wintoclient(ev.window) && ev.parent == root){
 		try{
 			manage(ev.window, &wa);
-			XMapWindow(dpy, ev.window);
+			//XMapWindow(dpy, ev.window);
 		}catch(Throwable t){
 			t.toString.log;
-			XUnmapWindow(dpy, ev.window);
 		}
 	}
 }
@@ -311,54 +321,8 @@ void onMotion(XEvent* e){
 			c.focus;
 	}
 	+/
-	static Monitor mon = null;
-	Monitor m;
-	if((m = findMonitor([ev.x_root, ev.y_root])) != mon && mon){
-		if(monitor && monitor.active)
-			monitor.active.unfocus(true);
-		monitor = m;
-		if(monitor.active)
-			monitor.active.focus;
-		//focus(null);
-	}
-	mon = m;
 	if(dragging){
-		if(!clients.canFind(dragging.client))
-			return;
-
-		auto newmon = findMonitor([ev.x_root, ev.y_root]);
-		if(dragging.client.monitor != newmon){
-			with(Log("move %s from monitor %s to %s".format(dragging.client, dragging.client.monitor, newmon))){
-				dragging.client.monitor.remove(dragging.client);
-				newmon.add(dragging.client, newmon.workspaceActive);
-			}
-		}
-
-		if(
-			(ev.y_root <= dragging.client.monitor.pos.y+cfg.tabsTitleHeight)
-					== dragging.client.isFloating
-				&& ev.x_root > dragging.client.monitor.pos.x+1
-				&& ev.x_root < dragging.client.monitor.pos.x+dragging.client.monitor.size.w-1)
-			dragging.client.togglefloating;
-
-		if(dragging.client.isFloating){
-			auto monitor = findMonitor(dragging.client.pos);
-			if(ev.x_root <= monitor.pos.x+10 && ev.x_root >= monitor.pos.x){
-				monitor.remove(dragging.client);
-				dragging.client.isFloating = false;
-				monitor.workspace.split.add(dragging.client, -1);
-				return;
-			}else if(ev.x_root >= monitor.pos.x+monitor.size.w-1 && ev.x_root <= monitor.pos.x+monitor.size.w){
-				monitor.remove(dragging.client);
-				dragging.client.isFloating = false;
-				monitor.workspace.split.add(dragging.client, monitor.workspace.split.clients.length);
-				return;
-			}
-			auto x = dragging.offset.x * dragging.client.size.w / dragging.width;
-			dragging.client.moveResize([ev.x_root, ev.y_root].a + [x, dragging.offset.y], dragging.client.sizeFloating);
-		}
-		else
-			{}
+		dragUpdate = [ev.x_root, ev.y_root];
 	}
 }
 

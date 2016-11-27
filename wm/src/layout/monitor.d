@@ -40,7 +40,6 @@ class Monitor {
 	int id;
 	int[2] pos;
 	int[2] size;
-	Client[] strutList;
 
 	Workspace[] workspaces;
 	Client[] globals;
@@ -110,18 +109,18 @@ class Monitor {
 
 	void add(Client client, long workspace=-1){
 		client.monitor = this;
-		if(workspace >= cast(long)workspaces.length || workspace < 0)
+		if(workspace < 0)
 			client.global = true;
 		with(Log("monitor.add %s workspace=%s".format(client, workspace))){
 			if(!client.global){
 				if(workspace == -1)
 					this.workspace.add(client);
 				else{
-					workspaces[workspace].add(client);
+					workspaces[workspace.max(0).min(workspaces.length-1)].add(client);
 				}
 			}else{
 				globals ~= client;
-				client.moveResize(client.posFloating, client.sizeFloating);
+				//client.moveResize(client.posFloating, client.sizeFloating);
 			}
 		}
 	}
@@ -148,7 +147,7 @@ class Monitor {
 			}
 			globals = globals.without(client);
 			XSync(dpy, false);
-			strut(client, true);
+			resize(size);
 		}
 	}
 
@@ -186,40 +185,29 @@ class Monitor {
 		with(Log("monitor.resize %s".format(size))){
 			this.size = size;
 			int[4] reserve;
-			foreach(c; strutList){
-				"monitor strut %s".format(c).log;
-				auto norm = [
-						(c.pos.x + c.size.w/2.0)/size.w,
-						(c.pos.y + c.size.h/2.0)/size.h
+			foreach(c; clients){
+				if(!c.strut)
+					continue;
+				auto strutNormalized = [
+						(c.pos.x - pos.x + c.size.w/2.0)/size.w,
+						(c.pos.y - pos.y + c.size.h/2.0)/size.h
 				];
-				writeln(norm);
-				reserve[0] += norm.y < 1-norm.x && norm.y > norm.x ? c.size.w : 0;
-				reserve[1] += norm.y > 1-norm.x && norm.y < norm.x ? c.size.w : 0;
-				reserve[2] += norm.y < norm.x && norm.y < 1-norm.x ? c.size.h : 0;
-				reserve[3] += norm.y > norm.x && norm.y > 1-norm.x ? c.size.h : 0;
-				writeln(reserve);
+				"strut normalized %s %s".format(c, strutNormalized).log;
+				reserve[0] += strutNormalized.y < 1-strutNormalized.x && strutNormalized.y > strutNormalized.x ? c.size.w : 0;
+				reserve[1] += strutNormalized.y > 1-strutNormalized.x && strutNormalized.y < strutNormalized.x ? c.size.w : 0;
+				reserve[2] += strutNormalized.y < strutNormalized.x && strutNormalized.y < 1-strutNormalized.x ? c.size.h : 0;
+				reserve[3] += strutNormalized.y > strutNormalized.x && strutNormalized.y > 1-strutNormalized.x ? c.size.h : 0;
 			}
+			foreach(ref r; reserve){
+				if(r > size.w || r > size.h)
+					r = 0;
+			}
+			"monitor strut %s".format(reserve).log;
 			foreach(ws; workspaces){
 				ws.move(pos.a + [reserve[0].to!int, cast(int)reserve[2]]);
 				ws.resize([(size.w-reserve[1]-reserve[0]).to!int, (size.h-reserve[2]-reserve[3]).to!int]);
 			}
 		}
-	}
-
-	void strut(Client client, bool remove=false){
-		XSync(dpy, false);
-		auto found = strutList.canFind(client);
-		if(found){
-			"monitor remove strut %s".format(client).log;
-			strutList = strutList.without(client);
-		}
-
-		if(!remove && client.getStrut[0..4].any){
-			"monitor add strut %s %s %s".format(client, client.pos, client.size).log;
-			if(!found)
-				strutList ~= client;
-		}
-		resize(size);
 	}
 
 	override string toString(){

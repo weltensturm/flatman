@@ -33,8 +33,12 @@ class Tabs: Container {
 	
 	void restack(){
 		"tabs.restack".log;
-		if(active)
-			active.raise;
+		if(active){
+			if(!active.isfullscreen)
+				active.raise;
+			else
+				active.lower;
+		}
 	}
 
 	override void show(){
@@ -43,7 +47,7 @@ class Tabs: Container {
 		hidden = false;
 		resize(size);
 		if(active)
-			active.configure;
+			active.showSoft;
 	}
 
 	override void hide(){
@@ -52,7 +56,7 @@ class Tabs: Container {
 		hidden = true;
 		resize(size);
 		if(active)
-            XMoveWindow(dpy, active.win, active.pos.x, active.pos.y-monitor.size.h);
+            active.hideSoft;
 	}
 
 	void destroy(){
@@ -157,16 +161,18 @@ class Tabs: Container {
 	}
 
 	override void resize(int[2] size){
-		super.resize(size);
-		auto padding = cfg.tabsPadding;
-		if(active){
-			if(active.isfullscreen){
-				active.moveResize(active.monitor.pos.a + [0, hidden ? -active.monitor.size.h : 0], active.monitor.size);
-			}else{
-				active.moveResize(
-					pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? active.monitor.size.h : 0)],
-					size.a - [padding[0]+padding[1], (showTabs ? 0 : padding[2])+padding[3]]
-				);
+		with(Log("tabs.resize %s".format(size))){
+			super.resize(size);
+			auto padding = cfg.tabsPadding;
+			if(active){
+				if(active.isfullscreen){
+					active.moveResize(active.monitor.pos.a + [0, hidden ? -rootSize.h : 0], active.monitor.size);
+				}else{
+					active.moveResize(
+						pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? active.monitor.size.h : 0)],
+						size.a - [padding[0]+padding[1], (showTabs ? 0 : padding[2])+padding[3]]
+					);
+				}
 			}
 		}
 	}

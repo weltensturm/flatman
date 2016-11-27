@@ -3,6 +3,7 @@ module common.configLoader;
 
 import
     std.traits,
+    std.stdio,
     std.path,
     std.string,
     std.conv,
@@ -82,7 +83,8 @@ void fillConfig(T)(ref T config, string[] paths){
                 mixin("config." ~ field ~ " = filtered[$-1].value.to!(typeof(T." ~ field ~ "));");
             }
         }catch(Exception e){
-            throw new Exception("Error in config at \"%s\", matches \"%s\"".format(splitName, filtered), e);
+        	writeln(e.toString);
+            throw new Exception("Error in config at \"%s\", matches \"%s\"".format(splitName, filtered));
         }
     }
 }

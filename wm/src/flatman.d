@@ -80,6 +80,10 @@ Dragging dragging;
 
 bool redraw;
 bool queueRestack;
+bool updateStrut;
+int[] dragUpdate;
+
+int[2] rootSize = [1,1];
 
 
 void main(string[] args){
@@ -157,6 +161,7 @@ void setup(bool autostart){
 
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
+	rootSize = [sw, sh];
 	root = RootWindow(dpy, screen);
 
 	/* init atoms */
@@ -167,6 +172,7 @@ void setup(bool autostart){
 
 	wm.fillAtoms;
 	net.fillAtoms;
+	motif.fillAtoms;
 
 	//updatebars();
 	updateMonitors();
@@ -289,6 +295,17 @@ void run(){
 		}
 		Inotify.update;
 
+		if(updateStrut){
+			foreach(m; monitors)
+				m.resize(m.size);
+			updateStrut = false;
+		}
+
+		if(dragUpdate.length && dragging){
+			doDrag(dragUpdate.to!(int[2]));
+			dragUpdate = [];
+		}
+
 		if(redraw){
 			monitor.onDraw;
 			redraw = false;
@@ -345,6 +362,67 @@ void drag(Client client, int[2] offset){
 				CurrentTime);
 }
 
+void doDrag(int[2] pos){
+
+	auto x = pos.x;
+	auto y = pos.y;
+
+	if(!clients.canFind(dragging.client))
+		return;
+
+	static Monitor mon = null;
+	Monitor m;
+	if((m = findMonitor(pos)) != mon && mon){
+		if(monitor && monitor.active)
+			monitor.active.unfocus(true);
+		monitor = m;
+		if(monitor.active)
+			monitor.active.focus;
+		//focus(null);
+	}
+	mon = m;
+
+	auto client = dragging.client;
+	auto monitor = client.monitor;
+
+	if(.monitor != monitor){
+		monitor.remove(client);
+		m.add(client);
+		monitor = m;
+	}
+
+	auto snapBorder = 10;
+
+	if(
+		(y <= monitor.pos.y+cfg.tabsTitleHeight)
+				== client.isFloating
+			&& x > monitor.pos.x+snapBorder
+			&& x < monitor.pos.x+monitor.size.w-snapBorder)
+		client.togglefloating;
+
+	if(client.isFloating){
+		if(x <= monitor.pos.x+snapBorder && x >= monitor.pos.x){
+			if(client.isFloating){
+				monitor.remove(client);
+				client.isFloating = false;
+				monitor.workspace.split.add(client, -1);
+			}
+			return;
+		}else if(x >= monitor.pos.x+monitor.size.w-snapBorder && x <= monitor.pos.x+monitor.size.w){
+			if(client.isFloating){
+				monitor.remove(client);
+				client.isFloating = false;
+				monitor.workspace.split.add(client, monitor.workspace.split.clients.length);	
+			}
+			return;
+		}
+		auto xt = dragging.offset.x * client.size.w / dragging.width;
+		client.moveResize([x, y].a + [xt, dragging.offset.y], client.sizeFloating);
+	}
+	else
+		{}
+}
+
 Client active(){
 	return monitor.active;
 }
@@ -386,9 +464,10 @@ void manage(Window w, XWindowAttributes* wa){
 		c.pos = monitor.size.a/2 - c.size.a/2;
 	XChangeProperty(dpy, root, net.clientList, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
 	c.updateStrut;
-	if(c.isVisible)
+	if(c.isVisible){
+		c.show;
 		c.focus;
-	else
+	}else
 		c.requestAttention;
 }
 
@@ -397,35 +476,37 @@ void quit(){
 }
 
 bool updateMonitors(){
-	bool dirty = false;
-	auto screens = screens;
-	while(monitors.length != screens.length){
-		if(monitors.length < screens.length)
-			monitors ~= [new Monitor([0,0], [1,1])];
-		else {
-			foreach(c; monitors[$-1].clients){
-				monitors[$-1].remove(c);
-				monitors[$-2].add(c);
-			}
-			monitors = monitors[0..$-1];
-		}
-	}
-	foreach(i, monitor; monitors){
-		monitor.id = i.to!int;
-		auto screen = screens[i.to!int];
-		if(monitor.size != [screen.w, screen.h] || monitor.pos != [screen.x, screen.y]){
-			with(Log("updating desktop size")){
-				dirty = true;
-				monitor.pos = [screen.x, screen.y];
-				monitor.resize([screen.w, screen.h]);
+	with(Log("updateMonitors")){
+		bool dirty = false;
+		auto screens = screens(dpy);
+		while(monitors.length != screens.length){
+			if(monitors.length < screens.length)
+				monitors ~= [new Monitor([0,0], [1,1])];
+			else {
+				foreach(c; monitors[$-1].clients){
+					monitors[$-1].remove(c);
+					monitors[$-2].add(c);
+				}
+				monitors = monitors[0..$-1];
 			}
 		}
+		foreach(i, monitor; monitors){
+			monitor.id = i.to!int;
+			auto screen = screens[i.to!int];
+			if(monitor.size != [screen.w, screen.h] || monitor.pos != [screen.x, screen.y]){
+				with(Log("updating desktop size")){
+					dirty = true;
+					monitor.pos = [screen.x, screen.y];
+					monitor.resize([screen.w, screen.h]);
+				}
+			}
+		}
+		if(dirty){
+			monitor = monitors[0];
+			monitor = wintomon(root);
+		}
+		return dirty;	
 	}
-	if(dirty){
-		monitor = monitors[0];
-		monitor = wintomon(root);
-	}
-	return dirty;
 }
 
 Client wintoclient(Window w){
@@ -496,7 +577,7 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
 	try{
 		defaultTraceHandler.toString.log;
 		"flatman: X11 error: request code=%d %s, error code=%d %s".format(ee.request_code, cast(XRequestCode)ee.request_code, ee.error_code, cast(XErrorCode)ee.error_code).log;
-	}catch {}
+	}catch(Throwable) {}
 	return xerrorxlib(dpy, ee); /* may call exit */
 }
 
@@ -504,7 +585,7 @@ extern(C) nothrow int xerrorfatal(Display* dpy){
 	try{
 		defaultTraceHandler.toString.log;
 		"flatman: X11 fatal i/o error".log;
-	}catch{}
+	}catch(Throwable) {}
 	return xerrorfatalxlib(dpy);
 }
 
@@ -515,7 +596,7 @@ extern(C) nothrow int xerrordummy(Display* dpy, XErrorEvent* ee){
 nothrow extern(C) int xerrorstart(Display *dpy, XErrorEvent* ee){
 	try
 		"flatman: another window manager is already running".log;
-	catch {}
+	catch(Throwable) {}
 	_exit(-1);
 	return -1;
 }

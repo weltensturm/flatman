@@ -124,10 +124,10 @@ class Split: Container {
 		with(Log("split.restack")){
 			foreach(separator; separators)
 				XRaiseWindow(dpy, separator.window);
-			if(!children.length)
-				return;
-			foreach(tabs; (children.without(children[clientActive]) ~ children[clientActive]).to!(Tabs[]))
+			foreach(i, tabs; children.to!(Tabs[]))
 				tabs.restack;
+			if(clientActive < children.length && clientActive >= 0)
+				children[clientActive].to!Tabs.restack;
 		}
 	}
 
@@ -292,8 +292,6 @@ class Split: Container {
 
 	override void resize(int[2] size){
 		with(Log("split.resize %s".format(size))){
-			if(size.w < 0 || size.h < 0)
-				throw new Exception("workspace size invalid");
 			super.resize(size);
 			if(draw)
 				draw.resize(size);

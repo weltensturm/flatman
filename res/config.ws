@@ -1,7 +1,7 @@
 
 
 keys {
-	alt+d				exec dinu -f -fn Monospace-9 -c "$(flatman-context -p)"
+	alt+d				exec dinu -f -fn Ubuntu-10 -as 0 -l 0 -r 0.3333 -y 24 -c "$(flatman-context -p)"
 	alt+Return			exec cd "$(flatman-context)" && terminator
 	alt+n				exec firefox
 	alt+shift+w			exec i3lock -c 000000 && systemctl suspend
@@ -57,10 +57,16 @@ autostart {
 }
 
 
+workspace {
+	wrap false
+}
+
+
 split {
 	paddingElem 6
 	background 222222
 }
+
 
 tabs {
 	width 120
@@ -100,6 +106,7 @@ tabs {
 		fullscreen 888888
 	}
 }
+
 
 dock {
 	background 333333

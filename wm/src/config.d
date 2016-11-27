@@ -37,6 +37,8 @@ struct WmConfig {
 	string[] keys;
 	string[] autostart;
 
+	bool workspaceWrap;
+
 	int tabsTitleHeight;
 	int tabsWidth;
 	ConfigInt4 tabsPadding;

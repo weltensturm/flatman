@@ -6,16 +6,9 @@ import flatman;
 
 __gshared:
 
-
-private static Mutex mutex;
-
-shared static this(){
-	Log.loggerHandle = spawn(&Log.logger);
-	mutex = new Mutex;
-}
-
-
 struct Log {
+
+	private static Mutex mutex;
 
 	string dummy;
 
@@ -27,6 +20,12 @@ struct Log {
 	enum BOLD = "\033[1m";
 
 	private static Tid loggerHandle;
+
+	private static void function() init = {
+		loggerHandle = spawn(&Log.logger);
+		mutex = new Mutex;
+		init = {};
+	};
 
 	private static void logger(){
 		while(true){
@@ -63,18 +62,21 @@ struct Log {
 	}
 
 	static void error(string s){
-		auto text = format(s);
+		init();
+		auto text = format(RED ~ s);
 		"/tmp/flatman.log".append(s);
 		text.write;
 	}
 
 	static void fallback(string s){
+		init();
 		auto text = format(s);
 		"/tmp/flatman.log".append(s);
 		text.write;
 	}
 
 	static void info(string s){
+		init();
 		auto text = format(s); 
 		loggerHandle.send(text);
 		text.write;

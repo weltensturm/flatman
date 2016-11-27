@@ -2,7 +2,7 @@
 	"name" : "flatman-dock",
 	"description" : "workspace dock for flatman",
 	"targetType": "executable",
-	"sourcePaths": ["src"],
+	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
 		"ws": ">=1.0.7",
 		"gtk-d": ">=3.2.0"

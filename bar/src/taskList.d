@@ -40,15 +40,17 @@ class TaskList: Base {
 					tabs[client.flatmanTabs.value-1] ~= client;
 			}
 		}
+        if(!tabs.length)
+        	return;
 		int width = ((size.w - config.separatorWidth - tabs.length*config.separatorWidth - (bar.left.max(bar.right)*2)).to!double/(tabs.map!(a => a.length).sum))
 					.min(250)
 					.to!int;
-        extents = ((tabs.map!(a => a.length).sum)*width + tabs.length*config.separatorWidth).to!int;
+        extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.separatorWidth).to!int;
         start = size.w/2 - extents/2;
         int offset = start;
 		foreach(i, tab; tabs){
             if(i != 0)
-                separators ~= offset-config.separatorWidth/2;
+                separators ~= offset;
 			foreach(client; tab){
                 auto listEntry = addNew!TaskListEntry(bar, client);
                 listEntry.move([offset,0]);

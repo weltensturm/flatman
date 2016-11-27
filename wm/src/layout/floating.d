@@ -19,8 +19,6 @@ long find(T)(T[] array, T what){
 
 class Floating: Container {
 
-	Frame[] frames;
-
 	this(int[2] pos, int[2] size){
 		move(pos);
 		resize(size);
@@ -30,19 +28,14 @@ class Floating: Container {
 		"floating.restack".log;
 		foreach(i, client; clients){
 			client.raise;
-			XRaiseWindow(dpy, frames[i].window);
 		}
 	}
 
 	override void show(){
 		if(!hidden)
 			return;
-		foreach(c; clients){
-			XMoveWindow(dpy, c.win, c.pos.x, c.pos.y);
-			updateClient(c);
-		}
-        foreach(f; frames)
-        	XMoveWindow(dpy, f.window, f.pos.x, f.pos.y);
+		foreach(c; clients)
+			c.showSoft;
 		hidden = false;
 	}
 
@@ -50,19 +43,14 @@ class Floating: Container {
 		if(hidden)
 			return;
 		foreach(c; clients)
-            XMoveWindow(dpy, c.win, c.pos.x, -monitor.size.h+c.pos.y);
-        foreach(f; frames)
-        	XMoveWindow(dpy, f.window, f.pos.x, -monitor.size.h+f.pos.y);
+			c.hideSoft;
 		hidden = true;
 	}
 
 	override void onDraw(){
-		foreach(frame; frames)
-			frame.onDraw;
-	}
-
-	void updateClient(Base client){
-		//XRaiseWindow(dpy, (cast(Client)client).win);
+		foreach(c; clients)
+			if(c.frame)
+				c.frame.onDraw;
 	}
 
 	void raise(Client client){
@@ -72,14 +60,11 @@ class Floating: Container {
 
 	void moveResizeClient(Client client){
 		if(client.isfullscreen){
-			client.moveResize(monitor.pos, monitor.size);
+			client.moveResize(client.monitor.pos, client.monitor.size);
 		}else{
 			client.moveResize(client.posFloating, client.sizeFloating);
-			foreach(frame; frames){
-				if(frame.client == client){
-					frame.moveResize(client.pos.a-[0,cfg.tabsTitleHeight], [client.size.w,cfg.tabsTitleHeight]);
-				}
-			}
+			if(client.frame)
+				client.frame.moveResize(client.pos.a-[0,cfg.tabsTitleHeight], [client.size.w,cfg.tabsTitleHeight]);
 		}
 	}
 
@@ -88,11 +73,12 @@ class Floating: Container {
 	override void add(Client client){
 		"floating.add %s fullscreen=%s".format(client, client.isfullscreen).log;
 		add(client.to!Base);
-		client.frame = new Frame(client, client.posFloating.a - [0,cfg.tabsTitleHeight], [client.sizeFloating.w,cfg.tabsTitleHeight]);
-		frames ~= client.frame;
-		if(client.isfullscreen)
- 			client.moveResize(monitor.pos, monitor.size);
-		else if(!client.posFloating.x && !client.posFloating.y || client.posFloating.x < 0 || client.posFloating.y < 0){
+		if(client.decorations)
+			client.frame = new Frame(client, client.posFloating.a - [0,cfg.tabsTitleHeight], [client.sizeFloating.w,cfg.tabsTitleHeight]);
+		if(client.isfullscreen){
+			"Floating fullscreen??".log;
+ 			client.moveResize(client.monitor.pos, client.monitor.size);
+		}else if(!client.posFloating.x && !client.posFloating.y || client.posFloating.x < 0 || client.posFloating.y < 0){
 			client.moveResize([pos.x+size.w/2-client.sizeFloating.w/2, pos.y+size.h/2-client.sizeFloating.h/2], client.sizeFloating, true);
 		}else
 			client.moveResize(client.posFloating, client.sizeFloating);
@@ -102,11 +88,8 @@ class Floating: Container {
 	alias remove = Base.remove;
 
 	override void remove(Client client){
-		foreach(frame; frames.filter!(a => a.client == client)){
-			frames = frames.without(frame);
-			frame.destroy;
-			break;
-		}
+		if(client.frame)
+			client.frame.destroy;
 		client.frame = null;
 		super.remove(client);
 	}
@@ -124,13 +107,16 @@ class Floating: Container {
 	}
 
 	void destroy(){
-		foreach(f; frames)
-			f.destroy;
-		foreach(c; children.to!(Client[]))
+		foreach(c; children.to!(Client[])){
+			if(c.frame)
+				c.frame.destroy;
 			c.unmanage(false);
+		}
 	}
 
 	void focusDir(int dir){
+		if(!children.length)
+			return;
 		auto newActive = clientActive+dir;
 		if(newActive >= children.length)
 			newActive = 0;

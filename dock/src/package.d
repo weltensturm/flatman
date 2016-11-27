@@ -39,7 +39,6 @@ public import
 	ws.gui.base,
 	ws.gui.input,
 	ws.gui.point,
-	dock.draw,
 	dock.dock,
 	dock.windowView,
 	dock.workspaceView,

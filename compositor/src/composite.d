@@ -610,8 +610,8 @@ class CompositeManager {
 					0,0,
 					pos.x + (x > 0 ? size.w-1 : 30*x),
 					pos.y + (y > 0 ? size.h-1 : 30*y),
-					x == 0 ? size.w-1 : 30,
-					y == 0 ? size.h-1 : 30
+					x == 0 ? size.w : 30,
+					y == 0 ? size.h : 30
 				);
 			}
 		}

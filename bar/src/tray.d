@@ -143,6 +143,7 @@ class Tray: Base {
         auto info = Xembed.get_info(window);
         if(info.flags == XEMBED_MAPPED)
             XMapWindow(wm.displayHandle, window);
+        XSync(dpy, false);
         clients ~= new TrayClient(window);
         update;
     }

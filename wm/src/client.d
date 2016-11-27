@@ -27,12 +27,15 @@ class Client: Base {
 	int bw, oldbw;
 	bool isUrgent;
 	bool isFloating;
+	bool decorations;
 	bool global;
 	bool isfixed, neverfocus, isfullscreen;
 	flatman.Monitor monitor;
 	Window win;
 	Window orig;
 	Frame frame;
+	bool strut;
+	bool destroyed;
 
 	ubyte[] icon;
 	Icon xicon;
@@ -68,6 +71,8 @@ class Client: Base {
 		updateWmHints;
 		updateIcon;
 		updateTitle;
+		updateDecorated;
+		checkMonitor;
 	}
 
 	override string toString(){
@@ -113,6 +118,18 @@ class Client: Base {
 		XFree(wmh);
 	}
 
+	void checkMonitor(){
+		if(isFloating || global){
+			auto newmon = findMonitor([pos.x, pos.y]);
+			if(monitor != newmon){
+				with(Log("move %s from monitor %s to %s".format(this, monitor, newmon))){
+					monitor.remove(this);
+					newmon.add(this, originWorkspace);
+				}
+			}
+		}
+	}
+
 	void focus(){
 		if(!monitor || !monitor.workspace)
 			return;
@@ -132,34 +149,60 @@ class Client: Base {
 		restack;
 		XSync(dpy, false);
 		setFocus;
+		configure;
 	}
 
-	void configureRequest(int[2] pos, int[2] size){
-		if(global || isFloating)
-			moveResize(pos, size);
+	void onConfigureRequest(XConfigureRequestEvent* e){
+		if(global || isFloating){
+			if(e.value_mask & (CWX | CWY))
+				//moveResize([e.x, e.y], [e.width, e.height]);
+				move([e.x, e.y]);
+			if(e.value_mask & (CWWidth | CWHeight))
+				resize([e.width, e.height]);
+		}
 	}
 	
 	void configure(){
 		"%s configure %s %s".format(this, pos, size).log;
 		XMoveResizeWindow(dpy, win, pos.x, pos.y, size.w, size.h);
-		if(win != orig)
-			XMoveResizeWindow(dpy, orig, 0, 0, size.w, size.h);
-		configureNotify;
+		if(frame){
+			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
+		}
 	}
 
-	void configureNotify(){
-		XConfigureEvent ce;
-		ce.type = ConfigureNotify;
-		ce.display = dpy;
-		ce.event = orig;
-		ce.window = orig;
-		ce.x = pos.x;
-		ce.y = pos.y;
-		ce.width = size.w;
-		ce.height = size.h;
-		ce.above = None;
-		ce.override_redirect = false;
-		XSendEvent(dpy, orig, false, StructureNotifyMask, cast(XEvent*)&ce);
+	override void move(int[2] pos){
+		if(this.pos == pos)
+			return;
+		"%s move %s".format(this, pos).log;
+		if(isFloating && !isfullscreen)
+			posFloating = pos;
+		this.pos = pos;
+		XMoveWindow(dpy, win, pos.x, pos.y);
+		if(frame){
+			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
+		}
+	}
+
+	override void resize(int[2] size){
+		if(this.size == size)
+			return;
+		"%s resize %s".format(this, size).log;
+		if(isFloating && !isfullscreen)
+			sizeFloating = size;
+		size.w = size.w.max(1).max(sizeMin.w).min(sizeMax.w);
+		size.h = size.h.max(1).max(sizeMin.h).min(sizeMax.h);
+		this.size = size;
+		XResizeWindow(dpy, win, size.w, size.h);
+		if(frame){
+			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
+		}
+	}
+
+	void moveResize(int[2] pos, int[2] size, bool force = false){
+		move(pos);
+		resize(size);
+		if(force)
+			configure;
 	}
 
 	Atom[] getPropList(Atom prop){
@@ -248,10 +291,22 @@ class Client: Base {
 	
 	void raise(){
 		XRaiseWindow(dpy, win);
+		if(frame)
+			XRaiseWindow(dpy, frame.window);
 	}
 
 	void lower(){
 		XLowerWindow(dpy, win);
+	}
+
+	void showSoft(){
+		configure;
+	}
+
+	void hideSoft(){
+		XMoveWindow(dpy, win, pos.x, -rootSize.h+pos.y);
+		if(frame)
+			XMoveWindow(dpy, frame.window, frame.pos.x, -rootSize.h+frame.pos.y);
 	}
 
 	override void show(){
@@ -259,9 +314,9 @@ class Client: Base {
 		setState(NormalState);
 		hidden = false;
 		XMapWindow(dpy, win);
-		if(win != orig)
-			XMapWindow(dpy, orig);
 		configure;
+		if(frame)
+			XMapWindow(dpy, frame.window);
 		XSync(dpy, false);
 	}
 
@@ -271,32 +326,13 @@ class Client: Base {
 		hidden = true;
 		ignoreUnmap += 1;
 		XUnmapWindow(dpy, win);
+		if(frame)
+			XUnmapWindow(dpy, frame.window);
 		XSync(dpy, false);
 	}
 
 	auto isVisible(){
 		return (monitor.workspace.clients.canFind(this) || globals.canFind(this));
-	}
-
-	void moveResize(int[2] pos, int[2] size, bool force = false){
-		size.w = size.w.max(1).max(sizeMin.w).min(sizeMax.w);
-		size.h = size.h.max(1).max(sizeMin.h).min(sizeMax.h);
-		/+if(isFloating){
-			pos.x = pos.x.max(0).min(monitor.size.w-size.w);
-			pos.y = pos.y.max(0).min(monitor.size.h-size.h);
-		}+/
-		if(isFloating && !isfullscreen){
-			posFloating = pos;
-			sizeFloating = size;
-		}
-		if(this.pos == pos && this.size == size && !force)
-			return;
-		this.pos = pos;
-		this.size = size;
-		configure;
-		if(frame){
-			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
-		}
 	}
 
 	int originWorkspace(){
@@ -316,7 +352,7 @@ class Client: Base {
 		+/
 		try
 			return cast(int)orig.getprop!CARDINAL(net.windowDesktop);
-		catch{}
+		catch(Throwable){}
 		return monitor.workspaceActive;
 	}
 
@@ -389,6 +425,7 @@ class Client: Base {
 		monitor.update(this);
 		if(this == flatman.active)
 			focus;
+		restack;
 	}
 	
 	void setState(long state){
@@ -424,15 +461,16 @@ class Client: Base {
 			XDeleteProperty(dpy, .root, net.windowActive);
 		}
 		if(isfullscreen && !isFloating){
-			hide;
+			//hide;
+			restack;
 		}
 	}
 	
 	void unmanage(bool force=false){
 		if(force){
-			monitor.remove(this);
-			if(win != orig)
-				XDestroyWindow(dpy, win);
+			destroyed = true;
+			foreach(monitor; monitors)
+				monitor.remove(this);
 		}
 		else{
 			XWindowChanges wc;
@@ -447,20 +485,21 @@ class Client: Base {
 		}
 		if(previousFocus && previousFocus != this)
 			previousFocus.focus;
-		updateClientList();
+		updateClientList;
 	}
 	
 	void updateStrut(){
-		try
-			monitor.strut(this, getPropList(net.strutPartial).length>0);
-		catch(Exception e)
-			e.toString.log;
+		bool oldStrut = strut;
+		strut = getStrut[0..4].any;
+		if(oldStrut != strut)
+			.updateStrut = true;
+		"%s strut=%s".format(this, strut);
 	}
 
 
 	void updateType(){
 		Atom[] state = this.getPropList(net.state);
-		if(state.canFind(net.fullscreen) || size == monitor.size)
+		if(state.canFind(net.fullscreen)/+ || size == monitor.size +/)
 			isfullscreen = true;
 		if(state.canFind(net.modal))
 			isFloating = true;
@@ -596,9 +635,15 @@ class Client: Base {
 		"%s title='%s'".format(this, name).log;
 	}
 	
+	void updateDecorated(){
+		decorations = win.getIsDecorated;
+		"%s decorated=%s".format(this, decorations).log;
+	}
+
 	void updateFloating(){
 		Window trans;
-		if(!isFloating && XGetTransientForHint(dpy, orig, &trans)){
+		if(!isFloating){
+			XGetTransientForHint(dpy, orig, &trans);
 			isFloating = (wintoclient(trans) !is null) || isfixed;
 		}
 	}
@@ -625,7 +670,8 @@ class Client: Base {
 			net.state:				&updateType,
 			net.windowType:			&updateType,
 			net.strutPartial:		&updateStrut,
-			net.icon:				&updateIcon
+			net.icon:				&updateIcon,
+			motif.hints:			&updateDecorated
 		];
 		auto change = ev.atom in handler;
 		if(change)
@@ -638,6 +684,8 @@ class Client: Base {
 
 	void onUnmap(XUnmapEvent* e){
 		unmanage(!hidden);
+		if(frame)
+			frame.hide;
 	}
 
 };

@@ -1,8 +1,10 @@
 [Desktop Entry]
-Name=flatman
+Name=Flatman Window Manager - User
 Comment=improved dynamic tiling window manager
-Exec=flatman-config
+Exec=xdg-open ~/.config/flatman/config.ws
 Type=Application
 DesktopNames=flatman
+Categories=Settings;DesktopSettings;
+OnlyShowIn=flatman;
 Name[en_US]=flatman config
 Comment[en_US]=configuration for flatman

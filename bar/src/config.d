@@ -23,6 +23,7 @@ struct ConfigColor {
 struct Config {
 
 	ConfigColor foreground;
+	ConfigColor foregroundMain;
 	ConfigColor background;
 
 	ConfigColor border;

@@ -25,6 +25,7 @@ struct NetAtoms {
 	@("_NET_RESTACK_WINDOW") Atom restack;
 	@("_NET_ACTIVE_WINDOW") Atom windowActive;
 
+	@("_NET_WM_MOVERESIZE") Atom drag;
 	@("_NET_WM_PID") Atom pid;
 	@("_NET_WM_NAME") Atom name;
 	@("_NET_WM_ICON") Atom icon;
@@ -81,7 +82,7 @@ void updateDesktopNames(){
 	foreach(i, ws; monitor.workspaces){
 		try{
 			names ~= std.array.replace(ws.context.expandTilde.readText, "~".expandTilde, "~");
-		}catch{
+		}catch(Throwable) {
 			names ~= "~";
 		}
 		names ~= "\0";
@@ -91,6 +92,8 @@ void updateDesktopNames(){
 
 void updateWindowDesktop(Client client, long n){
 	client.win.replace!CARDINAL(net.windowDesktop, n);
+	if(client.frame)
+		client.frame.window.replace!CARDINAL(net.windowDesktop, n);
 }
 
 void updateWorkspaces(){
@@ -99,8 +102,6 @@ void updateWorkspaces(){
 			foreach(s; ws.split.separators){
 				s.window.replace!CARDINAL(net.windowDesktop, n);
 			}
-			foreach(f; ws.floating.frames)
-				f.window.replace!CARDINAL(net.windowDesktop, n);
 			foreach(c; ws.clients)
 				c.updateWindowDesktop(n);
 		}
@@ -115,7 +116,8 @@ void updateActiveWindow(){
 void updateWorkarea(){
 	CARDINAL[] data;
 	foreach(ws; monitor.workspaces)
-		data ~= [ws.split.pos.x, ws.split.pos.y, ws.split.size.w, ws.split.size.h];
+		//data ~= [ws.split.pos.x, ws.split.pos.y, ws.split.size.w, ws.split.size.h];
+		data ~= [0, 0, sw, sh];
 	net.workArea.replace(data);
 	net.viewport.replace([0L,0L]);
 	"RESIZE %s".format(monitor.size.to!(long[])).log;
@@ -124,6 +126,8 @@ void updateWorkarea(){
 
 void updateClientList(){
 	auto clients = clients;
+	foreach(c; clients)
+		assert(!c.destroyed);
 	net.clientList.replace(clients);
 	net.clientListStacking.replace(clients);
 }

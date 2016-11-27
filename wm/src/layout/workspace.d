@@ -36,23 +36,25 @@ class Workspace: Container {
 	}
 
 	override void resize(int[2] size){
-		"workspace.resize %s".format(size).log;
-		this.size = size;
-		foreach(c; children)
-			c.resize(size);
+		with(Log("workspace.resize %s".format(size))){
+			this.size = size;
+			foreach(c; children)
+				c.resize(size);
+		}
 	}
 
 	alias add = Base.add;
 
 	override void add(Client client){
-		"workspace.add %s floating=%s fullscreen=%s".format(client, client.isFloating, client.isfullscreen).log;
-		updateWindowDesktop(client, monitor.workspaces.countUntil(this));
-		if(client.isFloating && !client.isfullscreen){
-			floating.add(client);
-		}else{
-			if(monitor.workspace == this && split.hidden)
-				split.show;
-			split.add(client);
+		with(Log("workspace.add %s floating=%s fullscreen=%s".format(client, client.isFloating, client.isfullscreen))){
+			updateWindowDesktop(client, monitor.workspaces.countUntil(this));
+			if(client.isFloating && !client.isfullscreen){
+				floating.add(client);
+			}else{
+				if(monitor.workspace == this && split.hidden)
+					split.show;
+				split.add(client);
+			}
 		}
 	}
 
@@ -60,6 +62,9 @@ class Workspace: Container {
 		if((client.isFloating && !client.isfullscreen) != floating.clients.canFind(client)){
 			remove(client);
 			add(client);
+			if(client.size.w > size.w || client.size.h > size.h){
+				client.moveResize(pos.a + [20, 20], size.a - [40, 40]);
+			}
 		}else{
 			split.resize(split.size);
 		}

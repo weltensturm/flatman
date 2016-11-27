@@ -28,19 +28,19 @@ class WorkspaceView: Base {
 	void update(){
 		foreach(c; children)
 			remove(c);
-		auto scale = (size.w-6) / cast(double)dock.screenSize.w;
+		auto scale = (size.w-6) / cast(double)dock.rootSize.w;
 		if(id in dock.workspaces && !empty)
 			foreach_reverse(w; dock.workspaces[id]){
 				auto wv = addNew!WindowView(w, cast(int)id);
 				auto y = w.pos.y;
-				auto sh = dock.screenSize.y;
+				auto sh = dock.rootSize.y;
 				while(y > sh)
 					y -= sh;
 				while(y < 0)
 					y += sh;
 				wv.moveLocal([
-					3+cast(int)(w.pos.x*scale).lround,
-					3+cast(int)((dock.screenSize.h-y-w.size.h)*scale).lround
+					3+cast(int)((w.pos.x)*scale).lround,
+					3+cast(int)((dock.rootSize.h-y-(w.size.h))*scale).lround
 				]);
 				wv.resize([
 					cast(int)(w.size.w*scale).lround,
@@ -91,18 +91,25 @@ class WorkspaceView: Base {
 		+/
 
 		if(!empty)
-			composite.render(dockWindow.root_picture, pos.a+[3,3], size.a-[6,6]);
+			composite.render(dockWindow.root_picture, pos.a+[3,3], size.a-[6,6], (size.w-6)/cast(double)dock.rootSize.w);
 		else if(preview){
 			draw.setColor([1,1,1,0.5]);
-			draw.rect(pos, size);
+			draw.rect(pos.a+[0,size.h/2], [size.w, 1]);
 		}
 
 		super.onDraw;
 
-		if(!empty && !combined){
-			composite.rect([pos.x+3, pos.y+3], [size.w-6, draw.fontHeight], [0,0,0,0.85]);
+		if(empty && !combined && !preview){
+			//composite.rect([pos.x+3, pos.y+3], [size.w-6, draw.fontHeight], [0,0,0,0.85]);
+			int x = size.w/2 - dock.draw.width(name)/2;
+			draw.setColor([0.7,0.7,0.7]);
+			foreach(part; name.split("/")[0..$-1]){
+				dock.draw.text(pos.a+[x,2], part ~ "/");
+				x += dock.draw.width(part ~ "/");
+			}
 			draw.setColor([1,1,1]);
-			dock.draw.text(pos.a+[size.w/2,3], name, 0.5);
+			dock.draw.text(pos.a+[x,2], name.split("/")[$-1]);
+			//dock.draw.text(pos.a+[size.w/2,3], name, 0.5);
 			//draw.setColor([color[0]/255.0, color[1]/255.0, color[2]/255.0]);
 			//draw.rect(pos.a+[6,6], [4,draw.fontHeight]);
 		}
