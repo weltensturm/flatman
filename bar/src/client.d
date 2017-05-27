@@ -65,9 +65,9 @@ class Client {
 		XEvent ev;
 		ev.type = ClientMessage;
 		ev.xclient.window = window;
-		ev.xclient.message_type = atoms.WM_PROTOCOLS;
+		ev.xclient.message_type = Atoms.WM_PROTOCOLS;
 		ev.xclient.format = 32;
-		ev.xclient.data.l[0] = atoms.WM_DELETE_WINDOW;
+		ev.xclient.data.l[0] = Atoms.WM_DELETE_WINDOW;
 		ev.xclient.data.l[1] = CurrentTime;
 		XSendEvent(wm.displayHandle, window, false, NoEventMask, &ev);
 	}
@@ -78,13 +78,13 @@ class Client {
 		int actFormat;
 		ubyte* data;
 		XGetWindowProperty(
-				dpy, window, atoms._NET_WM_NAME, 0, 0x77777777, False, atoms.UTF8_STRING,
+				dpy, window, Atoms._NET_WM_NAME, 0, 0x77777777, False, Atoms.UTF8_STRING,
 				&actType, &actFormat, &nItems, &bytes, &data
 		);
 		auto text = to!string(cast(char*)data);
 		XFree(data);
 		if(!text.length){
-			if(!gettextprop(window, atoms.NET_NAME, text))
+			if(!gettextprop(window, Atoms.NET_NAME, text))
 				gettextprop(window, XA_WM_NAME, text);
 		}
 		return text;

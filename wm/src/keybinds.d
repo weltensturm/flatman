@@ -16,7 +16,7 @@ struct Button {
 struct Key {
 	uint mod;
 	KeySym keysym;
-	void delegate() func;
+	void delegate(bool) func;
 }
 
 static Key[] keys;
@@ -82,11 +82,11 @@ void registerConfigKeys(){
 			key = key.chompPrefix("keys ");
 			Key bind;
 			auto space = value.countUntil(" ");
-			bind.func = {
+			bind.func = (pressed){
 				if(space >= 0)
-					call(value[0..space], value[space+1..$].split(" ").array);
+					call(pressed, value[0..space], value[space+1..$].split(" ").array);
 				else
-					call(value);
+					call(pressed, value);
 			};
 			foreach(i, k; key.split("+")){
 				if(i == key.count("+"))

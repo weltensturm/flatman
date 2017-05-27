@@ -23,6 +23,9 @@ void swap(T)(ref T[] array, size_t i1, size_t i2){
 }
 
 
+Atom overviewHide;
+
+
 class Separator: Base {
 
 	x11.X.Window window;
@@ -50,6 +53,9 @@ class Separator: Base {
 			+/
 		]);
 		XMapWindow(dpy, window);
+		if(!overviewHide)
+			overviewHide = XInternAtom(dpy, "_FLATMAN_OVERVIEW_HIDE", false);
+		window.replace(overviewHide, 1L);
 		hide;
 	}
 

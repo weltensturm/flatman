@@ -6,8 +6,8 @@ __gshared:
 
 Atom currentTab;
 Atom currentTabs;
-
 Atom tabDirection;
+Atom tabsWidth;
 
 
 class Tabs: Container {
@@ -26,11 +26,13 @@ class Tabs: Container {
 			currentTabs = XInternAtom(dpy, "_FLATMAN_TABS", false);
 		if(!currentTab)
 			"error".log;
+		if(!tabsWidth)
+			tabsWidth = XInternAtom(dpy, "_FLATMAN_WIDTH", false);
 
 		if(!tabDirection)
 			tabDirection = XInternAtom(dpy, "_FLATMAN_TAB_DIR", false);
 	}
-	
+
 	void restack(){
 		"tabs.restack".log;
 		if(active){
@@ -174,9 +176,10 @@ class Tabs: Container {
 					);
 				}
 			}
+			foreach(client; children.to!(Client[])){
+				client.win.replace(tabsWidth, (size.w-padding[0]-padding[1]).to!long);
+			}
 		}
 	}
 
 }
-
-

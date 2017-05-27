@@ -5,24 +5,26 @@ import composite;
 
 
 class CompositeClient: ws.wm.Window {
-	
+
 	bool hasAlpha;
 	Picture picture;
 	Picture resizeGhost;
 	Pixmap resizeGhostPixmap;
 	int[2] resizeGhostSize;
 	Pixmap pixmap;
-	Property!(XA_CARDINAL, false) workspaceProperty;
-	long workspace;
 	XWindowAttributes a;
 	bool destroyed;
 
 	ClientAnimation animation;
 
-	Property!(XA_CARDINAL, false) currentTab;
-	Property!(XA_CARDINAL, false) currentTabs;
-	Property!(XA_CARDINAL, false) tabDirectionProperty;
-	int tabDirection;
+	Properties!(
+		"workspace", "_NET_WM_DESKTOP", XA_CARDINAL, false,
+		"tab", "_FLATMAN_TAB", XA_CARDINAL, false,
+		"tabs", "_FLATMAN_TABS", XA_CARDINAL, false,
+		"dir", "_FLATMAN_TAB_DIR", XA_CARDINAL, false,
+		"width", "_FLATMAN_WIDTH", XA_CARDINAL, false,
+		"overviewHide", "_FLATMAN_OVERVIEW_HIDE", XA_CARDINAL, false
+	) properties;
 
 	override void hide(){}
 
@@ -31,18 +33,19 @@ class CompositeClient: ws.wm.Window {
 		this.pos = pos;
 		this.size = size;
 		this.a = a;
+		hidden = true;
 		animation = new ClientAnimation(pos, size);
 		isActive = true;
+		properties.window(window);
+		XSync(wm.displayHandle, false);
 		XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
-		currentTab = new Property!(XA_CARDINAL, false)(windowHandle, "_FLATMAN_TAB");
-		currentTabs = new Property!(XA_CARDINAL, false)(windowHandle, "_FLATMAN_TABS");
-		tabDirectionProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_FLATMAN_TAB_DIR");
-		workspaceProperty = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
-		workspace = workspaceProperty.get;
+		properties.workspace ~= (long workspace){
+			workspaceAnimation(workspace, workspace);
+		};
 		if(a.map_state & IsViewable)
 			onShow;
 	}
-	
+
 	void createPicture(){
 		if(hidden)
 			return;
@@ -82,7 +85,7 @@ class CompositeClient: ws.wm.Window {
 		scale = 0;
 		resizeGhostScale = 0;
 	}
-	
+
 	void cleanup(){
 		if(pixmap){
 			XFreePixmap(wm.displayHandle, pixmap);
@@ -149,23 +152,25 @@ class CompositeClient: ws.wm.Window {
 		resizeGhostSize = this.size;
 		"resize %s %s old %s".format(getTitle, size, this.size).writeln;
 		this.size = size;
-		
+
 		if(resizeGhostPixmap)
 			XFreePixmap(wm.displayHandle, resizeGhostPixmap);
 		resizeGhostPixmap = pixmap;
 		pixmap = None;
-		
+
 		if(resizeGhost)
 			XRenderFreePicture(wm.displayHandle, resizeGhost);
 		resizeGhost = picture;
 		picture = None;
-		createPicture;	
+		createPicture;
 	}
 
 	override void moved(int[2] pos){
 		if(pos.y <= this.pos.y-manager.height || pos == this.pos)
 			return;
-		if(a.override_redirect || workspace == manager.workspace || workspace < 0){
+		if(a.override_redirect
+				|| properties.workspace.value == manager.workspace
+				|| properties.workspace.value < 0){
 			if(animation.fade.completion < 0.1){
 				animation.pos.x.replace(pos.x, pos.x);
 				animation.pos.y.replace(pos.y, pos.y);
@@ -183,11 +188,10 @@ class CompositeClient: ws.wm.Window {
 	}
 
 	void workspaceAnimation(long ws, long old){
-		workspace = workspaceProperty.get;
-		if(workspace < 0)
+		if(properties.workspace.value < 0)
 			return;
-		auto target = ws > workspace ? -manager.height+pos.y : manager.height;
-		if(ws == workspace)
+		auto target = ws > properties.workspace.value ? -manager.height+pos.y : manager.height;
+		if(ws == properties.workspace.value)
 			target = pos.y;
 		if(target != animation.pos.y.end)
 			animation.pos.y.change(target);
@@ -198,48 +202,17 @@ class CompositeClient: ws.wm.Window {
 		"onShow %s".format(getTitle).writeln;
 		XSync(wm.displayHandle, false);
 		createPicture;
-		if(tabDirection){
-			animation.fade.replace(1);
-			if(tabDirection > 0){
-				animation.pos.x.replace(pos.x+size.w, pos.x);
-				animation.size.w.replace(0, size.w);
-				animation.renderOffset.x.replace(0);
-			}else{
-				animation.pos.x.replace(pos.x);
-				animation.renderOffset.x.replace(size.w, 0);
-			}
-			animation.pos.y.replace(pos.y);
-			animation.size.w.replace(0, size.w);
-			animation.size.h.replace(size.h);
-		}else{
-			animation.fade.change(1);
-			animation.pos.x.replace(pos.x);
-			animation.pos.y.replace(pos.y);
-			animation.size.w.replace(size.w);
-			animation.size.h.replace(size.h);
-		}
+		animation.fade.change(1);
+		animation.pos.x.replace(pos.x);
+		animation.pos.y.replace(pos.y);
+		animation.size.w.replace(size.w);
+		animation.size.h.replace(size.h);
 	}
 
 	override void onHide(){
 		hidden = true;
 		"onHide %s".format(getTitle).writeln;
-		if(destroyed){
-			animation.fade.change(0);
-			animation.pos.x.replace(animation.pos.x.calculate);
-			animation.pos.y.replace(animation.pos.y.calculate);
-			animation.size.h.change(0);
-		}else if(tabDirection){
-			if(tabDirection > 0){
-				animation.pos.x.change(pos.x+size.w);
-				animation.size.w.change(0);
-				animation.renderOffset.x.change(0);
-			}else{
-				animation.size.w.change(0);
-				animation.renderOffset.x.change(size.w);
-			}
-		}else{
-			animation.fade.change(0);
-		}
+		animation.fade.change(0);
 		if(resizeGhostPixmap)
 			XFreePixmap(wm.displayHandle, resizeGhostPixmap);
 		resizeGhostPixmap = None;
@@ -284,4 +257,3 @@ class ClientAnimation {
 	}
 
 }
-

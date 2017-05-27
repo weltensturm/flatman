@@ -15,6 +15,8 @@ extern(C) nothrow @nogc @system void stop(int){
 	running = false;
 }
 
+auto batterySave = false;
+
 void main(){
 	try {
 		signal(SIGINT, &stop);
@@ -33,7 +35,7 @@ void main(){
 			auto frame = now;
 			if(lastFrame-frame > 0)
 				Thread.sleep((((lastFrame-frame))*1000).lround.msecs);
-			lastFrame += 1.0/61;
+			lastFrame += 1.0/(batterySave ? 25 : 61);
 		}
 	}catch(Throwable t){
 		writeln(t);
@@ -48,7 +50,7 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
 		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
 	}
-	catch {}
+	catch(Throwable){}
 	return 0;
 }
 
@@ -71,18 +73,14 @@ void approach(ref double[2] current, double[2] target, double frt){
 }
 
 
-Atom[string] atoms;
-
-Atom atom(string n){
-	if(n !in atoms)
-		atoms[n] = XInternAtom(wm.displayHandle, n.toStringz, false);
-	return atoms[n];
+double animate(double start, double end, double state){
+	return start + (end - start)*state;
 }
-
 
 
 class CompositeManager {
 
+	FrameTimer frameTimer;
 	Picture backBuffer;
 	Pixmap backBufferPixmap;
 	GLXPixmap glxPixmap;
@@ -101,11 +99,14 @@ class CompositeManager {
 	x11.X.Window overlay;
 	x11.X.Window reg_win;
 
+	Overview overview;
+
 	Property!(XA_CARDINAL, false) workspaceProperty;
 	long workspace;
 
 	Property!(XA_PIXMAP, false) rootmapId;
 	Property!(XA_PIXMAP, false) setrootId;
+	Property!(XA_WINDOW, false) currentWindow;
 	Pixmap root_pixmap;
 	Picture root_picture;
 	bool root_tile_fill;
@@ -122,7 +123,17 @@ class CompositeManager {
 
 	bool restack;
 
+	bool doOverview = false;
+	SysTime overviewStart;
+	double overviewState = 0;
+
+	double workspaceAnimation = 0;
+
+	XDraw xdraw;
+
 	this(){
+
+		frameTimer = new FrameTimer;
 
 		manager = this;
 
@@ -137,7 +148,7 @@ class CompositeManager {
 	    "created simple window".writeln;
 		//XCompositeUnredirectWindow(wm.displayHandle, reg_win, CompositeRedirectManual);
 	    Xutf8SetWMProperties(wm.displayHandle, reg_win, cast(char*)"xcompmgr".toStringz, cast(char*)"xcompmgr".toStringz, null, 0, null, null, null);
-	    Atom a = XInternAtom(wm.displayHandle, "_NET_WM_CM_S0", False);
+	    Atom a = Atoms._NET_WM_CM_S0;
 	    XSetSelectionOwner(wm.displayHandle, a, reg_win, 0);
 	    "selected CM_S0 owner".writeln;
 
@@ -149,7 +160,9 @@ class CompositeManager {
 			StructureNotifyMask
 		    | SubstructureNotifyMask
 		    | ExposureMask
-		    | PropertyChangeMask);
+		    | PropertyChangeMask
+		    | KeyPressMask
+		    | KeyReleaseMask);
 
  		//overlay = XCompositeGetOverlayWindow(wm.displayHandle, root);
 	    //XSelectInput(wm.displayHandle, overlay, ExposureMask);
@@ -164,19 +177,24 @@ class CompositeManager {
 
 		XSync(wm.displayHandle, false);
 		"created backbuffer".writeln;
-		
+
 		workspaceProperty = new Property!(XA_CARDINAL, false)(root, "_NET_CURRENT_DESKTOP");
 		workspace = workspaceProperty.get;
-		
+
 		rootmapId = new Property!(XA_PIXMAP, false)(root, "_XROOTPMAP_ID");
 		setrootId = new Property!(XA_PIXMAP, false)(root, "_XSETROOT_ID");
+		currentWindow = new Property!(XA_WINDOW, false)(.root, "_NET_ACTIVE_WINDOW");
 
-		wm.handlerAll[CreateNotify] ~= e => evCreate(e.xcreatewindow.window);
-		wm.handlerAll[DestroyNotify] ~= e => evDestroy(e.xdestroywindow.window);
-		wm.handlerAll[ConfigureNotify] ~= e => evConfigure(e);
-		wm.handlerAll[MapNotify] ~= e => evMap(&e.xmap);
-		wm.handlerAll[UnmapNotify] ~= e => evUnmap(&e.xunmap);
-		wm.handlerAll[PropertyNotify] ~= e => evProperty(&e.xproperty);
+		wm.on([
+			CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
+			DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
+			ConfigureNotify: (XEvent* e) => evConfigure(e),
+			MapNotify: (XEvent* e) => evMap(&e.xmap),
+			UnmapNotify: (XEvent* e) => evUnmap(&e.xunmap),
+			PropertyNotify: (XEvent* e) => evProperty(&e.xproperty),
+			KeyPress: (XEvent* e) => evKey(&e.xkey, true),
+			KeyRelease: (XEvent* e) => evKey(&e.xkey, false)
+		]);
 
 		auto clientsProperty = new Property!(XA_WINDOW, true)(root, "_NET_CLIENT_LIST");
 
@@ -209,6 +227,26 @@ class CompositeManager {
 		shadowTr = shadow(1, -1, 30);
 		shadowBl = shadow(-1, 1, 30);
 		shadowBr = shadow(1, 1, 30);
+
+
+		uint    modifiers       = AnyModifier;
+		int             keycode         = XKeysymToKeycode(wm.displayHandle, XK_Super_L);
+		x11.X.Window    grab_window     = root;
+		Bool            owner_events    = False;
+		int             pointer_mode    = GrabModeAsync;
+		int             keyboard_mode   = GrabModeAsync;
+
+		XGrabKey(wm.displayHandle, keycode, modifiers, grab_window, owner_events, pointer_mode, keyboard_mode);
+
+		keycode = XKeysymToKeycode(wm.displayHandle, XK_Super_R);
+		XGrabKey(wm.displayHandle, keycode, modifiers, grab_window, owner_events, pointer_mode, keyboard_mode);
+
+
+		xdraw = new XDraw(root, backBufferPixmap, backBuffer);
+		xdraw.size = [width, height];
+		xdraw.setFont("Roboto", 10);
+
+		overview = new Overview(this);
 	}
 
 	void cleanup(){
@@ -217,7 +255,7 @@ class CompositeManager {
 		XRenderFreePicture(wm.displayHandle, frontBuffer);
 		XRenderFreePicture(wm.displayHandle, backBuffer);
 	}
-		
+
 	Picture shadowT;
 	Picture shadowB;
 	Picture shadowL;
@@ -283,7 +321,7 @@ class CompositeManager {
 			if(i < ALPHA_STEPS-1)
 				alpha[i] = colorPicture(false, i/cast(float)(ALPHA_STEPS-1), 0, 0, 0);
 			else
-				alpha[i] = None;				
+				alpha[i] = None;
 		}
 	}
 
@@ -292,8 +330,7 @@ class CompositeManager {
 		if(!XGetWindowAttributes(wm.displayHandle, window, &wa))
 			return;
 		auto client = new CompositeClient(window, [wa.x,wa.y], [wa.width,wa.height], wa);
-		client.workspace = client.workspaceProperty.get;
-		client.workspaceAnimation(client.workspace, client.workspace);
+		client.workspaceAnimation(client.properties.workspace, client.properties.workspace);
 		"found window %s".format(window).writeln;
 		clients ~= client;
 	}
@@ -313,6 +350,8 @@ class CompositeManager {
 		if(e.xconfigure.window == .root){
 			width = e.xconfigure.width;
 			height = e.xconfigure.height;
+			xdraw.size = [width, height];
+			//XftDrawChange(xdraw.xft, xdraw.drawable);
 			return;
 		}
 		foreach(i, c; clients){
@@ -352,34 +391,43 @@ class CompositeManager {
 				foreach(c; clients){
 					c.workspaceAnimation(workspace, oldWorkspace);
 				}
+			}else if(e.atom == currentWindow.property){
+				currentWindow.value = currentWindow.get;
 			}else{
-				foreach(bg; background_props_str){
-					if(e.atom == bg.atom){
-						updateWallpaper;
-					}
-				}
+				if([Atoms._XROOTPMAP_ID, Atoms._XSETROOT_ID].canFind(e.atom))
+					updateWallpaper;
 			}
 		}else{
-			if(!clients.length)
-				return;
-			if(![clients[0].workspaceProperty.property, clients[0].tabDirectionProperty.property].canFind(e.atom))
-				return;
-			CompositeClient client;
 			foreach(c; clients){
 				if(e.window == c.windowHandle){
-					client = c;
-					break;
+					c.properties.update(e);
 				}
 			}
-			if(!client)
-				return;
-			if(e.atom == client.workspaceProperty.property){
-				client.workspace = client.workspaceProperty.get;
-				client.workspaceAnimation(workspace, workspace);
-			}else if(e.atom == client.tabDirectionProperty.property){
-				client.tabDirection = client.tabDirectionProperty.get.to!int;
-			}
 		}
+	}
+
+	enum overviewTime = 1000/(60*0.06);
+
+	void evKey(XKeyEvent* ev, bool pressed){
+		auto key = XLookupKeysym(ev, 0);
+		if(key != XK_Super_L && key != XK_Super_R)
+			return;
+		if(!pressed && overviewStart < Clock.currTime-overviewTime.to!long.msecs || pressed && !doOverview){
+			overviewStart = Clock.currTime;
+			if(pressed)
+				startOverview;
+			else
+				stopOverview;
+		}else if(pressed && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
+			overviewStart = Clock.currTime-overviewTime.to!long.msecs;
+	}
+
+	void startOverview(){
+		doOverview = true;
+	}
+
+	void stopOverview(){
+		doOverview = false;
 	}
 
 	void updateWallpaper(){
@@ -490,7 +538,7 @@ class CompositeManager {
 		glLoadIdentity();
 		glOrtho(0,1,0,1,0,1);
 		glMatrixMode(GL_MODELVIEW);
-		
+
 		glBegin(GL_QUADS);
 		glVertex2f(0,0);
 		glVertex2f(1,0);
@@ -500,14 +548,106 @@ class CompositeManager {
 		glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
 	}
 
+	/+
+	void calcOverview(CompositeClient client, ref int[2] pos, ref double[2] offset, ref int[2] size, ref double scale, ref double alpha){
+		if(overviewState < 0.000001 || client.a.override_redirect)
+			return;
+		double flop;
+		if(client.hidden){
+			flop = 1;
+			alpha = overviewState.sinApproach;
+		}else{
+			flop = overviewState.sinApproach;
+			alpha = 0.75 + alpha*0.25;
+		}
+		if(client.workspace.value < 0){
+			alpha = 1-flop;
+			return;
+		}
+		int max;
+		long current;
+		int[2] maxSize;
+		foreach(c; clients){
+			if(c.workspace.value == client.workspace.value && c.currentTabs.value == client.currentTabs.value){
+				max++;
+				if(c.size.w > maxSize.w)
+					maxSize.w = c.size.w;
+				if(c.size.h > maxSize.h)
+					maxSize.h = c.size.h;
+				if(!c.hidden)
+					current = c.currentTab.value;
+			}
+		}
+		auto side = sqrt(max.to!double).ceil.lround.to!double;
+		auto padding = [width/40.0, height/40];
+		auto targetScale = 0.15;
+		scale = animate(scale, targetScale, flop);
+		auto windowSize = [
+			client.size.w*targetScale,
+			client.size.h*targetScale
+		];
+		auto maxY = 1;//((max/side).ceil)*(windowSize.h+padding.h)-padding.h;//side*side - side >= max ? windowSize.h/2 : 0;
+		auto offsetY = height/2-maxY/2;
+		pos = [
+			animate(
+				pos.x,
+				client.pos.x + client.size.w/2 - windowSize.w/2
+					+ (client.currentTab.value - current)*(windowSize.w+20),
+				flop
+			).lround.to!int,
+			animate(
+				pos.y,
+				(client.pos.y - windowSize.h/2
+					+ ((client.workspace.value.to!int-workspaceAnimation)*height*0.2) + offsetY),
+				flop
+			).lround.to!int
+		];
+		size = [
+			animate(size.w, windowSize.w, flop).to!int,
+			animate(size.h, windowSize.h, flop).to!int
+		];
+		if(client.hidden)
+			alpha *= 0.75;
+	}
+	+/
+
+	void drawOverview(CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
+		if(overviewState < 0.000001 || client.a.override_redirect)
+			return;
+		double flop;
+		if(client.hidden){
+			flop = 1*alpha;
+		}else{
+			flop = overviewState.sinApproach*alpha;
+		}
+		offset = [0,0];
+		if(client.hidden){
+			xdraw.setColor([0,0,0,0.3*flop]);
+			xdraw.rect([pos.x, height-pos.y-size.h], size);
+		}
+		/+
+		xdraw.setColor([0,0,0,0.7*flop]);
+		xdraw.rect([pos.x, height-pos.y-size.h], [size.w, 20]);
+		if(!client.hidden){
+			xdraw.setColor([1, 0.5, 0, flop]);
+			xdraw.rect([pos.x, height-pos.y-size.h], [size.w, 1]);
+		}
+		+/
+		xdraw.clip([pos.x, height-pos.y], [size.w, 20]);
+		xdraw.setColor([1,1,1,flop]);
+		auto title = client.getTitle;
+		xdraw.text([pos.x+size.w/2, height-pos.y], 20, title, 0.5);
+		xdraw.noclip;
+	}
+
 	void drawClient(CompositeClient c){
 
 		auto alpha = c.animation.fade.calculate;
 		auto animPos = [c.animation.pos.x.calculate, c.animation.pos.y.calculate];
-		auto animOffset = [c.animation.renderOffset.x.calculate, c.animation.renderOffset.y.calculate];
+		double[2] animOffset = [c.animation.renderOffset.x.calculate, c.animation.renderOffset.y.calculate];
 		auto animSize = [c.animation.size.x.calculate, c.animation.size.y.calculate];
 
-		auto scale = alpha/4+0.75;
+		double scale = 1;//alpha/4+0.75;
 
 		int[2] pos = [
 			(animPos.x + (1-scale)*c.size.x/2).lround.to!int,
@@ -516,8 +656,11 @@ class CompositeManager {
 
 		int[2] size = [
 			(animSize.w.min(c.size.w)*scale).lround.to!int,
-			(animSize.h.min(c.size.h)*scale).lround.to!int 
+			(animSize.h.min(c.size.h)*scale).lround.to!int
 		];
+
+		//calcOverview(c, pos, animOffset, size, scale, alpha);
+		overview.window(c, pos, animOffset, size, scale, alpha);
 
 		c.updateScale(scale);
 
@@ -561,6 +704,7 @@ class CompositeManager {
 		);
 		if(false)
 			drawShadow(pos, size);
+		drawOverview(c, pos, animOffset, size, scale, alpha);
 	}
 
 	void drawShadow(int[2] pos, int[2] size){
@@ -618,6 +762,14 @@ class CompositeManager {
 	}
 
 	void draw(){
+		frameTimer.tick;
+		if(doOverview)
+			overviewState = (overviewState+frameTimer.dur*0.06).min(1);
+		else
+			overviewState = (overviewState-frameTimer.dur*0.06).max(0);
+
+		workspaceAnimation = workspaceAnimation.eerp(workspace, 0.06);
+
 		CompositeClient[] windowsDraw;
 
 		foreach(c; clients ~ destroyed){
@@ -625,11 +777,12 @@ class CompositeManager {
 			auto animSize = [c.animation.size.x.calculate, c.animation.size.y.calculate];
 			if(
 				!c.picture
-				|| c.animation.fade.calculate == 0
-				|| animPos.x+animSize.w <= 0
-				|| animPos.y+animSize.h <= 0
-				|| animPos.x >= width
-				|| animPos.y >= height)
+				|| (overviewState < 0.0001
+					&& (c.animation.fade.calculate == 0
+					|| animPos.x+animSize.w <= 0
+					|| animPos.y+animSize.h <= 0
+					|| animPos.x >= width
+					|| animPos.y >= height)))
 				continue;
 			/+
 			if(!c.hasAlpha && c.animation.fade.calculate == 1)
@@ -646,20 +799,38 @@ class CompositeManager {
 				}
 			+/
 			windowsDraw ~= c;
-		}		
+		}
 
 		Animation.update;
 		XRenderComposite(wm.displayHandle, PictOpSrc, root_picture, None, backBuffer, 0,0,0,0,0,0,width,height);
 
+		xdraw.setColor([0,0,0,0.7*overviewState.sinApproach]);
+		xdraw.rect([0,0], [width, height]);
+
+		if(overviewState > 0.000001)
+			overview.calc([0, 1.0/7.5, 1.0/40, 0]);
+		if(overviewState > 0.000001)
+			overview.predraw(xdraw);
 		foreach(c; windowsDraw){
 			drawClient(c);
 		}
+		if(overviewState > 0.000001){
+			overview.draw(xdraw);
+			overview.drawDock(xdraw);
+		}
 		//verticalSync;
 		//verticalSyncDraw;
+		/+
+		debug{
+			xdraw.setColor([0, 0, 0, 0.7]);
+			xdraw.rect([8, 8], [100, 20]);
+			xdraw.setColor([1, 1, 0]);
+			xdraw.text([10, 10], (60/frameTimer.dur).to!string);
+		}
+		+/
 
 		XRenderComposite(wm.displayHandle, PictOpSrc, backBuffer, None, frontBuffer, 0, 0, 0, 0, 0, 0, width, height);
 
 	}
 
 }
-

@@ -2,9 +2,9 @@
 	"name" : "flatman-compositor",
 	"description" : "compositor for flatman",
 	"targetType": "executable",
-	"sourcePaths": ["src"],
+	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": ">=1.0.7"
+		"ws": ">=1.0.9"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama"]
 }

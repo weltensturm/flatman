@@ -62,9 +62,10 @@ class Workspace: Container {
 		if((client.isFloating && !client.isfullscreen) != floating.clients.canFind(client)){
 			remove(client);
 			add(client);
-			if(client.size.w > size.w || client.size.h > size.h){
+			if((client.isFloating && !client.isfullscreen) && (client.size.w > size.w || client.size.h > size.h)){
 				client.moveResize(pos.a + [20, 20], size.a - [40, 40]);
-			}
+			}else if(client.isfullscreen)
+				client.moveResize(pos, size);
 		}else{
 			split.resize(split.size);
 		}

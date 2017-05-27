@@ -1,10 +1,10 @@
 module flatman.log;
 
+__gshared:
 
 import flatman;
 
 
-__gshared:
 
 struct Log {
 
@@ -21,10 +21,14 @@ struct Log {
 
 	private static Tid loggerHandle;
 
-	private static void function() init = {
-		loggerHandle = spawn(&Log.logger);
-		mutex = new Mutex;
-		init = {};
+	private static bool started;
+
+	private static void init(){
+		if(!started){
+			loggerHandle = spawn(&Log.logger);
+			mutex = new Mutex;
+			started = true;
+		}
 	};
 
 	private static void logger(){
@@ -63,21 +67,21 @@ struct Log {
 
 	static void error(string s){
 		init();
-		auto text = format(RED ~ s);
+		string text = format(RED ~ s);
 		"/tmp/flatman.log".append(s);
 		text.write;
 	}
 
 	static void fallback(string s){
 		init();
-		auto text = format(s);
+		string text = format(s);
 		"/tmp/flatman.log".append(s);
 		text.write;
 	}
 
 	static void info(string s){
 		init();
-		auto text = format(s); 
+		string text = format(s); 
 		loggerHandle.send(text);
 		text.write;
 	}

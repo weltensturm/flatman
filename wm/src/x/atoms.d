@@ -70,4 +70,3 @@ ubyte* _rawget(Window window, Atom atom, int type, ulong count=1){
 	}
 	throw new Exception("no data");
 }
-

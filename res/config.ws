@@ -1,6 +1,7 @@
 
 
 keys {
+	#alt					overview
 	alt+d				exec dinu -f -fn Ubuntu-10 -as 0 -l 0 -r 0.3333 -y 24 -c "$(flatman-context -p)"
 	alt+Return			exec cd "$(flatman-context)" && terminator
 	alt+n				exec firefox
@@ -45,6 +46,9 @@ keys {
 	XF86AudioRaiseVolume exec pactl set-sink-volume @DEFAULT_SINK@ +3%
 	XF86AudioLowerVolume exec pactl set-sink-volume @DEFAULT_SINK@ -3%
 	XF86AudioMute exec pactl set-sink-mute @DEFAULT_SINK@ toggle
+
+	XF86MonBrightnessUp exec xbacklight -inc 3
+	XF86MonBrightnessDown exec xbacklight -dec 3
 }
 
 

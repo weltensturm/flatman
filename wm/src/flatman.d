@@ -90,7 +90,7 @@ void main(string[] args){
 	(Log.BOLD ~ Log.GREEN ~ "===== FLATMAN =====").log;
 	"args %s".format(args).log;
 	try{
-
+		auto configs = ["/etc/flatman/config.ws", "~/.config/flatman/config.ws"];
 		environment["_JAVA_AWT_WM_NONREPARENTING"] = "1";
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			"warning: no locale support".log;
@@ -98,19 +98,21 @@ void main(string[] args){
 		auto cfgReload = {
 			["notify-send", "Loading config"].execute;
 			try{
-				cfg.fillConfig(["/etc/flatman/config.ws", "~/.config/flatman/config.ws"]);
+				cfg.fillConfig(configs);
 			}catch(Exception e){
 				["notify-send", e.toString].execute;
 				log(e.to!string);
 			}
 		};
 		cfgReload();
-		Inotify.watch("/etc/flatman/config.ws", (d,f,m){
-			cfgReload();
-		});
-		Inotify.watch("~/.config/flatman/config.ws".expandTilde, (d,f,m){
-			cfgReload();
-		});
+		foreach(file; configs){
+			file = file.expandTilde;
+			if(!file.exists)
+				continue;
+			Inotify.watch(file, (d,f,m){
+				cfgReload();
+			});
+		}
 
 		dpy = XOpenDisplay(null);
 		if(!dpy)
@@ -127,7 +129,7 @@ void main(string[] args){
 		cleanup();
 	catch(Throwable t)
 		"cleanup error %s".format(t).log;
-	
+
 	if(restart){
 		"restart".log;
 		XSetCloseDownMode(dpy, CloseDownMode.RetainTemporary);
@@ -186,7 +188,7 @@ void setup(bool autostart){
 	/* select for events */
 	XSetWindowAttributes wa;
 	wa.cursor = cursor[CurNormal].cursor;
-	wa.event_mask = 
+	wa.event_mask =
 			SubstructureRedirectMask|SubstructureNotifyMask|ButtonPressMask
 			|PointerMotionMask|EnterWindowMask|StructureNotifyMask
 			|PropertyChangeMask;
@@ -221,8 +223,9 @@ void setup(bool autostart){
 				}
 				reader.yieldForce;
 				Log.fallback("QUIT: %s".format(command));
+				pipes.pid.wait;
 			}).executeInNewThread;
-		});	
+		});
 	}
 }
 
@@ -275,7 +278,7 @@ void scan(){
 
 void run(){
 	XEvent ev;
-	
+
 	while(running){
 		XSync(dpy, false);
 		while(XPending(dpy)){
@@ -412,7 +415,7 @@ void doDrag(int[2] pos){
 			if(client.isFloating){
 				monitor.remove(client);
 				client.isFloating = false;
-				monitor.workspace.split.add(client, monitor.workspace.split.clients.length);	
+				monitor.workspace.split.add(client, monitor.workspace.split.clients.length);
 			}
 			return;
 		}
@@ -456,7 +459,7 @@ void manage(Window w, XWindowAttributes* wa){
 		throw new Exception("No window given");
 	if(wintoclient(w))
 		return;
-	//auto monitor = findMonitor([wa.x, wa.y], [wa.width, wa.height]); 
+	//auto monitor = findMonitor([wa.x, wa.y], [wa.width, wa.height]);
 	auto c = new Client(w, monitor);
 	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
 	monitor.add(c, c.originWorkspace);
@@ -505,7 +508,7 @@ bool updateMonitors(){
 			monitor = monitors[0];
 			monitor = wintomon(root);
 		}
-		return dirty;	
+		return dirty;
 	}
 }
 

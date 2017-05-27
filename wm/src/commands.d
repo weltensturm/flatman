@@ -3,32 +3,38 @@ module flatman.commands;
 import flatman;
 
 
-string delegate(string[])[string] functions;
+string delegate(bool, string[])[string] functions;
 
 
-string call(Args...)(string fn, Args args){
+string call(Args...)(bool pressed, string fn, Args args){
 	string[Args.length] stringArgs;
 	foreach(i, arg; args)
 		stringArgs[i] = arg.to!string;
 	`calling "%s" with "%s"`.format(fn, stringArgs).log;
-	return call(fn, stringArgs);
+	return call(pressed, fn, stringArgs);
 }
 
 
-string call()(string fn, string[] args){
+string call()(bool pressed, string fn, string[] args){
 	if(fn in functions)
 		with(Log(`calling "%s" with "%s"`.format(fn, args)))
-			return functions[fn](args);
+			return functions[fn](pressed, args);
 	`ERROR: Function not found "%s"`.format(fn).log;
 	return "";
 }
 
 
-void register(T,Args...)(string name, T delegate(Args) dg){
-	functions[name] = delegate(string[] args){
+void register(T, Args...)(string name, T delegate(Args) dg){
+	functions[name] = delegate(bool pressed, string[] args){
+		if(!pressed && !is(Args[0] == bool))
+			return "";
 		Args tuple;
-		static if(Args.length == 1){
+		static if(!is(Args[0] == bool) && Args.length == 1){
 			tuple[0] = args.join(" ");
+		}else static if(is(Args[0] == bool)){
+			tuple[0] = pressed;
+			foreach(i, type; Args[1..$])
+				tuple[i+1] = args[i].to!type;
 		}else{
 			foreach(i, type; Args)
 				tuple[i] = args[i].to!(Args[i]);
@@ -42,13 +48,13 @@ void register(T,Args...)(string name, T delegate(Args) dg){
 }
 
 
-void register(T,Args...)(string name, T function(Args) fn){
+void register(T, Args...)(string name, T function(Args) fn){
 	register(name, fn.toDelegate);
 }
 
 
 void registerFunctions(){
-	register("exec", (string command){ spawnShell(command); });
+	register("exec", function(string command) => task({ spawnShell(command).wait; }).executeInNewThread);
 	register("focus", &focus);
 	register("resize", &resize);
 	register("move", &move);
@@ -58,6 +64,7 @@ void registerFunctions(){
 	register("workspace", &workspace);
 	register("reload", &reload);
 	register("insert", &toggleTabs);
+	register("overview", &overview);
 }
 
 
@@ -157,4 +164,20 @@ void toggleTabs(){
 		tabs.resize(tabs.size);
 		tabs.onDraw;
 	}
+}
+
+bool doOverview = false;
+SysTime overviewStart;
+enum overviewTime = 1000/(60*0.06);
+
+
+void overview(bool activate){
+	if(!activate && overviewStart < Clock.currTime-overviewTime.to!long.msecs || activate && !doOverview){
+		overviewStart = Clock.currTime;
+		if(activate)
+			doOverview = true;
+		else
+			doOverview = false;
+	}else if(activate && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
+		overviewStart = Clock.currTime-overviewTime.to!long.msecs;
 }

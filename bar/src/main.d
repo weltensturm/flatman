@@ -4,46 +4,13 @@ module bar.main;
 import bar;
 
 
-struct Screen {
-	int x, y, w, h;
-}
-
-Screen[int] screens(){
-	int count;
-	auto screenInfo = XineramaQueryScreens(dpy, &count);
-	Screen[int] res;
-	foreach(screen; screenInfo[0..count])
-		res[screen.screen_number] = Screen(screen.x_org, screen.y_org, screen.width, screen.height);
-	XFree(screenInfo);
-	return res;
-
-}
-
-auto intersectArea(int[2] pos1, int[2] size1, int[2] pos2, int[2] size2){
-	return (max(0, min(pos1.x+size1.w, pos2.x+size2.w) - max(pos1.x, pos2.x))
-    	  * max(0, min(pos1.y+size1.h, pos2.y+size2.h) - max(pos1.y, pos2.y)));	
-}
-
-
-int findScreen(Screen[int] screens, int[2] pos, int[2] size=[1,1]){
-	int result = 0;
-	int a, area = 0;
-	foreach(i, screen; screens)
-		if((a = intersectArea(pos, size, [screen.x, screen.y], [screen.w, screen.h])) > area){
-			area = a;
-			result = i;
-		}
-	return result;
-}
-
-
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	try {
 		char[128] buffer;
 		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
 		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
 	}
-	catch {}
+	catch(Throwable){}
 	return 0;
 }
 
@@ -70,49 +37,30 @@ void main(){
 }
 
 
-void fillAtoms(T)(ref T data){
-	foreach(n; FieldNameTuple!T){
-		mixin("data." ~ n ~ " = XInternAtom(wm.displayHandle, \"" ~ n ~ "\", false);");
-	}
-}
-
-
-struct Atoms {
-	Atom WM_PROTOCOLS;
-	Atom WM_DELETE_WINDOW;
-	Atom _NET_WM_NAME;
-	Atom _NET_ACTIVE_WINDOW;
-	Atom UTF8_STRING;
-	Atom NET_NAME;
-	Atom _XEMBED;
-	Atom _XEMBED_INFO;
-	Atom _NET_SYSTEM_TRAY_OPCODE;
-	Atom _NET_SYSTEM_TRAY_S0;
-	Atom _NET_SYSTEM_TRAY_ORIENTATION;
-	Atom MANAGER;
-}
-
-Atoms atoms;
-
-
 class App {
 
 	int mainScreen;
 
-	Screen[int] screens;
+	common.screens.Screen[int] screens;
 
 	Client[] clients;
 
 	Bar bar;
 
+    version(CompilePlugins){
+	    Plugins plugins;
+    }
+
 	this(){
 
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
-
-		config.fillConfig(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"]);
-
-		atoms.fillAtoms;
+		
+		try {
+			config.fillConfig(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"]);
+		}catch(Exception e){
+			writeln(e.to!string);
+		}
 
 		wm.on([
 			CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
@@ -131,11 +79,16 @@ class App {
 
 
 		bar = new Bar(this);
+        version(CompilePlugins){
+    		plugins = new Plugins(bar);
+        }
+		bar.show;
 		wm.add(bar);
 
 		scan;
 
 		updateScreens;
+
 	}
 	
 	void scan(){
@@ -157,7 +110,7 @@ class App {
 	}
 
 	void updateScreens(){
-		screens = .screens;
+		screens = .screens(wm.displayHandle);
 		writeln(screens);
 		bar.resize([screens[0].w, bar.size.h]);
 		bar.move([screens[0].x, screens[0].y]);

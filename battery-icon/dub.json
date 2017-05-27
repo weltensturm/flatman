@@ -1,6 +1,6 @@
 {
-	"name" : "flatman-wm",
-	"description" : "window manager",
+	"name" : "flatman-battery-icon",
+	"description" : "battery icon for flatman",
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
 	"dependencies" : {

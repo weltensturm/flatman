@@ -32,13 +32,19 @@ public import
 	ws.wm,
 	ws.math,
 	ws.time,
+	ws.frameTimer,
 	ws.x.property,
+	ws.x.draw,
+	common.window,
+	common.screens,
+	common.atoms,
 	composite.main,
+	composite.overview,
 	composite.client,
 	composite.animation;
 
 
-Screen screen;
+x11.Xlib.Screen screen;
 ulong root;
 
 enum CompositeRedirectManual = 1;

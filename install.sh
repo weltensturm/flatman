@@ -2,7 +2,7 @@
 
 installdir=$1
 
-parts=(wm compositor dock menu context volume-icon bar)
+parts=(wm compositor dock menu context volume-icon battery-icon volume-notify backlight-notify bar)
 
 configs=(config.ws bar.ws menu)
 

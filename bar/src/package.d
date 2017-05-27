@@ -28,14 +28,26 @@ public import
     ws.wm,
 
 	common.configLoader,
+	common.screens,
+	common.atoms,
 
     bar.bar,
 	bar.config,
     bar.main,
+    bar.plugin,
+    bar.plugins,
 	bar.powerButton,
-	bar.taskList,
-	bar.taskListEntry,
+	bar.widget.taskList,
+	bar.widget.taskListEntry,
 	bar.alpha,
     bar.client,
-	bar.tray,
+	bar.widget.tray,
 	bar.xembed;
+
+
+enum CompilePlugins = false;
+
+
+static if(CompilePlugins){
+	public import commando;
+}

@@ -4,6 +4,6 @@
 	"targetType": "executable",
 	"sourcePaths": ["src"],
 	"dependencies": {
-		"ws": ">=1.0.7"
+		"ws": ">=1.0.9"
 	}
 }

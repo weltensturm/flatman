@@ -1,4 +1,4 @@
-module bar.tray;
+module bar.widget.tray;
 
 
 import bar;
@@ -45,24 +45,24 @@ class Tray: Base {
         ]);
         this.bar = bar;
         iconSize = [bar.size.h, bar.size.h-1];
-        if(XGetSelectionOwner(wm.displayHandle, atoms._NET_SYSTEM_TRAY_S0) != None)
+        if(XGetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0) != None)
             throw new Exception("another systray already running");
-        if(XSetSelectionOwner(wm.displayHandle, atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle, CurrentTime)){
+        if(XSetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle, CurrentTime)){
             auto data = _NET_SYSTEM_TRAY_ORIENTATION_HORZ;
             XChangeProperty(
                 wm.displayHandle,
                 bar.windowHandle,
-                atoms._NET_SYSTEM_TRAY_ORIENTATION,
+                Atoms._NET_SYSTEM_TRAY_ORIENTATION,
                 XA_CARDINAL, 32,
                 PropModeReplace,
                 cast(ubyte*)&data, 1);
             XClientMessageEvent xev;
             xev.type = ClientMessage;
             xev.window = .root;
-            xev.message_type = atoms.MANAGER;
+            xev.message_type = Atoms.MANAGER;
             xev.format = 32;
             xev.data.l[0] = CurrentTime;
-            xev.data.l[1] = atoms._NET_SYSTEM_TRAY_S0;
+            xev.data.l[1] = Atoms._NET_SYSTEM_TRAY_S0;
             xev.data.l[2] = bar.windowHandle;
             xev.data.l[3] = 0;
             xev.data.l[4] = 0;
@@ -73,7 +73,7 @@ class Tray: Base {
     }
 
     void evClientMessage(XClientMessageEvent* e){
-        if (e.message_type == atoms._NET_SYSTEM_TRAY_OPCODE){
+        if (e.message_type == Atoms._NET_SYSTEM_TRAY_OPCODE){
             switch (e.data.l[1]){
                 case SYSTEM_TRAY_REQUEST_DOCK:
                     if (e.window == bar.windowHandle){
@@ -82,7 +82,7 @@ class Tray: Base {
                     break;
                 default: break;
             }
-        }else if(e.message_type == atoms._XEMBED){
+        }else if(e.message_type == Atoms._XEMBED){
             switch(e.data.l[1]){
                 case XEMBED_REQUEST_FOCUS:
                     writeln("focus ", e.window);
@@ -106,9 +106,10 @@ class Tray: Base {
 
     void evReparent(XReparentEvent* e){
         foreach(client; clients){
-            if(client.window == e.window && e.parent == .root){
+            if(client.window == e.window && e.parent != bar.windowHandle){
                 writeln("removing ", e.window);
                 clients = clients.without(client);
+                update;
             }
         }
     }
@@ -118,6 +119,7 @@ class Tray: Base {
             if(client.window == window){
                 writeln("removing ", window);
                 clients = clients.without(client);
+                update;
             }
         }
     }
@@ -136,9 +138,11 @@ class Tray: Base {
 
     void dock(x11.X.Window window){
         writeln("dock ", window);
-        if(clients.canFind!(c => c.window == window))
+        if(clients.canFind!(c => c.window == window)){
+            writeln("WARNING: already docked");
             return;
-        XSelectInput(wm.displayHandle, window, SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
+        }
+        XSelectInput(wm.displayHandle, window, StructureNotifyMask | SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
         Xembed.embed(window, bar.windowHandle);
         auto info = Xembed.get_info(window);
         if(info.flags == XEMBED_MAPPED)

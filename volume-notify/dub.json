@@ -1,0 +1,10 @@
+{
+	"name" : "flatman-volume-notify",
+	"description" : "volume notification for flatman",
+	"targetType": "executable",
+	"sourcePaths": ["src"],
+	"dependencies" : {
+		"ws": ">=1.0.9"
+	},
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+}

@@ -164,7 +164,8 @@ class Client: Base {
 	
 	void configure(){
 		"%s configure %s %s".format(this, pos, size).log;
-		XMoveResizeWindow(dpy, win, pos.x, pos.y, size.w, size.h);
+		auto hide = (parent && parent.hidden ? monitor.size.h : 0).to!int;
+		XMoveResizeWindow(dpy, win, pos.x, pos.y-hide, size.w, size.h);
 		if(frame){
 			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
 		}
@@ -177,9 +178,10 @@ class Client: Base {
 		if(isFloating && !isfullscreen)
 			posFloating = pos;
 		this.pos = pos;
-		XMoveWindow(dpy, win, pos.x, pos.y);
+		auto hide = (parent && parent.hidden ? monitor.size.h : 0).to!int;
+		XMoveWindow(dpy, win, pos.x, pos.y - hide);
 		if(frame){
-			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight], [size.w,cfg.tabsTitleHeight]);
+			frame.moveResize(pos.a-[0,cfg.tabsTitleHeight+hide], [size.w,cfg.tabsTitleHeight]);
 		}
 	}
 

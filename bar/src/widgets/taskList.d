@@ -1,4 +1,4 @@
-module bar.taskList;
+module bar.widget.taskList;
 
 import bar;
 

@@ -49,6 +49,7 @@ enum handler = [
 	Expose: &onExpose,
 	FocusIn: &onFocus,
 	KeyPress: &onKey,
+    KeyRelease: &onKeyRelease,
 	MappingNotify: (XEvent* e) => onMapping(e),
 	MapRequest: &onMapRequest,
 	PropertyNotify: (XEvent* e) => onProperty(&e.xproperty),
@@ -266,7 +267,7 @@ void onKey(XEvent* e){
 	"key %s".format(keysym).log;
 	foreach(key; flatman.keys){
 		if(keysym == key.keysym && cleanMask(key.mod) == cleanMask(ev.state) && key.func)
-			key.func();
+			key.func(true);
 	}
 }
 
@@ -276,7 +277,7 @@ void onKeyRelease(XEvent* e){
 	"key release %s".format(keysym).log;
 	foreach(key; flatman.keys){
 		if(keysym == key.keysym && cleanMask(key.mod) == cleanMask(ev.state) && key.func)
-			key.func();
+			key.func(false);
 	}
 }
 

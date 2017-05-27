@@ -1,4 +1,4 @@
-module bar.taskListEntry;
+module bar.widget.taskListEntry;
 
 import bar;
 
@@ -63,23 +63,47 @@ class TaskListEntry: Base {
         draw.noclip;
     }
 
+    override void onMouseMove(int x, int y){
+        super.onMouseMove(x, y);
+        if(dragging){
+            writeln(x, " ", y);
+            dragging = false;
+            XEvent ev;
+            ev.type = ClientMessage;
+            ev.xclient.window = client.window;
+            ev.xclient.message_type = Atoms._NET_WM_MOVERESIZE;
+            ev.xclient.format = 32;
+            ev.xclient.data.l[0] = bar.pos.x + x;
+            ev.xclient.data.l[1] = bar.pos.y + y;
+            ev.xclient.data.l[2] = 0;
+            ev.xclient.data.l[3] = Mouse.buttonLeft;
+            ev.xclient.data.l[4] = 2;   
+            XSendEvent(dpy, .root, false, SubstructureNotifyMask|SubstructureRedirectMask, &ev);
+        }
+    }
+
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-        if(button == Mouse.buttonLeft && !pressed){
-            XClientMessageEvent xev;
-            xev.type = ClientMessage;
-            xev.window = client.window;
-            xev.message_type = atoms._NET_ACTIVE_WINDOW;
-            xev.format = 32;
-            xev.data.l[0] = 2;
-            xev.data.l[1] = CurrentTime;
-            xev.data.l[2] = bar.currentWindow;
-            xev.data.l[3] = 0;    /* manager specific data */
-            xev.data.l[4] = 0;    /* manager specific data */
-            XSendEvent(wm.displayHandle, .root, false, StructureNotifyMask, cast(XEvent*) &xev);
-            super.onMouseButton(button, pressed, x, y);
+        if(button == Mouse.buttonLeft){
+            if(!pressed){
+                dragging = false;
+                XClientMessageEvent xev;
+                xev.type = ClientMessage;
+                xev.window = client.window;
+                xev.message_type = Atoms._NET_ACTIVE_WINDOW;
+                xev.format = 32;
+                xev.data.l[0] = 2;
+                xev.data.l[1] = CurrentTime;
+                xev.data.l[2] = bar.currentWindow;
+                xev.data.l[3] = 0;    /* manager specific data */
+                xev.data.l[4] = 0;    /* manager specific data */
+                XSendEvent(wm.displayHandle, .root, false, StructureNotifyMask, cast(XEvent*) &xev);
+            }else{
+                dragging = true;
+            }
         }else if(button == Mouse.buttonMiddle && !pressed){
             client.requestClose;
         }
+        super.onMouseButton(button, pressed, x, y);
     }
 
 }

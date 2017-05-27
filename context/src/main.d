@@ -10,8 +10,7 @@ import
 	std.array,
 	x11.X,
 	x11.Xlib,
-	x11.Xatom,
-	ws.x.property;
+	x11.Xatom;
 
 
 enum PATH = "~/.flatman/";
@@ -34,9 +33,11 @@ string clean(string path){
 }
 
 string getContext(){
-	auto cur = (PATH ~ "current").expandTilde;
-	if(!cur.exists || !cur.readText.exists)
-		return "~";
+	auto cur = (PATH ~ "current").clean;
+	if(!cur.exists || !cur.readText.exists){
+		setContext("~".clean);
+		cur = (PATH ~ "current").clean;
+	}
 	return cur.readText.readText;
 }
 

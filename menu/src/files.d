@@ -385,7 +385,7 @@ class ButtonFile: ButtonExec, Path {
 		Context.current.openFile(file.normalize);
 	}
 
-	string sortName(){
+	override string sortName(){
 		return file;
 	}
 

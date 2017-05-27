@@ -62,7 +62,7 @@ class Bar: ws.wm.Window {
 	this(App app){
 		this.app = app;
 		properties = new PropertyList;
-		auto screens = screens;
+		auto screens = screens(wm.displayHandle);
 
 		taskList = addNew!TaskList(this);
 		powerButton = addNew!PowerButton(this);
@@ -78,12 +78,11 @@ class Bar: ws.wm.Window {
 		if(autohide){
 			resize([size.w, 1]);
 			hidden = true;
-		}
-		resize(size);
+		}else
+			resize(size);
 	}
 
 	override void show(){
-		super.show;
 		workspace = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 		workspace = -1;
 
@@ -104,6 +103,7 @@ class Bar: ws.wm.Window {
 		strut = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
 		strut = [0, 0, size.h, 0, 0, 0, 0, 0, 0, 0, 0, size.h];
 
+		super.show;
 	}
 
 	override void drawInit(){
@@ -146,6 +146,9 @@ class Bar: ws.wm.Window {
 			draw.text([size.w-right, 5], "%02d:%02d:%02d".format(time.hour, time.minute, time.second), 0);
 
 			super.onDraw;
+    		version(CompilePlugins){
+				app.plugins.event("draw");
+			}
 
 			draw.finishFrame;
 
@@ -165,6 +168,7 @@ class Bar: ws.wm.Window {
 			tray.resize(size);
 			tray.move([size.w-tray.clients.length.to!int*size.h - draw.width("00:00:00") - 20, 0]);
 		}
+		onDraw;
 	}
 
 }

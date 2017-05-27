@@ -38,6 +38,7 @@ void main(){
 		xerrorxlib = XSetErrorHandler(&xerror);
 		dockWindow = new WorkspaceDock(400, 300, "flatman-dock");
 		dockWindow.init;
+		dockWindow.show;
 		composite = new Composite;
 		wm.add(dockWindow);
 		while(wm.hasActiveWindows && running){
@@ -90,11 +91,16 @@ class Composite {
 	this(){
 		foreach(i; 0..ScreenCount(dpy))
 		    XCompositeRedirectSubwindows(dpy, RootWindow(dpy, i), 0);
+		transparency = colorPicture(false, 0.7, 0, 0, 0);
+		resize;
+	}
+
+	void resize(){
+		writeln("composite resize");
+		XRenderPictureAttributes pa;
 		auto visual = DefaultVisual(wm.displayHandle, 0);
     	auto format = XRenderFindVisualFormat(dpy, visual);
-		XRenderPictureAttributes pa;
 		picture = XRenderCreatePicture(dpy, (cast(XDraw)dockWindow._draw).drawable, format, CPSubwindowMode, &pa);
-		transparency = colorPicture(false, 0.7, 0, 0, 0);
 	}
 
 	void clip(int[2] pos, int[2] size){
@@ -272,6 +278,12 @@ class WorkspaceDock: ws.wm.Window {
 		    | PropertyChangeMask);
 		updateWallpaper;
 
+	}
+
+	override void resized(int[2] size){
+		super.resized(size);
+		if(composite)
+			composite.resize;
 	}
 
 	void init(){
@@ -586,6 +598,6 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
 		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
 	}
-	catch {}
+	catch(Throwable){}
 	return 0;
 }
