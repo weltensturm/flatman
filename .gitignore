@@ -11,9 +11,17 @@ dock/flatman-dock
 menu/flatman-menu
 volume-icon/flatman-volume-icon
 xinput-gui/flatman-input
+backlight-notify/flatman-backlight-notify
+volume-notify/flatman-volume-notify
+battery-icon/flatman-battery-icon
 wm/flatman-wm
 context/flatman-context
 bar/flatman-bar
 *.sync-conflict*
 *.swp
 1
+vgcore.*
+trace.*
+callgrind.*
+trace.def
+trace.log
