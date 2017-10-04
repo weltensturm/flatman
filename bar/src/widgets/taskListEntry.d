@@ -7,6 +7,8 @@ class TaskListEntry: Base {
 
     Client client;
     Bar bar;
+    int[2] start;
+    bool dragging;
 
     this(Bar bar, Client client){
         this.bar = bar;
@@ -28,7 +30,7 @@ class TaskListEntry: Base {
                 PictOpOver,
                 bar.glow,
                 None,
-                draw.to!XDraw.frontBuffer,
+                draw.to!XDraw.picture,
                 0,
                 0,
                 0,0,
@@ -64,9 +66,8 @@ class TaskListEntry: Base {
     }
 
     override void onMouseMove(int x, int y){
-        super.onMouseMove(x, y);
-        if(dragging){
-            writeln(x, " ", y);
+        if((start.x - x).abs > 3 && (start.y - y) > 3 && dragging){
+            writeln("start ", x, " ", y);
             dragging = false;
             XEvent ev;
             ev.type = ClientMessage;
@@ -75,16 +76,19 @@ class TaskListEntry: Base {
             ev.xclient.format = 32;
             ev.xclient.data.l[0] = bar.pos.x + x;
             ev.xclient.data.l[1] = bar.pos.y + y;
-            ev.xclient.data.l[2] = 0;
+            ev.xclient.data.l[2] = 8;
             ev.xclient.data.l[3] = Mouse.buttonLeft;
             ev.xclient.data.l[4] = 2;   
-            XSendEvent(dpy, .root, false, SubstructureNotifyMask|SubstructureRedirectMask, &ev);
+            XSendEvent(wm.displayHandle, .root, false, SubstructureNotifyMask|SubstructureRedirectMask, &ev);
         }
+        super.onMouseMove(x, y);
     }
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        writeln(button, ' ', pressed);
         if(button == Mouse.buttonLeft){
             if(!pressed){
+                writeln("false");
                 dragging = false;
                 XClientMessageEvent xev;
                 xev.type = ClientMessage;
@@ -98,6 +102,8 @@ class TaskListEntry: Base {
                 xev.data.l[4] = 0;    /* manager specific data */
                 XSendEvent(wm.displayHandle, .root, false, StructureNotifyMask, cast(XEvent*) &xev);
             }else{
+                writeln(start);
+                start = [x, y];
                 dragging = true;
             }
         }else if(button == Mouse.buttonMiddle && !pressed){

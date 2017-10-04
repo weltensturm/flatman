@@ -11,6 +11,8 @@ public import
 	std.traits,
 	std.conv,
 	std.math,
+	std.process,
+	std.regex,
 
 	x11.X,
 	x11.Xlib,
@@ -26,6 +28,7 @@ public import
 	ws.x.draw,
 	ws.math.vector,
     ws.wm,
+    ws.inotify,
 
 	common.configLoader,
 	common.screens,
@@ -34,7 +37,6 @@ public import
     bar.bar,
 	bar.config,
     bar.main,
-    bar.plugin,
     bar.plugins,
 	bar.powerButton,
 	bar.widget.taskList,
@@ -44,10 +46,3 @@ public import
 	bar.widget.tray,
 	bar.xembed;
 
-
-enum CompilePlugins = false;
-
-
-static if(CompilePlugins){
-	public import commando;
-}

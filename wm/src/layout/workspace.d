@@ -46,7 +46,7 @@ class Workspace: Container {
 	alias add = Base.add;
 
 	override void add(Client client){
-		with(Log("workspace.add %s floating=%s fullscreen=%s".format(client, client.isFloating, client.isfullscreen))){
+		with(Log("workspace(%s).add %s floating=%s fullscreen=%s".format(cast(void*)this, client, client.isFloating, client.isfullscreen))){
 			updateWindowDesktop(client, monitor.workspaces.countUntil(this));
 			if(client.isFloating && !client.isfullscreen){
 				floating.add(client);
@@ -102,11 +102,16 @@ class Workspace: Container {
 	alias remove = Base.remove;
 
 	override void remove(Client client){
-		"workspace.remove %s".format(client).log;
-		foreach(c; children)
-			c.to!Container.remove(client);
-		if(!split.children)
-			split.hide;
+		with(Log("workspace(%s).remove %s".format(cast(void*)this, client))){
+			if(floating.clients.canFind(client))
+				floating.remove(client);
+			else if(split.clients.canFind(client))
+				split.remove(client);
+			else
+				assert(0);
+			if(!split.children)
+				split.hide;
+		}
 	}
 
 	override void show(){

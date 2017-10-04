@@ -23,14 +23,22 @@ void swap(T)(ref T[] array, size_t i1, size_t i2){
 }
 
 
-Atom overviewHide;
-
-
 class Separator: Base {
 
 	x11.X.Window window;
+	XDraw _draw;
+	int[2] cursor;
 
-	this(){
+	override DrawEmpty draw(){
+		return _draw;
+	}
+
+	Split split;
+	size_t index;
+
+	this(Split split, size_t index){
+		this.split = split;
+		this.index = index;
 		size = [10,10];
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
@@ -43,24 +51,31 @@ class Separator: Base {
 		);
 		_draw = new XDraw(dpy, window);
 		window.register([
-			Expose: (XEvent* e)=>onDraw(),
-			/+
-			EnterNotify: (XEvent* e)=>mouse(true),
-			LeaveNotify: (XEvent* e)=>mouse(false),
-			ButtonPress: (XEvent* e)=>mouse(e.xbutton.button, true),
-			ButtonRelease: (XEvent* e)=>mouse(e.xbutton.button, false),
-			MotionNotify: (XEvent* e)=>mouse([e.xmotion.x, e.xmotion.y])
-			+/
+			Expose: (XEvent* e)=>onDraw()
 		]);
 		XMapWindow(dpy, window);
-		if(!overviewHide)
-			overviewHide = XInternAtom(dpy, "_FLATMAN_OVERVIEW_HIDE", false);
-		window.replace(overviewHide, 1L);
+		window.replace(Atoms._FLATMAN_OVERVIEW_HIDE, 1L);
 		hide;
 	}
 
+	void mouse(Mouse.button button, bool pressed){
+		if(button == Mouse.buttonLeft && pressed){
+			
+			.drag((int[2] cursor){
+				auto diff = pos.x - cursor.x;
+				if(!diff)
+					return;
+				diff.to!string.log;
+				split.sizes[index] -= diff;
+				split.sizes[index+1] += diff;
+				split.rebuild;
+			});
+
+		}
+	}
+
 	override void show(){
-		//replace!long(window, net.windowDesktop, monitor.workspaceActive);
+		//replace!long(window, Atoms._NET_WM_DESKTOP, monitor.workspaceActive);
 		if(size.w > 0 && size.h > 0){
 			"separator.show".log;
 			hidden = false;
@@ -93,7 +108,7 @@ class Separator: Base {
 	}
 
 	override void onDraw(){
-		draw.setColor(config.color("split background"));
+		draw.setColor(config.split.background);
 		draw.rect([0,0], size);
 		draw.finishFrame;
 	}
@@ -161,6 +176,8 @@ class Split: Container {
 			return;
 		with(Log("split.show")){
 			hidden = false;
+			if(!children.length)
+				return;
 			foreach(c; children ~ separators.to!(Base[]))
 				c.show;
 			rebuild;
@@ -207,7 +224,7 @@ class Split: Container {
 					}
 				}
 				if(children.length > 1)
-					separators ~= new Separator;
+					separators ~= new Separator(this, separators.length);
 				if(!hidden){
 					tab.show;
 					if(separators.length)
@@ -299,14 +316,14 @@ class Split: Container {
 	override void resize(int[2] size){
 		with(Log("split.resize %s".format(size))){
 			super.resize(size);
-			if(draw)
-				draw.resize(size);
+			//if(_draw)
+			//	draw.resize(size);
 			rebuild;
 		}
 	}
 
 	void normalize(){
-		auto padding = config["split paddingElem"].to!long;
+		auto padding = config.split.paddingElem;
 		long max = size.w-padding*(children.length-1);
 		max = max.max(400);
 		foreach(ref s; sizes)
@@ -335,7 +352,7 @@ class Split: Container {
 		with(Log("split.rebuild")){
 			normalize;
 			int offset = 0;
-			auto padding = config["split paddingElem"].to!int;
+			auto padding = config.split.paddingElem;
 			foreach(i, c; children){
 				c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
 				c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);

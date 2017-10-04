@@ -41,15 +41,6 @@ struct Rule {
 	int monitor;
 }
 
-class Dragging {
-	Client client;
-	int[2] offset;
-	int width;
-	void delegate(int[2]) drag;
-	void delegate() drop;
-}
-
-
 struct TimedEvent {
 	double time;
 	void delegate() event;
@@ -59,29 +50,26 @@ TimedEvent[] schedule;
 
 void delegate(XEvent*)[int][Window] customHandler;
 
-static bool running = true;
+bool running = true;
 bool restart = false;
 Client previousFocus;
 Window[] unmanaged;
 
-static int screen;
-static int sw, sh;           /* X display screen geometry width, height */
+int screen;
+int sw, sh;           /* X display screen geometry width, height */
 extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
 extern(C) nothrow int function(Display*) xerrorfatalxlib;
-static uint numlockmask = 0;
+uint numlockmask = 0;
 
-static ws.x.draw.Cur[CurLast] cursor;
-static Display* dpy;
-static Monitor monitor;
-static Monitor[] monitors;
-static Window root;
-
-Dragging dragging;
+ws.x.draw.Cur[CurLast] cursor;
+Display* dpy;
+Monitor monitor;
+Monitor[] monitors;
+Window root;
 
 bool redraw;
 bool queueRestack;
 bool updateStrut;
-int[] dragUpdate;
 
 int[2] rootSize = [1,1];
 
@@ -95,13 +83,17 @@ void main(string[] args){
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			"warning: no locale support".log;
 
+		["mkdir", "-p", "~/.config/flatman".expandTilde].execute;
+		["touch", "~/.config/flatman/config.ws".expandTilde].execute;
+
 		auto cfgReload = {
 			["notify-send", "Loading config"].execute;
 			try{
-				cfg.fillConfig(configs);
+				config.fillConfigNested(configs);
+				registerConfigKeys;
 			}catch(Exception e){
+				Log.fallback(Log.RED ~ e.to!string);
 				["notify-send", e.toString].execute;
-				log(e.to!string);
 			}
 		};
 		cfgReload();
@@ -117,11 +109,13 @@ void main(string[] args){
 		dpy = XOpenDisplay(null);
 		if(!dpy)
 			throw new Exception("cannot open display");
+		getDisplay = () => dpy;
 		checkOtherWm;
 		setup(args[$-1] != "restarting");
 		scan;
 		run;
 	}catch(Throwable t){
+		"FATAL ERROR".log;
 		Log.error(t.toString);
 		throw t;
 	}
@@ -153,39 +147,34 @@ void checkOtherWm(){
 }
 
 void setup(bool autostart){
+	eventsInit;
+
 	xerrorfatalxlib = XSetIOErrorHandler(&xerrorfatal);
 
-	/* init screen */
 	screen = DefaultScreen(dpy);
 	root = XDefaultRootWindow(dpy);
-
-	//wm = new CompositeManager;
 
 	sw = DisplayWidth(dpy, screen);
 	sh = DisplayHeight(dpy, screen);
 	rootSize = [sw, sh];
 	root = RootWindow(dpy, screen);
 
-	/* init atoms */
-	/* init cursors */
 	cursor[CurNormal] = new ws.x.draw.Cur(dpy, XC_left_ptr);
 	cursor[CurResize] = new ws.x.draw.Cur(dpy, XC_sizing);
 	cursor[CurMove] = new ws.x.draw.Cur(dpy, XC_fleur);
 
 	wm.fillAtoms;
-	net.fillAtoms;
 	motif.fillAtoms;
 
-	//updatebars();
 	updateMonitors();
-	/* EWMH support per view */
-	XDeleteProperty(dpy,root, net.supported);
-	foreach(n; FieldNameTuple!NetAtoms)
-		mixin("XChangeProperty(dpy, root, net.supported, XA_ATOM, 32, PropModeAppend, cast(ubyte*)&net." ~ n ~ ", 1);");
-	XDeleteProperty(dpy, root, net.clientList);
+	
+	XDeleteProperty(dpy, root, Atoms._NET_SUPPORTED);
+	foreach(n; netSupported)
+		XChangeProperty(dpy, root, Atoms._NET_SUPPORTED, XA_ATOM, 32, PropModeAppend, cast(ubyte*)&n, 1);
+	XDeleteProperty(dpy, root, Atoms._NET_CLIENT_LIST);
+
 	updateDesktopCount;
 	updateCurrentDesktop;
-	/* select for events */
 	XSetWindowAttributes wa;
 	wa.cursor = cursor[CurNormal].cursor;
 	wa.event_mask =
@@ -199,12 +188,12 @@ void setup(bool autostart){
 	registerConfigKeys;
 
 	grabkeys();
-	//focus(null);
 	updateWorkarea;
 	setSupportingWm;
+	dragInit;
 
 	if(autostart){
-		cfg.autostart.each!((command){
+		config.autostart.each!((command){
 			if(!command.strip.length)
 				return;
 			"autostart '%s'".format(command).log;
@@ -251,9 +240,9 @@ void scan(){
 					"scan manages %s".format(w).log;
 					long workspace;
 					try {
-						workspace = w.getprop!XA_CARDINAL(net.windowDesktop);
+						workspace = w.getprop!XA_CARDINAL(Atoms._NET_WM_DESKTOP);
 					}catch(Exception e){
-						e.writeln;
+						Log.fallback(Log.RED ~ e.to!string);
 					}
 					workspaces[workspace] ~= w;
 				}
@@ -276,154 +265,75 @@ void scan(){
 	}
 }
 
-void run(){
+
+void loop(){
 	XEvent ev;
+	XSync(dpy, false);
+	while(XPending(dpy)){
+		XNextEvent(dpy, &ev);
+		with(Log(Log.BOLD ~ "%s ev %s".format(ev.xany.window, handlerNames.get(ev.type, ev.type.to!string)))){
+			if(ev.xany.window in customHandler && ev.type in customHandler[ev.xany.window])
+				customHandler[ev.xany.window][ev.type](&ev);
+			if(ev.type in handler){
+				try{
+					handler[ev.type](&ev);
+				}catch(Throwable t){
+					t.toString.log;
+					["notify-send", t.toString].execute;
+				}
+			}
+		}
+	}
+	Inotify.update;
 
+	if(updateStrut){
+		foreach(m; monitors)
+			m.resize(m.size);
+		updateStrut = false;
+	}
+
+	tick();
+
+	if(redraw){
+		monitor.onDraw;
+		redraw = false;
+	}
+
+	TimedEvent[] newSchedule;
+	foreach(e; schedule){
+		if(e.time < now)
+			e.event();
+		else
+			newSchedule ~= e;
+	}
+	schedule = newSchedule;
+
+	if(queueRestack){
+		with(Log("restack")){
+			XGrabServer(dpy);
+			foreach(monitor; monitors){
+				monitor.restack;
+				if(monitor.active && monitor.active.isfullscreen)
+					monitor.active.raise;
+			}
+			foreach(w; unmanaged)
+				XRaiseWindow(dpy, w);
+			XSync(dpy, false);
+			while(XCheckMaskEvent(dpy, EnterWindowMask|LeaveWindowMask, &ev)){}
+			XUngrabServer(dpy);
+			queueRestack = false;
+		}
+	}
+}
+
+void run(){
 	while(running){
-		XSync(dpy, false);
-		while(XPending(dpy)){
-			XNextEvent(dpy, &ev);
-			with(Log(Log.BOLD ~ "%s ev %s".format(ev.xany.window, handlerNames.get(ev.type, ev.type.to!string)))){
-				if(ev.xany.window in customHandler && ev.type in customHandler[ev.xany.window])
-					customHandler[ev.xany.window][ev.type](&ev);
-				if(ev.type in handler){
-					try{
-						handler[ev.type](&ev);
-					}catch(Throwable t){
-						t.toString.log;
-						["notify-send", t.toString].execute;
-					}
-				}
-			}
-		}
-		Inotify.update;
-
-		if(updateStrut){
-			foreach(m; monitors)
-				m.resize(m.size);
-			updateStrut = false;
-		}
-
-		if(dragUpdate.length && dragging){
-			doDrag(dragUpdate.to!(int[2]));
-			dragUpdate = [];
-		}
-
-		if(redraw){
-			monitor.onDraw;
-			redraw = false;
-		}
-
-		TimedEvent[] newSchedule;
-		foreach(e; schedule){
-			if(e.time < now)
-				e.event();
-			else
-				newSchedule ~= e;
-		}
-		schedule = newSchedule;
-
-		if(queueRestack){
-			with(Log("restack")){
-				XGrabServer(dpy);
-				foreach(monitor; monitors){
-					monitor.restack;
-					if(monitor.active && monitor.active.isfullscreen)
-						monitor.active.raise;
-				}
-				foreach(w; unmanaged)
-					XRaiseWindow(dpy, w);
-				XSync(dpy, false);
-				while(XCheckMaskEvent(dpy, EnterWindowMask|LeaveWindowMask, &ev)){}
-				XUngrabServer(dpy);
-				queueRestack = false;
-			}
-		}
-		sleep(1/120.0);
+		auto start = now;
+		loop;
+		auto end = now;
+		if(end - start < 1/120.0)
+			sleep(1/120.0 - (end-start));
 	}
-}
-
-void drag(Client client, int[2] offset){
-	dragging = new Dragging;
-	dragging.client = client;
-	dragging.offset = offset;
-	dragging.width = client.size.w;
-	XGrabPointer(
-				dpy,
-				root,
-				true,
-				ButtonPressMask |
-						ButtonReleaseMask |
-						PointerMotionMask |
-						FocusChangeMask |
-						EnterWindowMask |
-						LeaveWindowMask,
-				GrabModeAsync,
-				GrabModeAsync,
-				None,
-				None,
-				CurrentTime);
-}
-
-void doDrag(int[2] pos){
-
-	auto x = pos.x;
-	auto y = pos.y;
-
-	if(!clients.canFind(dragging.client))
-		return;
-
-	static Monitor mon = null;
-	Monitor m;
-	if((m = findMonitor(pos)) != mon && mon){
-		if(monitor && monitor.active)
-			monitor.active.unfocus(true);
-		monitor = m;
-		if(monitor.active)
-			monitor.active.focus;
-		//focus(null);
-	}
-	mon = m;
-
-	auto client = dragging.client;
-	auto monitor = client.monitor;
-
-	if(.monitor != monitor){
-		monitor.remove(client);
-		m.add(client);
-		monitor = m;
-	}
-
-	auto snapBorder = 10;
-
-	if(
-		(y <= monitor.pos.y+cfg.tabsTitleHeight)
-				== client.isFloating
-			&& x > monitor.pos.x+snapBorder
-			&& x < monitor.pos.x+monitor.size.w-snapBorder)
-		client.togglefloating;
-
-	if(client.isFloating){
-		if(x <= monitor.pos.x+snapBorder && x >= monitor.pos.x){
-			if(client.isFloating){
-				monitor.remove(client);
-				client.isFloating = false;
-				monitor.workspace.split.add(client, -1);
-			}
-			return;
-		}else if(x >= monitor.pos.x+monitor.size.w-snapBorder && x <= monitor.pos.x+monitor.size.w){
-			if(client.isFloating){
-				monitor.remove(client);
-				client.isFloating = false;
-				monitor.workspace.split.add(client, monitor.workspace.split.clients.length);
-			}
-			return;
-		}
-		auto xt = dragging.offset.x * client.size.w / dragging.width;
-		client.moveResize([x, y].a + [xt, dragging.offset.y], client.sizeFloating);
-	}
-	else
-		{}
 }
 
 Client active(){
@@ -442,6 +352,13 @@ Client[] clientsVisible(){
 	return monitors.map!(a => a.clientsVisible).fold!((a, b) => a ~ b);
 }
 
+
+void focus(Monitor monitor){
+	if(monitor != .monitor)
+		.monitor = monitor;
+}
+
+
 void restack(){
 	"queueRestack = true".log;
 	queueRestack = true;
@@ -452,26 +369,6 @@ bool getrootptr(int *x, int *y){
 	uint dui;
 	Window dummy;
 	return 1 == XQueryPointer(dpy, root, &dummy, &dummy, x, y, &di, &di, &dui);
-}
-
-void manage(Window w, XWindowAttributes* wa){
-	if(!w)
-		throw new Exception("No window given");
-	if(wintoclient(w))
-		return;
-	//auto monitor = findMonitor([wa.x, wa.y], [wa.width, wa.height]);
-	auto c = new Client(w, monitor);
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
-	monitor.add(c, c.originWorkspace);
-	if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
-		c.pos = monitor.size.a/2 - c.size.a/2;
-	XChangeProperty(dpy, root, net.clientList, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
-	c.updateStrut;
-	if(c.isVisible){
-		c.show;
-		c.focus;
-	}else
-		c.requestAttention;
 }
 
 void quit(){
@@ -506,7 +403,7 @@ bool updateMonitors(){
 		}
 		if(dirty){
 			monitor = monitors[0];
-			monitor = wintomon(root);
+			monitor = findMonitor(root);
 		}
 		return dirty;
 	}
@@ -519,17 +416,50 @@ Client wintoclient(Window w){
 	return null;
 }
 
-Monitor wintomon(Window w){
+Monitor findMonitor(int[2] pos, int[2] size=[1,1]){
+	Monitor result = monitor;
+	int a, area = 0;
+	foreach(monitor; monitors)
+		if((a = intersectArea(pos.x, pos.y, size.w, size.h, monitor)) > area){
+			area = a;
+			result = monitor;
+		}
+	return result;
+}
+
+Monitor findMonitor(Window w){
 	int x, y;
-	Client c = wintoclient(w);
 	if(w == root && getrootptr(&x, &y))
 		return findMonitor([x, y]);
-	//foreach(m; monitors)
-	//	if(w == m.bar.window || w == m.workspace.split.window)
-	//		return m;
-	if(c)
-		return c.monitor;
-	return monitor;
+	return findMonitor(wintoclient(w));
+}
+
+Monitor findMonitor(Client w){
+	foreach(m; monitors){
+		if(m.clients.canFind(w))
+			return m;
+	}
+	return null;
+}
+
+void manage(Window w, XWindowAttributes* wa){
+	if(!w)
+		throw new Exception("No window given");
+	if(wintoclient(w))
+		return;
+	//auto monitor = findMonitor([wa.x, wa.y], [wa.width, wa.height]);
+	auto c = new Client(w);
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
+	monitor.add(c, c.originWorkspace);
+	if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
+		c.pos = monitor.size.a/2 - c.size.a/2;
+	XChangeProperty(dpy, root, Atoms._NET_CLIENT_LIST, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
+	c.updateStrut;
+	if(c.isVisible){
+		c.show;
+		c.focus;
+	}else
+		c.requestAttention;
 }
 
 void cleanup(){
@@ -550,7 +480,7 @@ void cleanup(){
 			c.destroy(dpy);
 		XSync(dpy, false);
 		XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
-		XDeleteProperty(dpy, root, net.windowActive);
+		XDeleteProperty(dpy, root, Atoms._NET_ACTIVE_WINDOW);
 		taskPool.stop;
 	}
 }

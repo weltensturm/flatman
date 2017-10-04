@@ -1,13 +1,9 @@
+
 module flatman.layout.tabs;
 
 import flatman;
 
 __gshared:
-
-Atom currentTab;
-Atom currentTabs;
-Atom tabDirection;
-Atom tabsWidth;
 
 
 class Tabs: Container {
@@ -20,17 +16,6 @@ class Tabs: Container {
 	this(){
 		size = [10,10];
 		hidden = true;
-		if(!currentTab)
-			currentTab = XInternAtom(dpy, "_FLATMAN_TAB", false);
-		if(!currentTabs)
-			currentTabs = XInternAtom(dpy, "_FLATMAN_TABS", false);
-		if(!currentTab)
-			"error".log;
-		if(!tabsWidth)
-			tabsWidth = XInternAtom(dpy, "_FLATMAN_WIDTH", false);
-
-		if(!tabDirection)
-			tabDirection = XInternAtom(dpy, "_FLATMAN_TAB_DIR", false);
 	}
 
 	void restack(){
@@ -68,13 +53,12 @@ class Tabs: Container {
 
 	override void add(Client client){
 		//add(client.to!Base);
-		if(clientActive+1 < children.length)
+		if(clientActive+1 < children.length){
 			children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
-		else
+			client.parent = this;
+		}else
 			add(client.to!Base);
-		foreach(c; clients)
-			if(c != client)
-				c.hide;
+		active = client;
 		updateHints;
 		resize(size);
 	}
@@ -86,14 +70,14 @@ class Tabs: Container {
 		super.remove(client);
 		if(any)
 			active = any;
-		client.win.replace(currentTabs, 0L);
+		client.win.replace(Atoms._FLATMAN_TABS, 0L);
 		updateHints;
 	}
 
 	void updateHints(){
 		foreach(i, c; children.to!(Client[])){
-			c.win.replace(currentTab, cast(long)i);
-			c.win.replace(currentTabs, parent.children.countUntil(this)+1);
+			c.win.replace(Atoms._FLATMAN_TAB, cast(long)i);
+			c.win.replace(Atoms._FLATMAN_TABS, parent.children.countUntil(this)+1);
 		}
 		XSync(dpy, false);
 	}
@@ -147,7 +131,7 @@ class Tabs: Container {
 			if(c == client)
 				newPassed = true;
 			else
-				c.win.replace(tabDirection, newPassed && activePassed ? 1L : -1L);
+				c.win.replace(Atoms._FLATMAN_TAB_DIR, newPassed && activePassed ? 1L : -1L);
 		}
 		if(active && active != client)
 			active.hide;
@@ -165,19 +149,20 @@ class Tabs: Container {
 	override void resize(int[2] size){
 		with(Log("tabs.resize %s".format(size))){
 			super.resize(size);
-			auto padding = cfg.tabsPadding;
+			auto padding = config.tabs.padding;
 			if(active){
+				auto monitor = findMonitor(active);
 				if(active.isfullscreen){
-					active.moveResize(active.monitor.pos.a + [0, hidden ? -rootSize.h : 0], active.monitor.size);
+					active.moveResize(monitor.pos.a + [0, hidden ? -rootSize.h : 0], monitor.size);
 				}else{
 					active.moveResize(
-						pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? active.monitor.size.h : 0)],
+						pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? monitor.size.h : 0)],
 						size.a - [padding[0]+padding[1], (showTabs ? 0 : padding[2])+padding[3]]
 					);
 				}
 			}
 			foreach(client; children.to!(Client[])){
-				client.win.replace(tabsWidth, (size.w-padding[0]-padding[1]).to!long);
+				client.win.replace(Atoms._FLATMAN_WIDTH, (size.w-padding[0]-padding[1]).to!long);
 			}
 		}
 	}

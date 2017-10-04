@@ -23,18 +23,6 @@ void focusmon(int arg){
 }
 
 
-Monitor findMonitor(int[2] pos, int[2] size=[1,1]){
-	Monitor result = monitor;
-	int a, area = 0;
-	foreach(monitor; monitors)
-		if((a = intersectArea(pos.x, pos.y, size.w, size.h, monitor)) > area){
-			area = a;
-			result = monitor;
-		}
-	return result;
-}
-
-
 class Monitor {
 
 	int id;
@@ -108,10 +96,9 @@ class Monitor {
 	}
 
 	void add(Client client, long workspace=-1){
-		client.monitor = this;
-		if(workspace < 0)
-			client.global = true;
-		with(Log("monitor.add %s workspace=%s".format(client, workspace))){
+		with(Log("%s.add %s workspace=%s".format(this, client, workspace))){
+			if(workspace < 0)
+				client.global = true;
 			if(!client.global){
 				if(workspace == -1)
 					this.workspace.add(client);
@@ -120,13 +107,14 @@ class Monitor {
 				}
 			}else{
 				globals ~= client;
+				assert(!client.parent);
 				//client.moveResize(client.posFloating, client.sizeFloating);
 			}
 		}
 	}
 
 	void move(Client client, int workspace){
-		with(Log("monitor.move %s workspace=%s".format(client, workspace))){
+		with(Log("%s.move %s workspace=%s".format(this, client, workspace))){
 			auto l = workspaces.length;
 			auto pos = workspaces.countUntil!(a => a.clients.canFind(client));
 			this.workspace.remove(client);
@@ -140,14 +128,24 @@ class Monitor {
 	}
 
 	void remove(Client client){
-		with(Log("monitor.remove %s".format(client))){
+		with(Log("%s.remove %s".format(this, client))){
+			bool found;
 			foreach(ws; workspaces){
-				if(ws.clients.canFind(client))
+				if(ws.clients.canFind(client)){
 					ws.remove(client);
+					found = true;
+					break;
+				}
 			}
-			globals = globals.without(client);
+			if(!found && globals.canFind(client)){
+				found = true;
+				globals = globals.without(client);
+			}
+			if(!found)
+				throw new Exception("Monitor does not have %s".format(client));
 			XSync(dpy, false);
-			resize(size);
+			if(client.strut)
+				resize(size);
 		}
 	}
 

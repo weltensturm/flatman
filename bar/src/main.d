@@ -28,6 +28,7 @@ void main(){
 	signal(SIGINT, &stop);
 	auto app = new App;
 	while(wm.hasActiveWindows && running){
+		Inotify.update;
 		wm.processEvents;
 		app.bar.onDraw;
 		Thread.sleep(10.msecs);
@@ -47,20 +48,12 @@ class App {
 
 	Bar bar;
 
-    version(CompilePlugins){
-	    Plugins plugins;
-    }
-
 	this(){
 
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
 		
-		try {
-			config.fillConfig(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"]);
-		}catch(Exception e){
-			writeln(e.to!string);
-		}
+        config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"], {});
 
 		wm.on([
 			CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
@@ -79,9 +72,6 @@ class App {
 
 
 		bar = new Bar(this);
-        version(CompilePlugins){
-    		plugins = new Plugins(bar);
-        }
 		bar.show;
 		wm.add(bar);
 

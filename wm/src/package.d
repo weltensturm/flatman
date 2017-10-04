@@ -41,11 +41,14 @@ public import
 	x11.extensions.Xinerama,
 	x11.keysymdef,
 
+	ws.event,
 	ws.math,
 	ws.inotify,
 	ws.time,
 	ws.gui.base,
 	ws.gui.input,
+	ws.draw,
+	ws.gl.draw,
 	ws.x.draw,
 	ws.x.property,
 	ws.decode,
@@ -54,6 +57,7 @@ public import
 
 	common.configLoader,
 	common.screens,
+	common.atoms,
 
 	flatman.x.atoms,
 	flatman.x.ewmh,
@@ -66,6 +70,7 @@ public import
 	flatman.layout.split,
 	flatman.layout.floating,
 	flatman.layout.tabs,
+	flatman.dragging,
 	flatman.log,
 	flatman.util,
 	flatman.flatman,

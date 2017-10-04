@@ -8,7 +8,7 @@ import flatman;
 
 struct Log {
 
-	private static Mutex mutex;
+	private __gshared Mutex mutex;
 
 	string dummy;
 
@@ -19,9 +19,9 @@ struct Log {
 	enum GREY = "\033[90m";
 	enum BOLD = "\033[1m";
 
-	private static Tid loggerHandle;
+	private __gshared Tid loggerHandle;
 
-	private static bool started;
+	private __gshared bool started;
 
 	private static void init(){
 		if(!started){
@@ -39,7 +39,7 @@ struct Log {
 		}
 	}
 
-	static int indent;
+	__gshared int indent;
 
 	this(string s){
 		info(s);
@@ -75,7 +75,7 @@ struct Log {
 	static void fallback(string s){
 		init();
 		string text = format(s);
-		"/tmp/flatman.log".append(s);
+		"/tmp/flatman.log".append(s ~ "\n");
 		text.write;
 	}
 

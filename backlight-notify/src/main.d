@@ -9,15 +9,26 @@ import
 	std.stdio,
     std.process,
     std.string,
-	ws.math,
+    std.file,
+    std.path,
+    ws.math,
 	ws.wm;
 
 
-int getBacklight(){
-    auto c = "xbacklight -get".executeShell;
-    if(c.status)
-        writeln("failed");
-    return c.output.strip.to!double.lround.to!int;
+int getBacklight(string path){
+    auto current = path.buildPath("brightness").readText.strip.to!float;
+    auto max = path.buildPath("max_brightness").readText.strip.to!float;
+    return (current/max*100).to!int;
+}
+
+
+string backlightPath(){
+    foreach(path; "/sys/class/backlight/".dirEntries(SpanMode.shallow)){
+        writeln(path);
+        if(path.buildPath("brightness").exists && path.buildPath("max_brightness").exists)
+            return path;
+    }
+    throw new Exception("No backlight found");
 }
 
 
@@ -28,7 +39,7 @@ class NotifyWindow: Window {
 		move([50, 50]);
 	}
 
-    long backlight;
+    long brightness;
     int margin = 5;
     int barHeight = 4;
     SysTime showTime;
@@ -39,9 +50,9 @@ class NotifyWindow: Window {
         draw.setColor([0.3,0.3,0.3]);
         draw.rect([margin, size.h/2-barHeight/2], [size.w-margin*2, barHeight]);
         draw.setColor([1, 1, 1]);
-        auto width = (backlight.min(100)/100.0*(size.w-margin*2)).to!int;
+        auto width = (brightness.min(100)/100.0*(size.w-margin*2)).to!int;
         draw.rect([margin, size.h/2-barHeight/2], [width, barHeight]);
-        width = ((backlight-100).max(0)/100.0*(size.w-margin*2)).to!int;
+        width = ((brightness-100).max(0)/100.0*(size.w-margin*2)).to!int;
         draw.setColor([1,0,0]);
         draw.rect([margin, size.h/2-barHeight/2], [width, barHeight]);
         draw.finishFrame;
@@ -51,21 +62,23 @@ class NotifyWindow: Window {
 
 
 void main(){
+    auto path = backlightPath;
     auto window = new NotifyWindow;
     wm.add(window);
     window.hide;
     while(wm.hasActiveWindows){
         wm.processEvents;
-        window.onDraw;
-        auto backlight = getBacklight;
-        if(window.backlight != backlight){
-        	window.backlight = backlight;
+        auto brightness = getBacklight(path);
+        if(window.brightness != brightness){
+        	window.brightness = brightness;
         	window.showTime = Clock.currTime;
         	window.show;
         }else if(window.showTime < Clock.currTime - 2.seconds){
         	window.hide;
         }
-        Thread.sleep(20.msecs);
+        if(!window.hidden)
+            window.onDraw;
+        Thread.sleep(16.msecs);
     }
 
 }

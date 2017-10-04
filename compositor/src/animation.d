@@ -7,7 +7,7 @@ import composite;
 class Animation {
 
 	static double time;
-	static update(){
+	static void update(){
 		time = now;
 	}
 
@@ -87,5 +87,4 @@ class Animation {
 	}
 
 }
-
 

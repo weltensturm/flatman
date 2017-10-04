@@ -10,15 +10,13 @@ string call(Args...)(bool pressed, string fn, Args args){
 	string[Args.length] stringArgs;
 	foreach(i, arg; args)
 		stringArgs[i] = arg.to!string;
-	`calling "%s" with "%s"`.format(fn, stringArgs).log;
 	return call(pressed, fn, stringArgs);
 }
 
 
 string call()(bool pressed, string fn, string[] args){
 	if(fn in functions)
-		with(Log(`calling "%s" with "%s"`.format(fn, args)))
-			return functions[fn](pressed, args);
+		return functions[fn](pressed, args);
 	`ERROR: Function not found "%s"`.format(fn).log;
 	return "";
 }
@@ -28,22 +26,24 @@ void register(T, Args...)(string name, T delegate(Args) dg){
 	functions[name] = delegate(bool pressed, string[] args){
 		if(!pressed && !is(Args[0] == bool))
 			return "";
-		Args tuple;
-		static if(!is(Args[0] == bool) && Args.length == 1){
-			tuple[0] = args.join(" ");
-		}else static if(is(Args[0] == bool)){
-			tuple[0] = pressed;
-			foreach(i, type; Args[1..$])
-				tuple[i+1] = args[i].to!type;
-		}else{
-			foreach(i, type; Args)
-				tuple[i] = args[i].to!(Args[i]);
+		with(Log(`"%s(%s, %s)"`.format(name, pressed, args))){
+			Args tuple;
+			static if(!is(Args[0] == bool) && Args.length == 1){
+				tuple[0] = args.join(" ");
+			}else static if(is(Args[0] == bool)){
+				tuple[0] = pressed;
+				foreach(i, type; Args[1..$])
+					tuple[i+1] = args[i].to!type;
+			}else{
+				foreach(i, type; Args)
+					tuple[i] = args[i].to!(Args[i]);
+			}
+			static if(is(T == void)){
+				dg(tuple);
+				return "";
+			}else
+				return dg(tuple).to!string;
 		}
-		static if(is(T == void)){
-			dg(tuple);
-			return "";
-		}else
-			return dg(tuple).to!string;
 	};
 }
 
@@ -174,10 +174,28 @@ enum overviewTime = 1000/(60*0.06);
 void overview(bool activate){
 	if(!activate && overviewStart < Clock.currTime-overviewTime.to!long.msecs || activate && !doOverview){
 		overviewStart = Clock.currTime;
-		if(activate)
+		if(activate){
 			doOverview = true;
-		else
+			root.replace(Atoms._FLATMAN_OVERVIEW, 1L);
+		}else{
 			doOverview = false;
+			root.replace(Atoms._FLATMAN_OVERVIEW, 0L);
+		}
 	}else if(activate && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
 		overviewStart = Clock.currTime-overviewTime.to!long.msecs;
 }
+
+
+void teleport(Client client, Client target, long mode){
+	client.monitor.remove(client);
+	if(auto c = cast(Split)target.parent){
+		auto i = c.children.countUntil(target);
+		c.add(client, i);
+	}else if(auto c = cast(Container)target.parent){
+		c.add(client);
+	}else{
+		"could not add %s to %s".format(client, target).log;
+		monitor.add(client);
+	}
+}
+

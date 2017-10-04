@@ -9,42 +9,41 @@ enum _NET_WM_STATE_ADD = 1;
 enum _NET_WM_STATE_TOGGLE = 2;
 
 
-struct NetAtoms {
-	@("_NET_SUPPORTED") Atom supported;
-	@("_NET_CLIENT_LIST") Atom clientList;
-	@("_NET_CLIENT_LIST_STACKING") Atom clientListStacking;
 
-	@("_NET_WORKAREA") Atom workArea;
-	@("_NET_DESKTOP_GEOMETRY") Atom geometry;
-	@("_NET_DESKTOP_VIEWPORT") Atom viewport;
-	@("_NET_CURRENT_DESKTOP") Atom currentDesktop;
-	@("_NET_NUMBER_OF_DESKTOPS") Atom desktopCount;
-	@("_NET_DESKTOP_NAMES") Atom desktopNames;
-
-	@("_NET_MOVERESIZE_WINDOW") Atom moveResize;
-	@("_NET_RESTACK_WINDOW") Atom restack;
-	@("_NET_ACTIVE_WINDOW") Atom windowActive;
-
-	@("_NET_WM_MOVERESIZE") Atom drag;
-	@("_NET_WM_PID") Atom pid;
-	@("_NET_WM_NAME") Atom name;
-	@("_NET_WM_ICON") Atom icon;
-	@("_NET_WM_STATE") Atom state;
-	@("_NET_WM_STATE_MODAL") Atom modal;
-	@("_NET_WM_STATE_FULLSCREEN") Atom fullscreen;
-	@("_NET_WM_STATE_DEMANDS_ATTENTION") Atom attention;
-	@("_NET_WM_STRUT_PARTIAL") Atom strutPartial;
-	@("_NET_WM_WINDOW_TYPE") Atom windowType;
-	@("_NET_WM_WINDOW_TYPE_DIALOG") Atom windowTypeDialog;
-	@("_NET_WM_WINDOW_TYPE_DOCK") Atom windowTypeDock;
-	@("_NET_WM_WINDOW_TYPE_SPLASH") Atom windowTypeSplash;
-	@("_NET_WM_DESKTOP") Atom windowDesktop;
-	@("_NET_WM_USER_TIME") Atom userTime;
-
-	@("_NET_SUPPORTING_WM_CHECK") Atom supportingWm;
+Atom[] netSupported(){
+	return [
+		Atoms._NET_SUPPORTED,
+		Atoms._NET_CLIENT_LIST,
+		Atoms._NET_CLIENT_LIST_STACKING,
+		Atoms._NET_WORKAREA,
+		Atoms._NET_DESKTOP_GEOMETRY,
+		Atoms._NET_DESKTOP_VIEWPORT,
+		Atoms._NET_CURRENT_DESKTOP,
+		Atoms._NET_NUMBER_OF_DESKTOPS,
+		Atoms._NET_DESKTOP_NAMES,
+		Atoms._NET_MOVERESIZE_WINDOW,
+		Atoms._NET_RESTACK_WINDOW,
+		Atoms._NET_ACTIVE_WINDOW,
+		Atoms._NET_WM_MOVERESIZE,
+		Atoms._NET_WM_PID,
+		Atoms._NET_WM_NAME,
+		Atoms._NET_WM_ICON,
+		Atoms._NET_WM_STATE,
+		Atoms._NET_WM_STATE_MODAL,
+		Atoms._NET_WM_STATE_FULLSCREEN,
+		Atoms._NET_WM_STATE_DEMANDS_ATTENTION,
+		Atoms._NET_WM_STRUT_PARTIAL,
+		Atoms._NET_WM_WINDOW_TYPE,
+		Atoms._NET_WM_WINDOW_TYPE_DIALOG,
+		Atoms._NET_WM_WINDOW_TYPE_DOCK,
+		Atoms._NET_WM_WINDOW_TYPE_SPLASH,
+		Atoms._NET_WM_WINDOW_TYPE_NOTIFICATION,
+		Atoms._NET_WM_DESKTOP,
+		Atoms._NET_WM_USER_TIME,
+		Atoms._NET_SUPPORTING_WM_CHECK
+	];
 }
 
-NetAtoms net;
 
 Window getWindow(Window window, Atom prop){
 	int di;
@@ -61,20 +60,28 @@ Window getWindow(Window window, Atom prop){
 
 
 void setSupportingWm(){
-	auto window = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
+	XSetWindowAttributes wa;
+	wa.override_redirect = true;
+	auto window = XCreateWindow(dpy, root, 0, 0, 1, 1, 0,
+				DefaultDepth(dpy, screen),
+				CopyFromParent,
+				DefaultVisual(dpy, screen),
+				CWOverrideRedirect,
+				&wa
+	);
 	foreach(w; [root, window]){
-		w.replace(net.supportingWm, window);
-		w.replace(net.name, "flatman");
+		w.replace(Atoms._NET_SUPPORTING_WM_CHECK, window);
+		w.replace(Atoms._NET_WM_NAME, "flatman");
 	}
 }
 
 
 void updateCurrentDesktop(){
-	replace(net.currentDesktop, cast(long)monitor.workspaceActive); 
+	replace(Atoms._NET_CURRENT_DESKTOP, cast(long)monitor.workspaceActive); 
 }
 
 void updateDesktopCount(){
-	replace(net.desktopCount, cast(CARDINAL)monitor.workspaces.length);
+	replace(Atoms._NET_NUMBER_OF_DESKTOPS, cast(CARDINAL)monitor.workspaces.length);
 }
 
 void updateDesktopNames(){
@@ -87,20 +94,20 @@ void updateDesktopNames(){
 		}
 		names ~= "\0";
 	}
-	net.desktopNames.replace(names);
+	Atoms._NET_DESKTOP_NAMES.replace(names);
 }
 
 void updateWindowDesktop(Client client, long n){
-	client.win.replace!CARDINAL(net.windowDesktop, n);
+	client.win.replace!CARDINAL(Atoms._NET_WM_DESKTOP, n);
 	if(client.frame)
-		client.frame.window.replace!CARDINAL(net.windowDesktop, n);
+		client.frame.window.replace!CARDINAL(Atoms._NET_WM_DESKTOP, n);
 }
 
 void updateWorkspaces(){
 	foreach(monitor; monitors){
 		foreach(n, ws; monitor.workspaces){
 			foreach(s; ws.split.separators){
-				s.window.replace!CARDINAL(net.windowDesktop, n);
+				s.window.replace!CARDINAL(Atoms._NET_WM_DESKTOP, n);
 			}
 			foreach(c; ws.clients)
 				c.updateWindowDesktop(n);
@@ -110,7 +117,7 @@ void updateWorkspaces(){
 }
 
 void updateActiveWindow(){
-	replace(net.windowActive, monitor.active.win);
+	replace(Atoms._NET_ACTIVE_WINDOW, monitor.active.win);
 }
 
 void updateWorkarea(){
@@ -118,17 +125,17 @@ void updateWorkarea(){
 	foreach(ws; monitor.workspaces)
 		//data ~= [ws.split.pos.x, ws.split.pos.y, ws.split.size.w, ws.split.size.h];
 		data ~= [0, 0, sw, sh];
-	net.workArea.replace(data);
-	net.viewport.replace([0L,0L]);
+	Atoms._NET_WORKAREA.replace(data);
+	Atoms._NET_DESKTOP_VIEWPORT.replace(monitor.pos.to!(long[]));
 	"RESIZE %s".format(monitor.size.to!(long[])).log;
-	net.geometry.replace(monitor.size.to!(long[]));
+	Atoms._NET_DESKTOP_GEOMETRY.replace(monitor.size.to!(long[]));
 }
 
 void updateClientList(){
 	auto clients = clients;
 	foreach(c; clients)
 		assert(!c.destroyed);
-	net.clientList.replace(clients);
-	net.clientListStacking.replace(clients);
+	Atoms._NET_CLIENT_LIST.replace(clients);
+	Atoms._NET_CLIENT_LIST_STACKING.replace(clients);
 }
 

@@ -28,6 +28,8 @@ Picture generateGlow(float[3] color){
 	return picture;
 }
 
+int[] battery;
+
 class Bar: ws.wm.Window {
 
 	int screen;
@@ -73,7 +75,7 @@ class Bar: ws.wm.Window {
 		tray = addNew!Tray(this);
 		tray.resize(size);
 		tray.change ~= (int clients){
-			tray.move([size.w-clients*size.h - draw.width("00:00:00") - 20, 0]);
+			tray.move([size.w-clients*size.h - draw.width("000 00:00:00") - 20, 0]);
 		};
 		if(autohide){
 			resize([size.w, 1]);
@@ -141,8 +143,40 @@ class Bar: ws.wm.Window {
 			draw.setColor(config.border);
 			draw.rect([0,0], [size.w,1]);
 
+			enum baseline = 8.0;
+			enum dangerRatio = 1/3.0;
+			draw.setColor([0.5, 0.5, 0.5]);
+			auto right = draw.width("0000 00:00:00")+10;
+			try {
+				auto match = ["acpi", "-b"].execute.output.matchFirst("([0-9]+)%, ((?:[0-9]+:?)+) (remaining|until charged)");
+				writeln(match);
+				if(!match.empty){
+					auto split = match[2].split(":");
+					auto hour = split[0].to!int;
+					auto minute = split[1].to!int;
+					auto percent = match[1].to!int;
+					battery ~= hour*60+minute;
+					if(battery.length > 5)
+						battery = battery[$-5..$];
+
+					auto avg = battery.sum/battery.length;
+
+					if(match[3] == "until charged"){
+						draw.setColor([0.3, 0.7, 0.3]);
+					}else if(hour == 0)
+						draw.setColor([1, 0, 0]);
+					else if(hour*60+minute <= percent*baseline*dangerRatio)
+						draw.setColor([1, 1, 0]);
+					else
+						draw.setColor([0.9, 0.9, 0.9]);
+					right -= draw.text([size.w-right, 5], "%02d".format(match[1].to!int.min(99)), 0);
+					draw.setColor([0.5, 0.5, 0.5]);
+					draw.text([size.w-right, 5], "%02d".format(((hour*60+minute)/10).min(99)), 0);
+				}
+			}catch(Exception e){}
+
 			draw.setColor(config.foreground);
-			auto right = draw.width("00:00:00")+10;
+			right = draw.width("00:00:00")+10;
 			draw.text([size.w-right, 5], "%02d:%02d:%02d".format(time.hour, time.minute, time.second), 0);
 
 			super.onDraw;

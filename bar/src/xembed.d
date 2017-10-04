@@ -56,8 +56,8 @@ class Xembed {
     }
 
     static void embed(x11.X.Window child, x11.X.Window parent){
-        XReparentWindow(wm.displayHandle, child, parent, 0, 0);
         embedNotify(child, parent, XEMBED_VERSION);
+        XReparentWindow(wm.displayHandle, child, parent, 1000, 1000);
     }
 
     static void unembed(x11.X.Window child){

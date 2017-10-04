@@ -19,9 +19,9 @@ struct Key {
 	void delegate(bool) func;
 }
 
-static Key[] keys;
-static Button[] buttons;
-
+Key[] keys;
+Button[] buttons;
+int mod;
 
 void updatenumlockmask(){
 	uint i, j;
@@ -66,8 +66,12 @@ KeySym getKey(string name){
 
 int getMask(string name){
 	final switch(name){
+		case "mod":
+			return mod;
 		case "alt":
 			return Mod1Mask;
+		case "super":
+			return Mod4Mask;
 		case "shift":
 			return ShiftMask;
 		case "ctrl":
@@ -77,25 +81,24 @@ int getMask(string name){
 
 
 void registerConfigKeys(){
-	foreach(key, value; config.values){
-		if(key.startsWith("keys ")){
-			key = key.chompPrefix("keys ");
-			Key bind;
-			auto space = value.countUntil(" ");
-			bind.func = (pressed){
-				if(space >= 0)
-					call(pressed, value[0..space], value[space+1..$].split(" ").array);
-				else
-					call(pressed, value);
-			};
-			foreach(i, k; key.split("+")){
-				if(i == key.count("+"))
-					bind.keysym = getKey(k);
-				else
-					bind.mod |= getMask(k);
-			}
-			flatman.keys ~= bind;
+	Log.info("Registering keys");
+	assert(config.mod.length);
+	mod = getMask(config.mod);
+	Log.info("mod " ~ config.mod);
+	assert(mod == Mod4Mask);
+	foreach(key, action; config.keys){
+		Key bind;
+		auto split = action.split;
+		bind.func = (pressed){
+			call(pressed, split[0], split[1..$].array);
+		};
+		foreach(i, k; key.split("+")){
+			if(i == key.count("+"))
+				bind.keysym = getKey(k);
+			else
+				bind.mod |= getMask(k);
 		}
+		flatman.keys ~= bind;
 	}
 
 	//[XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9, XK_0].each((size_t i, size_t k){

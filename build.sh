@@ -1,6 +1,6 @@
 #!/bin/bash
 
-parts=(wm compositor dock menu context volume-icon battery-icon volume-notify backlight-notify bar)
+parts=(wm compositor menu context volume-icon volume-notify backlight-notify bar)
 
 
 set -e
