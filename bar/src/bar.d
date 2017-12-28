@@ -146,7 +146,7 @@ class Bar: ws.wm.Window {
 			enum baseline = 8.0;
 			enum dangerRatio = 1/3.0;
 			draw.setColor([0.5, 0.5, 0.5]);
-			auto right = draw.width("0000 00:00:00")+10;
+			auto right = draw.width("000:0 00:00:00")+10;
 			try {
 				auto match = ["acpi", "-b"].execute.output.matchFirst("([0-9]+)%, ((?:[0-9]+:?)+) (remaining|until charged)");
 				writeln(match);
@@ -156,10 +156,18 @@ class Bar: ws.wm.Window {
 					auto minute = split[1].to!int;
 					auto percent = match[1].to!int;
 					battery ~= hour*60+minute;
-					if(battery.length > 5)
-						battery = battery[$-5..$];
+					if(battery.length > 10)
+						battery = battery[$-10..$];
 
 					auto avg = battery.sum/battery.length;
+					auto averageMinutes = 0;
+					foreach(v, i; battery){
+						averageMinutes += v*i;
+					}
+					if(battery.length > 1)
+						averageMinutes /= iota(1, battery.length).sum;
+					hour = averageMinutes/60;
+					minute = averageMinutes - hour*60;
 
 					if(match[3] == "until charged"){
 						draw.setColor([0.3, 0.7, 0.3]);
@@ -171,7 +179,10 @@ class Bar: ws.wm.Window {
 						draw.setColor([0.9, 0.9, 0.9]);
 					right -= draw.text([size.w-right, 5], "%02d".format(match[1].to!int.min(99)), 0);
 					draw.setColor([0.5, 0.5, 0.5]);
-					draw.text([size.w-right, 5], "%02d".format(((hour*60+minute)/10).min(99)), 0);
+					if(hour < 10)
+						draw.text([size.w-right, 5], "%01d:%01d".format(hour, minute/10), 0);
+					else
+						draw.text([size.w-right, 5], "%01d:".format(hour.min(99)), 0);
 				}
 			}catch(Exception e){}
 

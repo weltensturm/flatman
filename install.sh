@@ -2,9 +2,9 @@
 
 installdir=$1
 
-parts=(wm compositor dock menu context volume-icon battery-icon volume-notify backlight-notify bar)
+parts=($(cat build.conf))
 
-configs=(config.ws bar.ws menu)
+configs=(config.ws bar.ws menu composite.ws)
 
 paths=(usr/bin etc/flatman usr/share/xsessions usr/share/applications)
 

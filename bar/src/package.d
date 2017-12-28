@@ -4,6 +4,7 @@ public import
 	core.thread,
 	core.sys.posix.signal,
 	
+	std.range,
 	std.algorithm,
 	std.datetime,
 	std.string,
