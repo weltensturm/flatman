@@ -19,9 +19,9 @@ class TaskListEntry: Base {
         draw.clip(pos, size);
 
         if(!client.hidden)
-            draw.setColor(config.titleTextNormal);
+            draw.setColor(config.theme.titleTextNormal);
         else
-            draw.setColor(config.titleTextHidden);
+            draw.setColor(config.theme.titleTextHidden);
         auto txt = client.title;
 
         if(client == bar.currentClient){
@@ -41,7 +41,7 @@ class TaskListEntry: Base {
             );
             //draw.setColor([0.85,0.85,0.85]);
             //draw.rect(pos.a + [offset, 0], [size.w, 24]);
-            draw.setColor(config.titleTextActive);
+            draw.setColor(config.theme.titleTextActive);
         }
 
         auto centerOffset = size.w/2.0 - draw.width(txt)/2.0;
@@ -51,7 +51,7 @@ class TaskListEntry: Base {
             iconWidth = client.iconSize.w*scale;
             centerOffset = (centerOffset - iconWidth).max(10);
             
-            draw.text([pos.x + iconWidth.to!int + centerOffset.max(0).to!int - 5, 5], txt);
+            draw.text([pos.x + iconWidth.to!int + centerOffset.max(0).to!int, 5], txt);
 
             if(!client.xicon){
                 client.xicon = draw.to!XDraw.icon(client.icon, client.iconSize.to!(int[2]));
@@ -66,7 +66,8 @@ class TaskListEntry: Base {
     }
 
     override void onMouseMove(int x, int y){
-        if((start.x - x).abs > 3 && (start.y - y) > 3 && dragging){
+        if(((start.x - x).abs > 3 || (start.y - y) > 3) && dragging){
+            XUngrabPointer(dpy, CurrentTime);
             writeln("start ", x, " ", y);
             dragging = false;
             XEvent ev;
@@ -102,7 +103,6 @@ class TaskListEntry: Base {
                 xev.data.l[4] = 0;    /* manager specific data */
                 XSendEvent(wm.displayHandle, .root, false, StructureNotifyMask, cast(XEvent*) &xev);
             }else{
-                writeln(start);
                 start = [x, y];
                 dragging = true;
             }

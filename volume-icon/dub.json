@@ -2,10 +2,9 @@
 	"name" : "flatman-volume-icon",
 	"description" : "volume icon for flatman",
 	"targetType": "executable",
-	"sourcePaths": ["src"],
+	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": ">=1.0.7",
-		"gtk-d": ">=3.2.0"
+		"ws": "1.0.11"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "pulse"]
 }

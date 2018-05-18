@@ -64,6 +64,7 @@ public import
 	flatman.x.icccm,
 	flatman.x.motif,
 	flatman.x.properties,
+	flatman.layout.stacking,
 	flatman.layout.monitor,
 	flatman.layout.workspace,
 	flatman.layout.container,
@@ -81,3 +82,7 @@ public import
 	flatman.commands,
 	flatman.config,
 	flatman.keybinds;
+
+
+public import
+	ws.wm: WindowHandle;

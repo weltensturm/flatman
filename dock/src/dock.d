@@ -425,7 +425,7 @@ class WorkspaceDock: ws.wm.Window {
 				import std.digest.md;
 				workspaceColors = [];
 				foreach(i, n; workspaceNames)
-					workspaceColors ~= digest!MD5(n)[0..3];
+					workspaceColors ~= digest!MD5(n).idup[0..3];
 			}else if(wallpaperAtoms.map!(s => s.atom).canFind(e.atom)){
 				updateWallpaper;
 			}else
@@ -464,8 +464,6 @@ class WorkspaceDock: ws.wm.Window {
 		XUngrabServer(wm.displayHandle);
 		update;
 	}
-
-	override void gcInit(){}
 
 	override void show(){
 		super.show;

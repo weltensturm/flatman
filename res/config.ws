@@ -3,10 +3,10 @@
 mod super
 
 keys {
-    Super_L					overview
-    Super_R					overview
+    Super_L				overview
+    Super_R				overview
     alt+d				exec dinu -f -fn Ubuntu-10 -as 0 -l 0 -r 0.3333 -y 24 -c "$(flatman-context -p)"
-    mod+Return			exec cd "$(flatman-context)" && terminator
+    mod+Return			exec cd "$(flatman-context)" && terminator || terminator
     mod+n				exec firefox
     mod+shift+w			exec i3lock -c 000000 && systemctl suspend
     mod+j				focus dir -
@@ -23,7 +23,7 @@ keys {
     mod+m				move mouse
     mod+k				workspace + filled
     mod+Down			workspace + filled
-    mod+asciitilde			workspace + filled
+    mod+asciitilde		workspace + filled
     mod+l				workspace - filled
     mod+Up				workspace - filled
     mod+shift+asciitilde		workspace - filled
@@ -37,6 +37,10 @@ keys {
     mod+shift+semicolon	move +
     mod+shift+k			move down
     mod+shift+l			move up
+    mod+shift+Left		move -
+    mod+shift+Right     move +
+    mod+shift+Down		move down
+    mod+shift+Up		move up
     mod+w				insert
     mod+shift+q			killclient
     mod+shift+space		toggle floating
@@ -77,6 +81,7 @@ split {
 tabs {
     width 120
     border {
+        height 12
         active 222222
         normal 222222
         fullscreen 005577
@@ -97,7 +102,6 @@ tabs {
         show 0
         normal bbbbbb
         active ffffff
-        activeBg ffffff
         urgent dd8600
         hover ffffff
         fullscreen 888888

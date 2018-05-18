@@ -129,7 +129,7 @@ class Pulseaudio {
     Device defaultSink;
     Device defaultSource;
 
-    void run(Op, Cb, Args...)(Op operation, Args args, Cb cb, void* user=null){
+    void run(Op, Cb, Args...)(Op operation, Args args, Cb cb, void* user){
         pa_operation* op = operation(context, args, cb, user);
         assert(op);
         while(pa_operation_get_state(op) == PA_OPERATION_RUNNING){
@@ -235,6 +235,10 @@ class Pulseaudio {
         return sources.list[0];
     }
     
+    void volume(Device device, double new_volume){
+         volume(device, (new_volume*PA_VOLUME_NORM*100).lround.to!pa_volume_t);
+    }
+
     void volume(Device device, pa_volume_t new_volume){
         if (new_volume > PA_VOLUME_MAX) {
             new_volume = PA_VOLUME_MAX;

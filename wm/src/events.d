@@ -215,6 +215,12 @@ void onConfigure(Window window, int x, int y, int width, int height){
 			updateWorkarea;
 			restack;
 		}
+	}else{
+		foreach(c; clients){
+			if(c.win == window){
+				c.onConfigure([x,y], [width, height]);
+			}
+		}
 	}
 }
 

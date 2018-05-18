@@ -3,7 +3,7 @@ module bar;
 public import
 	core.thread,
 	core.sys.posix.signal,
-	
+
 	std.range,
 	std.algorithm,
 	std.datetime,
@@ -14,6 +14,7 @@ public import
 	std.math,
 	std.process,
 	std.regex,
+	std.random,
 
 	x11.X,
 	x11.Xlib,
@@ -24,6 +25,7 @@ public import
 	x11.extensions.Xrender,
 	x11.Xatom,
 
+	ws.time,
 	ws.gui.base,
 	ws.x.property,
 	ws.x.draw,
@@ -40,10 +42,13 @@ public import
     bar.main,
     bar.plugins,
 	bar.powerButton,
+	bar.widget.widget,
+	bar.widget.battery,
 	bar.widget.taskList,
 	bar.widget.taskListEntry,
+	bar.widget.workspaceIndicator,
+	bar.widget.clock,
 	bar.alpha,
     bar.client,
 	bar.widget.tray,
 	bar.xembed;
-

@@ -42,7 +42,7 @@ class Client: Base {
     long[2] iconSize;
 
     long ignoreUnmap;
-                 
+
     this(Window client){
         hidden = false;
         XSync(dpy, false);
@@ -119,7 +119,6 @@ class Client: Base {
             return;
         "%s focus".format(this).log;
         .monitor = monitor;
-        .monitor.setActive(this);
         if(currentFocus)
             currentFocus.unfocus(false);
         if(isUrgent)
@@ -130,8 +129,9 @@ class Client: Base {
         previousFocus = this;
         restack;
         XSync(dpy, false);
-        setFocus;
         configure;
+        .monitor.setActive(this);
+        setFocus;
     }
 
     void onConfigureRequest(XConfigureRequestEvent* e){
@@ -143,7 +143,7 @@ class Client: Base {
                 resize([e.width, e.height]);
         }
     }
-    
+
     void configure(){
         "%s configure %s %s".format(this, pos, size).log;
         auto hide = (parent && parent.hidden ? monitor.size.h : 0).to!int;
@@ -151,6 +151,19 @@ class Client: Base {
         if(frame){
             frame.moveResize(pos.a-[0,config.tabs.title.height], [size.w, config.tabs.title.height]);
         }
+    }
+
+    void onConfigure(int[2] pos, int[2] size){
+        if(isFloating || global){
+            auto current = findMonitor(this);
+            auto target = findMonitor(pos, size);
+            if(current != target){
+                current.remove(this);
+                target.add(this, current.workspaceActive);
+            }
+        }
+        if(strut)
+            .updateStrut = true;
     }
 
     override void move(int[2] pos){
@@ -203,7 +216,7 @@ class Client: Base {
         }
         return atom;
     }
-    
+
     Atom getatomprop(Atom prop){
         int di;
         ulong dl;
@@ -236,7 +249,7 @@ class Client: Base {
         return [0,0,0,0];
 
     }
-    
+
     string getTitle(){
         Atom actType;
         size_t nItems, bytes;
@@ -254,7 +267,7 @@ class Client: Base {
         }
         return text;
     }
-    
+
     void grabButtons(bool focused){
         /+
         updatenumlockmask();
@@ -271,7 +284,7 @@ class Client: Base {
             XGrabButton(dpy, AnyButton, AnyModifier, orig, false, BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
         +/
     }
-    
+
     void raise(){
         XRaiseWindow(dpy, orig);
         if(frame)
@@ -377,7 +390,7 @@ class Client: Base {
         }
         return exists;
     }
-    
+
     void setFocus(){
         if(!neverfocus){
             XSetInputFocus(dpy, orig, RevertToPointerRoot, CurrentTime);
@@ -387,7 +400,7 @@ class Client: Base {
         }
         sendEvent(wm.takeFocus);
     }
-    
+
     void setFullscreen(bool fullscreen){
         "%s fullscreen=%s".format(this, fullscreen).log;
         isfullscreen = fullscreen;
@@ -404,13 +417,15 @@ class Client: Base {
             focus;
         restack;
     }
-    
+
     void setState(long state){
         long[] data = [ state, None ];
         XChangeProperty(dpy, orig, wm.state, wm.state, 32, PropModeReplace, cast(ubyte*)data, 2);
     }
 
     void setWorkspace(long i){
+        if(!monitor)
+            return;
         if(i >= 0 && i < monitor.workspaces.length && monitor.workspaces[i].clients.canFind(this))
             return;
         "%s set workspace %s".format(this, i).log;
@@ -429,7 +444,7 @@ class Client: Base {
             monitor.update(this);
         }
     }
-    
+
     void unfocus(bool setfocus){
         "%s unfocus".format(this).log;
         grabButtons(false);
@@ -442,7 +457,7 @@ class Client: Base {
             restack;
         }
     }
-    
+
     void destroy(){
                 if(previousFocus == this)
                     previousFocus = null;
@@ -452,12 +467,11 @@ class Client: Base {
             previousFocus.focus;
         updateClientList;
     }
-    
+
     void updateStrut(){
         bool oldStrut = strut;
         strut = getStrut[0..4].any;
-        if(oldStrut != strut)
-            .updateStrut = true;
+        .updateStrut = true;
         "%s strut=%s".format(this, strut);
     }
 
@@ -594,7 +608,7 @@ class Client: Base {
         name = getTitle;
         "%s title='%s'".format(this, name).log;
     }
-    
+
     void updateDecorated(){
         decorations = win.getIsDecorated;
         "%s decorated=%s".format(this, decorations).log;
@@ -621,17 +635,17 @@ class Client: Base {
 
     void onProperty(XPropertyEvent* ev){
         auto handler = [
-            XA_WM_TRANSIENT_FOR:	&updateFloating,
-            XA_WM_NORMAL_HINTS:		&updateSizeHints,
-            XA_WM_HINTS:			&updateWmHints,
-            XA_WM_NAME:				&updateTitle,
-            wm.state:				&updateState,
-            Atoms._NET_WM_NAME:				&updateTitle,
-            Atoms._NET_WM_STATE:				&updateType,
-            Atoms._NET_WM_WINDOW_TYPE:			&updateType,
-            Atoms._NET_WM_STRUT_PARTIAL:		&updateStrut,
-            Atoms._NET_WM_ICON:				&updateIcon,
-            motif.hints:			&updateDecorated
+            XA_WM_TRANSIENT_FOR:            &updateFloating,
+            XA_WM_NORMAL_HINTS:             &updateSizeHints,
+            XA_WM_HINTS:                    &updateWmHints,
+            XA_WM_NAME:                     &updateTitle,
+            wm.state:                       &updateState,
+            Atoms._NET_WM_NAME:             &updateTitle,
+            Atoms._NET_WM_STATE:            &updateType,
+            Atoms._NET_WM_WINDOW_TYPE:      &updateType,
+            Atoms._NET_WM_STRUT_PARTIAL:    &updateStrut,
+            Atoms._NET_WM_ICON:             &updateIcon,
+            Atoms._MOTFI_WM_HINTS:          &updateDecorated
         ];
         auto change = ev.atom in handler;
         if(change)
@@ -647,4 +661,3 @@ class Client: Base {
     }
 
 };
-

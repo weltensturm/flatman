@@ -72,13 +72,10 @@ struct NestedConfig {
 		Title title;
 
 		struct Border {
-			struct BorderInfo {
-				int height;
-				ConfigColor color;
-			}
-			BorderInfo normal;
-			BorderInfo active;
-			BorderInfo fullscreen;
+			int height;
+			ConfigColor normal;
+			ConfigColor active;
+			ConfigColor fullscreen;
 		}
 		Border border;
 

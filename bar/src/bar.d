@@ -28,17 +28,13 @@ Picture generateGlow(float[3] color){
 	return picture;
 }
 
-int[] battery;
-
 class Bar: ws.wm.Window {
 
 	int screen;
 
 	Property!(XA_CARDINAL, false) workspace;
-	Property!(XA_CARDINAL, false) currentWorkspace;
 	Property!(XA_WINDOW, false) currentWindow;
 	Property!(XA_CARDINAL, true) strut;
-	Property!(XA_STRING, false) workspaceNames;
 
 	Client currentClient;
 
@@ -51,8 +47,9 @@ class Bar: ws.wm.Window {
 	TaskList taskList;
 	PowerButton powerButton;
 	Tray tray;
-
-	int right, left;
+	Battery battery;
+	WorkspaceIndicator workspaceIndicator;
+	ClockWidget clock;
 
 	bool update = true;
 	int second = 0;
@@ -60,6 +57,8 @@ class Bar: ws.wm.Window {
 	//Switcher switcher;
 
 	App app;
+
+	Widget[] widgets;
 
 	this(App app){
 		this.app = app;
@@ -70,13 +69,17 @@ class Bar: ws.wm.Window {
 		powerButton = addNew!PowerButton(this);
 		powerButton.hide;
 
+		battery = addNew!Battery;
+		widgets ~= battery;
+
+		workspaceIndicator = addNew!WorkspaceIndicator;
+		widgets ~= workspaceIndicator;
+
+		clock = addNew!ClockWidget;
+		widgets ~= clock;
+
 		super(screens[0].w, 24, "flatman bar");
 
-		tray = addNew!Tray(this);
-		tray.resize(size);
-		tray.change ~= (int clients){
-			tray.move([size.w-clients*size.h - draw.width("000 00:00:00") - 20, 0]);
-		};
 		if(autohide){
 			resize([size.w, 1]);
 			hidden = true;
@@ -84,13 +87,22 @@ class Bar: ws.wm.Window {
 			resize(size);
 	}
 
+	void systray(bool enable){
+		if(enable && !tray){
+			tray = addNew!Tray(this);
+			tray.resize(size);
+			tray.change ~= (int clients){
+				tray.move([size.w-clients*size.h - draw.width("000:0 00:00:00") - 20, 0]);
+			};
+		}else if(!enable && tray){
+			tray.destroy;
+			tray = null;
+		}
+	}
+
 	override void show(){
 		workspace = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
 		workspace = -1;
-
-		workspaceNames = new Property!(XA_STRING, false)(.root, "_NET_DESKTOP_NAMES", properties);
-
-		currentWorkspace = new Property!(XA_CARDINAL, false)(.root, "_NET_CURRENT_DESKTOP", properties);
 
 		currentWindow = new Property!(XA_WINDOW, false)(.root, "_NET_ACTIVE_WINDOW", properties);
 		currentWindow ~= (x11.X.Window window){
@@ -103,7 +115,7 @@ class Bar: ws.wm.Window {
 		};
 
 		strut = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
-		strut = [0, 0, size.h, 0, 0, 0, 0, 0, 0, 0, 0, size.h];
+		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
 
 		super.show;
 	}
@@ -116,90 +128,50 @@ class Bar: ws.wm.Window {
 	}
 
 	override void onDestroy(){
-		tray.destroy;
+		if(tray)
+			tray.destroy;
 		super.onDestroy;
 	}
 
+	void tick(){
+		foreach(w; widgets)
+			w.tick;
+		foreach(w; widgets){
+			if(w.savedWidth != w.width){
+				w.savedWidth = w.width;
+				resized(size);
+			}
+		}
+	}
+
 	override void onDraw(){
+		tick;
 		auto time = Clock.currTime;
 		if(update || time.second != second){
 			if(update)
 				taskList.update(app.clients);
-			
-			draw.setColor(config.background);
+
+			//if(tray)
+			//	tray.update;
+			draw.setColor(config.theme.background);
 			draw.rect([0,0], size);
-
-			left = 200;
-			auto names = workspaceNames.value.split('\0');
-			if(currentWorkspace.value < names.length){
-				draw.setColor(config.foreground);
-				auto parts = names[currentWorkspace].split("/");
-				auto x = draw.text([5,5], parts[0..$-1].join("/"));
-				if(parts.length > 1)
-					x += draw.text([5+x, 5], "/");
-				draw.setColor(config.foregroundMain);
-				draw.text([5+x, 5], parts[$-1]);
-			}
-			draw.setColor(config.border);
+			draw.setColor(config.theme.border);
 			draw.rect([0,0], [size.w,1]);
-
-			enum baseline = 8.0;
-			enum dangerRatio = 1/3.0;
-			draw.setColor([0.5, 0.5, 0.5]);
-			auto right = draw.width("000:0 00:00:00")+10;
-			try {
-				auto match = ["acpi", "-b"].execute.output.matchFirst("([0-9]+)%, ((?:[0-9]+:?)+) (remaining|until charged)");
-				writeln(match);
-				if(!match.empty){
-					auto split = match[2].split(":");
-					auto hour = split[0].to!int;
-					auto minute = split[1].to!int;
-					auto percent = match[1].to!int;
-					battery ~= hour*60+minute;
-					if(battery.length > 10)
-						battery = battery[$-10..$];
-
-					auto avg = battery.sum/battery.length;
-					auto averageMinutes = 0;
-					foreach(v, i; battery){
-						averageMinutes += v*i;
-					}
-					if(battery.length > 1)
-						averageMinutes /= iota(1, battery.length).sum;
-					hour = averageMinutes/60;
-					minute = averageMinutes - hour*60;
-
-					if(match[3] == "until charged"){
-						draw.setColor([0.3, 0.7, 0.3]);
-					}else if(hour == 0)
-						draw.setColor([1, 0, 0]);
-					else if(hour*60+minute <= percent*baseline*dangerRatio)
-						draw.setColor([1, 1, 0]);
-					else
-						draw.setColor([0.9, 0.9, 0.9]);
-					right -= draw.text([size.w-right, 5], "%02d".format(match[1].to!int.min(99)), 0);
-					draw.setColor([0.5, 0.5, 0.5]);
-					if(hour < 10)
-						draw.text([size.w-right, 5], "%01d:%01d".format(hour, minute/10), 0);
-					else
-						draw.text([size.w-right, 5], "%01d:".format(hour.min(99)), 0);
-				}
-			}catch(Exception e){}
-
-			draw.setColor(config.foreground);
-			right = draw.width("00:00:00")+10;
-			draw.text([size.w-right, 5], "%02d:%02d:%02d".format(time.hour, time.minute, time.second), 0);
 
 			super.onDraw;
     		version(CompilePlugins){
 				app.plugins.event("draw");
 			}
 
-			draw.finishFrame;
-
 			second = time.second;
 			update = false;
 		}
+	}
+
+	override void moved(int[2] pos){
+		super.moved(pos);
+		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+		writeln("moved ", pos);
 	}
 
 	override void resized(int[2] size){
@@ -211,8 +183,12 @@ class Bar: ws.wm.Window {
 		taskList.move([size.h, 0]);
 		if(tray){
 			tray.resize(size);
-			tray.move([size.w-tray.clients.length.to!int*size.h - draw.width("00:00:00") - 20, 0]);
+			tray.move([size.w-tray.clients.length.to!int*size.h - battery.width - 40 - draw.width("00:00:00") - 20 - 40, 0]);
 		}
+		battery.resize([battery.width, size.h]);
+		battery.move([size.w-battery.width-clock.width-20, 0]);
+		clock.resize([clock.width, size.h]);
+		clock.move([size.w-clock.width, 0]);
 		onDraw;
 	}
 

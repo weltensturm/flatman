@@ -16,6 +16,13 @@ import
     ws.inotify;
 
 
+class ConfigException: Exception {
+    this(string msg){
+        super(msg);
+    }
+}
+
+
 private {
 
     struct Entry {
@@ -43,7 +50,6 @@ private {
 
     void loadBlock(T)(string block, string namespace, ref Entry[] values){
         Decode.text(block, (name, value, isBlock){
-            writeln(name, " = ", value);
             if(isBlock && !endpoint!T(name))
                 loadBlock!T(value, namespace ~ " " ~ name, values);
             else
@@ -75,7 +81,7 @@ void fillConfig(T)(ref T config, string[] paths){
         auto filtered = values.filter!(a => a.name == splitName && a.value.strip.length).array;
 
         if(!filtered.length)
-            throw new Exception("Error in config: could not find value " ~ splitName);
+            throw new ConfigException("Error in config: could not find value " ~ splitName);
         
         mixin("enum isList = is(typeof(T." ~ field ~ ") == string[]);");
         
@@ -88,7 +94,7 @@ void fillConfig(T)(ref T config, string[] paths){
             }
         }catch(Exception e){
         	writeln(e.toString);
-            throw new Exception("Error in config at \"%s\", matches \"%s\"".format(splitName, filtered));
+            throw new ConfigException("Error in config at \"%s\", matches \"%s\"".format(splitName, filtered.map!(a => a.name).array));
         }
     }
 }
@@ -106,7 +112,7 @@ void fillStruct(T)(ref T value, string prefix, Entry[] values){
         auto filtered = values.filter!(a => (a.name ~ " ").startsWith(name ~ " ") && a.value.strip.length).array;
         try {
             if(!filtered.length)
-                throw new Exception("No value for config field \"" ~ name ~ "\"");
+                throw new ConfigException("No value for config field \"" ~ name ~ "\"");
 
             static if(isType!field)
                 return;
@@ -122,10 +128,10 @@ void fillStruct(T)(ref T value, string prefix, Entry[] values){
 
             static if(isAssociativeArray!Raw){
                 foreach(v; filtered){
-                    auto shortname = v.name.split[$-1];
+                    auto shortname = v.name.chompPrefix(prefix).chompPrefix(field).split[0].to!string;
                     static if(isFillable){
                         Field temp;
-                        temp.fillStruct(name, filtered);
+                        temp.fillStruct(name ~ " " ~ shortname, filtered);
                         mixin("value." ~ field ~ "[shortname] = temp;");
                     }else{
                         mixin("value." ~ field ~ "[shortname] = v.value.to!Field;");
@@ -146,9 +152,11 @@ void fillStruct(T)(ref T value, string prefix, Entry[] values){
             }else{
                 mixin("value." ~ field ~ " = filtered[$-1].value.to!Field;");
             }
+        }catch(ConfigException e){
+            throw e;
         }catch(Exception e){
         	writeln(e.toString);
-            throw new Exception("Error in config at \"%s\", matches \"%s\": %s".format(name, filtered, e));
+            throw new ConfigException("Error in config at \"%s\", matches \"%s\": %s".format(name, filtered.map!(a => a.name).join(", "), e));
         }
     }
 }
@@ -159,6 +167,8 @@ void fillConfigNested(T)(ref T config, string[] paths){
 
     foreach(path; paths)
         loadBlock!T(path.expandTilde.readText, "", values);
+
+    writeln(values);
 
     config.fillStruct("", values);
 
@@ -175,11 +185,13 @@ void loadAndWatch(T)(auto ref T config, string[] configs, void delegate() cb){
     auto cfgReload = {
         try{
             config.fillConfigNested(configs);
-            cb();
+        }catch(ConfigException e){
+            ["notify-send", "-a", configs.join(", "), e.msg].execute;
         }catch(Exception e){
             //Log.fallback(Log.RED ~ e.to!string);
-            ["notify-send", e.toString].execute;
+            ["notify-send", "-a", configs.join(", "), e.toString].execute;
         }
+        cb();
     };
     cfgReload();
     foreach(file; configs){

@@ -65,7 +65,7 @@ KeySym getKey(string name){
 }
 
 int getMask(string name){
-	final switch(name){
+	switch(name){
 		case "mod":
 			return mod;
 		case "alt":
@@ -76,29 +76,37 @@ int getMask(string name){
 			return ShiftMask;
 		case "ctrl":
 			return ControlMask;
+		default:
+			throw new Exception("Unknown mask \"%s\"".format(name));
 	}
 }
 
 
 void registerConfigKeys(){
-	Log.info("Registering keys");
-	assert(config.mod.length);
-	mod = getMask(config.mod);
-	Log.info("mod " ~ config.mod);
-	assert(mod == Mod4Mask);
-	foreach(key, action; config.keys){
-		Key bind;
-		auto split = action.split;
-		bind.func = (pressed){
-			call(pressed, split[0], split[1..$].array);
-		};
-		foreach(i, k; key.split("+")){
-			if(i == key.count("+"))
-				bind.keysym = getKey(k);
-			else
-				bind.mod |= getMask(k);
+	Key[] binds;
+	try {
+		Log.info("Registering keys");
+		assert(config.mod.length);
+		mod = getMask(config.mod);
+		Log.info("mod " ~ config.mod);
+		assert(mod == Mod4Mask);
+		foreach(key, action; config.keys){
+			Key bind;
+			auto split = action.split;
+			bind.func = (pressed){
+				call(pressed, split[0], split[1..$].array);
+			};
+			foreach(i, k; key.split("+")){
+				if(i == key.count("+"))
+					bind.keysym = getKey(k);
+				else
+					bind.mod |= getMask(k);
+			}
+			binds ~= bind;
 		}
-		flatman.keys ~= bind;
+		flatman.keys = binds;
+	}catch(Exception e){
+		Log.error("Failed to register keys: %s".format(e.to!string));
 	}
 
 	//[XK_1, XK_2, XK_3, XK_4, XK_5, XK_6, XK_7, XK_8, XK_9, XK_0].each((size_t i, size_t k){

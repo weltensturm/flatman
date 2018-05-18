@@ -18,6 +18,7 @@ class Overview {
     bool cleanup;
     bool resetPos;
     CompositeClient[] zoomList;
+    double lastDamage = 0;
 
     Properties!(
         "workspaceNames", "_NET_DESKTOP_NAMES", XA_STRING, false,
@@ -48,6 +49,10 @@ class Overview {
         wm.add(window);
     }
 
+    bool visible(){
+        return state >= 0.0000001;
+    }
+
     void start(bool now=false){
         if(now){
             resetPos = true;
@@ -68,6 +73,8 @@ class Overview {
                     None,
                     CurrentTime
             );
+            XGrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle, False,
+                        ButtonPressMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None);
             cleanup = true;
             zoomList = [];
             foreach(c; manager.clients ~ manager.destroyed){
@@ -82,7 +89,7 @@ class Overview {
     void stop(bool now=false){
         if(now){
             doOverview = false;
-            window.hide;
+            //window.hide;
             XUngrabPointer(wm.displayHandle, CurrentTime);
             zoomList = [];
             foreach(c; manager.clients ~ manager.destroyed){
@@ -138,7 +145,13 @@ class Overview {
         }
     }
 
-    void calc(double[4] strut){
+    void tick(double[4] strut){
+        if(!doOverview && !visible && !window.hidden){
+            window.hide;
+        }
+        if(!visible){
+            return;
+        }
         prefill;
         struct Group {
             int width;
@@ -194,7 +207,8 @@ class Overview {
                             (mpos.y
                             	+ (w.window.properties.tab / columns).floor*(cellHeight+padding.h)
                             	//+ (w.window.properties.workspace.value.to!int-manager.workspaceAnimation)*monitor.size.h
-                                + (w.window.properties.workspace.value.to!int-manager.properties.workspace.value)*monitor.size.h
+                                + (w.window.properties.workspace.value.to!int-manager.properties.workspace.value)
+                                  *monitor.size.h
                             	+ offsetY
                             	).to!int
                         ];
@@ -235,7 +249,7 @@ class Overview {
     }
 
 	void calcWindow(CompositeClient client, ref int[2] pos, ref double[2] offset, ref int[2] size, ref double scale, ref double alpha){
-        if(state < 0.000001)
+        if(!visible)
             return;
         if(has(client)){
             auto tabWidth = 0;
@@ -249,7 +263,7 @@ class Overview {
                     alpha = (0.75 + alpha*0.25)*state.sinApproach;
                 }
                 if(client.properties.workspace.value < 0 || client.properties.overviewHide.value == 1){
-                    alpha = (1-zoom)^^2;
+                    alpha = (1-zoom*2).max(0)^^2;
                     return;
                 }
             }else{
@@ -272,6 +286,8 @@ class Overview {
 	void predraw(Backend backend){
 	}
 
+    long damageWorkspace;
+
     void damage(RootDamage damage){
         if(state > 0 && state < 1 || cleanup){
             damage.damage([0,0], [manager.width, manager.height]);
@@ -281,8 +297,14 @@ class Overview {
                 cleanup = false;
             return;
         }
-        if(state < 0.000001)
+        if(!visible)
             return;
+        auto workspace = manager.properties.workspace.value;
+        if(lastDamage > now-0.5 && workspace == damageWorkspace){
+            return;
+        }
+        damageWorkspace = workspace;
+        lastDamage = now;
         foreach(ref m; monitors){
             int max;
             foreach(i, frt; frameTimes){
@@ -298,7 +320,7 @@ class Overview {
                  2*fps30]
             );
 
-            
+
             auto state = state.sinApproach;
             auto y = manager.height - m.pos.y - m.size.h;
             auto maxDockHeight = m.size.h - 50.0 - 20*m.workspaces.length;
@@ -316,7 +338,7 @@ class Overview {
     }
 
 	void drawPre(Backend backend, CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
-        if(state < 0.000001 || client.a.override_redirect || !client.title.length || nodraw(client))
+        if(!visible || client.a.override_redirect || !client.title.length || nodraw(client))
             return;
         with(Profile("Overview " ~ client.to!string)){
             double flop = client.hidden ? 1*alpha : state.sinApproach*alpha;
@@ -332,7 +354,7 @@ class Overview {
 	}
 
 	void drawPost(Backend backend, CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
-        if(state < 0.000001 || client.a.override_redirect || nodraw(client))
+        if(!visible || client.a.override_redirect || nodraw(client))
             return;
         with(Profile("Overview " ~ client.to!string)){
             double flop = client.hidden ? (1-alpha)*state.sinApproach : state.sinApproach*alpha;
@@ -371,12 +393,15 @@ class Overview {
             foreach(wsi, ws; m.workspaces){
                 if(wsi != manager.properties.workspace.value)
                     continue;
+                auto y = manager.height - m.size.h - m.pos.y;
                 with(Profile("Sep")){
                     foreach(sep; ws.separators){
+                        /+
                         backend.setColor([0.5,0.5,0.5,0.3*state^^2]);
-                        backend.rect([sep-1+m.pos.x, m.size.h/20-1+m.pos.y], [4, m.size.h-m.size.h/10+2]);
+                        backend.rect([sep-1+m.pos.x, y + m.size.h/20-1], [4, m.size.h-m.size.h/10+2]);
                         backend.setColor([0,0,0,0.3*state^^2]);
-                        backend.rect([sep+m.pos.x, m.size.h/20+m.pos.y], [2, m.size.h-m.size.h/10]);
+                        backend.rect([sep+m.pos.x, y + m.size.h/20], [2, m.size.h-m.size.h/10]);
+                        +/
                     }
                 }
             }

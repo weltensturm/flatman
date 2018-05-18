@@ -9,6 +9,8 @@ class ListPopup: ws.wm.Window {
 
 	bool hasMouseFocus;
 
+	GlContext context;
+
 	struct Action {
 		string name;
 		void delegate() action;
@@ -50,21 +52,21 @@ class ListPopup: ws.wm.Window {
 		int inull;
 		uint uinull;
 		XQueryPointer(dpy, .root, &ulnull, &ulnull, &x, &y, &inull, &inull, &uinull);
-		x = x.max(0).min(menuWindow.size.w-width);
-		y = y.max(0).min(menuWindow.size.h-height);
 		XMoveResizeWindow(wm.displayHandle, windowHandle, x-1, y-1, width+4, height+4);
+		show;
 	}
 
 	override void drawInit(){
-		_draw = new XDraw(this);
-		_draw.setFont("Arial", 9);
+		context = new GlContext(windowHandle);
+		context.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		context.enable(GL_BLEND);
+		draw = new GlDraw(context);
+		draw.setFont("Arial", 9);
 	}
 
-	override void gcInit(){}
-
-	override void resize(int[2] size){
+	override void resized(int[2] size){
 		this.size = size;
-		super.resize(size);
+		super.resized(size);
 		foreach(c; children)
 			c.resize(size.a-[2,2]);
 		onDraw;
@@ -79,7 +81,6 @@ class ListPopup: ws.wm.Window {
 		draw.setColor([0, 0, 0, 1]);
 		draw.rect([1,1], size.a-[2,2]);
 		super.onDraw;
-		draw.finishFrame;
 	}
 
 	override void onMouseFocus(bool focus){

@@ -29,7 +29,7 @@ class CompositeClient: ws.wm.Window {
 		damage = XDamageCreate(wm.displayHandle, window, XDamageReportNonEmpty);
 	}
 	
-    override void gcInit(){}
+    override void drawInit(){}
 
 	void createPicture(){
 		if(hidden)

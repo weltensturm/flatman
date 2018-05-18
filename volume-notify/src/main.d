@@ -54,6 +54,7 @@ void main(){
     auto window = new NotifyWindow;
     wm.add(window);
     window.hide;
+    Sink[] sinks;
     while(wm.hasActiveWindows){
         wm.processEvents;
         pulseaudio.run;

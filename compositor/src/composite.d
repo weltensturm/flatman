@@ -9,7 +9,6 @@ CompositeManager manager;
 
 
 bool running = true;
-bool onlyOverview = false;
 
 
 extern(C) nothrow @nogc @system void stop(int){
@@ -173,7 +172,8 @@ class CompositeManager {
             ConfigureNotify: (XEvent* e) => evConfigure(e),
             MapNotify: (XEvent* e) => evMap(&e.xmap),
             UnmapNotify: (XEvent* e) => evUnmap(&e.xunmap),
-            PropertyNotify: (XEvent* e) => evProperty(&e.xproperty)
+            PropertyNotify: (XEvent* e) => evProperty(&e.xproperty),
+            ReparentNotify: (XEvent* e) => evReparent(&e.xreparent)
         ]);
 
         "looking for windows".writeln;
@@ -188,6 +188,7 @@ class CompositeManager {
         }else{
             backend = new XRenderWindowBackend(overview.window);
         }
+        backend.resize([width, height]);
 
         properties.workspace ~= (workspace){
             foreach(c; clients)
@@ -227,6 +228,8 @@ class CompositeManager {
     }
 
     void evCreate(x11.X.Window window){
+        if(find(window))
+            return;
         XWindowAttributes wa;
         if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly)
             return;
@@ -247,6 +250,13 @@ class CompositeManager {
                 return;
             }
         }
+    }
+
+    void evReparent(XReparentEvent* e){
+        if(e.parent != .root)
+            evDestroy(e.window);
+        else
+            evCreate(e.window);
     }
 
     void evConfigure(XEvent* e){
@@ -486,7 +496,10 @@ class CompositeManager {
         else
             overview.state = (overview.state-frameTimer.dur*0.06*config.animationSpeed).max(0);
 
-        if(!config.redirect && overview.state < 0.00001)
+        Animation.update;
+        overview.tick([0, 1.0/7.5, 1.0/40, 0]);
+        
+        if(!config.redirect && !overview.visible)
             return;
     
         CompositeClient[] windowsDraw;
@@ -494,48 +507,52 @@ class CompositeManager {
         with(Profile("Calc Draw")){
 
             foreach(c; clients){
-                auto targetP = c.pos.to!(double[2]);
-                auto targetS = c.size.to!(double[2]);
-                auto monitor = manager.screens[manager.screens.findScreen(c.pos, c.size)];
-                if(c.properties.workspace.exists && c.properties.workspace.value >= 0 && properties.workspace.value != c.properties.workspace.value){
-                    targetP.y += properties.workspace.value > c.properties.workspace.value ? -monitor.h : monitor.h;
+                with(Profile("Calc Draw %s".format(c))){
+                    auto targetP = c.pos.to!(double[2]);
+                    auto targetS = c.size.to!(double[2]);
+                    auto monitor = manager.screens[manager.screens.findScreen(c.pos, c.size)];
+                    if(c.properties.workspace.exists && c.properties.workspace.value >= 0 && properties.workspace.value != c.properties.workspace.value){
+                        targetP.y += properties.workspace.value > c.properties.workspace.value ? -monitor.h : monitor.h;
+                    }
+                    c.animation.pos.rip(targetP, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
+                    c.animation.size.rip(targetS, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
+                    if(c.destroyed)
+                        restack = true;
                 }
-                c.animation.pos.rip(targetP, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
-                c.animation.size.rip(targetS, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
-                if(c.destroyed)
-                    restack = true;
             }
 
-            Animation.update;
-            if(overview.state > 0.000001){
-                overview.calc([0, 1.0/7.5, 1.0/40, 0]);
-            }
             foreach(c; clients ~ destroyed){
-                if(c.a.override_redirect && !c.picture || (c.animation.fade.calculate <= 0.0001 && c.floating))
-                    continue;
-                animate(c);
-                if((overview.state < 0.00001 && c.animation.fade.calculate <= 0.0001
-                            || c.animPos.x+c.animSize.w <= 0
-                            || c.animPos.y+c.animSize.h <= 0
-                            || c.animPos.x >= width
-                            || c.animPos.y >= height))
-                    continue;
-                applyDamage(c);
-                windowsDraw ~= c;
+                with(Profile("Calc Draw %s".format(c))){
+                    if(c.a.override_redirect && !c.picture || (c.animation.fade.calculate <= 0.0001 && c.floating))
+                        continue;
+                    animate(c);
+                    if((!overview.visible && c.animation.fade.calculate <= 0.0001
+                                || c.animPos.x+c.animSize.w <= 0
+                                || c.animPos.y+c.animSize.h <= 0
+                                || c.animPos.x >= width
+                                || c.animPos.y >= height))
+                        continue;
+                    applyDamage(c);
+                    windowsDraw ~= c;
+                }
             }
 
-            overview.damage(damage);
-            backend.damage(damage);
+            with(Profile("Calc Draw Overview Damage")){
+                overview.damage(damage);
+            }
+            with(Profile("Calc Draw Damage")){
+                backend.damage(damage);
+            }
 
             backend.render(root_picture, false, 1, [0, 0], [0, 0], [width, height]);
-            if(overview.state > 0.00001){
+            if(overview.visible){
                 backend.setColor([0,0,0,0.7*overview.state.sinApproach]);
                 backend.rect([0,0], [width, height]);
             }
 
         }
 
-        if(overview.state > 0.000001){
+        if(overview.visible){
             with(Profile("Overview Predraw")){
                 overview.predraw(backend);
             }
@@ -546,7 +563,7 @@ class CompositeManager {
             }
         }
         
-        if(overview.state > 0.0001){
+        if(overview.visible){
             with(Profile("Overview Dock")){
                 overview.drawDock(backend);
             }

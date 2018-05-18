@@ -5,20 +5,24 @@ import composite;
 
 class XRenderWindowBackend: Backend {
     
+    ws.wm.Window window;
+    
     enum ALPHA_STEPS = 256;
     Picture[ALPHA_STEPS] alpha;
 
-    ws.wm.Window window;
+    XDraw xdraw;
 
     this(ws.wm.Window window){
         this.window = window;
-        draw = window.draw.to!XDraw;
+        xdraw = window.draw.to!XDraw;
+        draw = xdraw;
         draw.setFont("Roboto", 10);
         initAlpha;
+        checkXerror;
     }
 
     override void damage(RootDamage damage){
-        damage.clip(draw.picture);
+        xdraw.clip(damage.all);
     }
 
     override void render(Picture picture, bool transparent, double alpha, int[2] offset, int[2] pos, int[2] size){
@@ -28,7 +32,7 @@ class XRenderWindowBackend: Backend {
             transparent || alpha < 1 ? PictOpOver : PictOpSrc,
             picture,
             alphaMask,
-            draw.picture,
+            xdraw.picture,
             offset.x,
             offset.y,
             0,
@@ -46,6 +50,7 @@ class XRenderWindowBackend: Backend {
             draw.rect([0,0], draw.size);
         }
         draw.finishFrame;
+        draw.noclip;
     }
 
     override void destroy(){

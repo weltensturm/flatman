@@ -1,16 +1,35 @@
 module flatman.log;
 
-__gshared:
 
-import flatman;
+import
+	core.sync.mutex,
+	std.stdio,
+	std.string,
+	std.file,
+	std.range,
+	std.datetime,
+	std.concurrency;
 
+
+private {
+	__gshared Tid logger;
+	shared Mutex mutex;
+	__gshared int indent;
+
+	shared static this(){
+		mutex = new shared Mutex;
+		logger = spawn({
+			while(true){
+				receive((string s){
+					"/tmp/flatman.log".append(s);
+				});
+			}
+		});
+	}
+}
 
 
 struct Log {
-
-	private __gshared Mutex mutex;
-
-	string dummy;
 
 	enum DEFAULT = "\033[0m";
 	enum RED = "\033[31m";
@@ -18,28 +37,6 @@ struct Log {
 	enum YELLOW = "\033[33m";
 	enum GREY = "\033[90m";
 	enum BOLD = "\033[1m";
-
-	private __gshared Tid loggerHandle;
-
-	private __gshared bool started;
-
-	private static void init(){
-		if(!started){
-			loggerHandle = spawn(&Log.logger);
-			mutex = new Mutex;
-			started = true;
-		}
-	};
-
-	private static void logger(){
-		while(true){
-			receive((string s){
-				"/tmp/flatman.log".append(s);
-			});
-		}
-	}
-
-	__gshared int indent;
 
 	this(string s){
 		info(s);
@@ -55,7 +52,7 @@ struct Log {
 	static string format(string s){
 		int indent;
 		synchronized(mutex)
-			indent = this.indent;
+			indent = .indent;
 		return "%s%s.%02d%s %s\n".format(
 				GREY,
 				Clock.currTime.toISOExtString[0..19],
@@ -66,23 +63,14 @@ struct Log {
 	}
 
 	static void error(string s){
-		init();
 		string text = format(RED ~ s);
-		"/tmp/flatman.log".append(s);
-		text.write;
-	}
-
-	static void fallback(string s){
-		init();
-		string text = format(s);
-		"/tmp/flatman.log".append(s ~ "\n");
+		logger.send(s);
 		text.write;
 	}
 
 	static void info(string s){
-		init();
-		string text = format(s); 
-		loggerHandle.send(text);
+		string text = format(s);
+		logger.send(text);
 		text.write;
 	}
 

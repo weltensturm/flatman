@@ -123,7 +123,7 @@ class WorkspaceView: Base {
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-		if(button == Mouse.buttonLeft && !pressed && !dragging){
+		if(button == Mouse.buttonLeft && !pressed && !draggingChild){
 			dock.workspaceProperty.request([id, CurrentTime, empty ? 1 : 0]);
 		}
 		super.onMouseButton(button, pressed, x, y);

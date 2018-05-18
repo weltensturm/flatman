@@ -24,11 +24,14 @@ class Floating: Container {
 		resize(size);
 	}
 
-	void restack(){
-		"floating(%s).restack".format(cast(void*)this).log;
-		foreach(i, client; clients){
-			client.raise;
+	WindowHandle[] stack(){
+		WindowHandle[] result;
+		foreach_reverse(w; clients){
+			result ~= w.win;
+			if(w.frame)
+				result ~= w.frame.window;
 		}
+		return result;
 	}
 
 	override void show(){

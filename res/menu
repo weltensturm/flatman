@@ -1,5 +1,7 @@
 
 menu {
+	font DejaVu Sans
+	font-size 10
 	button-tab {
 		font Arial
 		font-size 10

@@ -74,6 +74,12 @@ bool updateStrut;
 int[2] rootSize = [1,1];
 
 
+void notify(string message){
+	Log.info(message);
+	["notify-send", "-a", "flatman", message].spawnProcess;
+}
+
+
 void main(string[] args){
 	(Log.BOLD ~ Log.GREEN ~ "===== FLATMAN =====").log;
 	"args %s".format(args).log;
@@ -83,17 +89,21 @@ void main(string[] args){
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			"warning: no locale support".log;
 
-		["mkdir", "-p", "~/.config/flatman".expandTilde].execute;
-		["touch", "~/.config/flatman/config.ws".expandTilde].execute;
+		["mkdir", "-p", "~/.config/flatman".expandTilde].spawnProcess;
+		["touch", "~/.config/flatman/config.ws".expandTilde].spawnProcess;
 
 		auto cfgReload = {
-			["notify-send", "Loading config"].execute;
+			notify("Loading config");
 			try{
-				config.fillConfigNested(configs);
+				auto newConfig = NestedConfig();
+				newConfig.fillConfigNested(configs);
+				config = newConfig;
 				registerConfigKeys;
+			}catch(ConfigException e){
+				Log.error(e.msg);
+				notify(e.msg);
 			}catch(Exception e){
-				Log.fallback(Log.RED ~ e.to!string);
-				["notify-send", e.toString].execute;
+				notify(e.toString);
 			}
 		};
 		cfgReload();
@@ -164,10 +174,9 @@ void setup(bool autostart){
 	cursor[CurMove] = new ws.x.draw.Cur(dpy, XC_fleur);
 
 	wm.fillAtoms;
-	motif.fillAtoms;
 
 	updateMonitors();
-	
+
 	XDeleteProperty(dpy, root, Atoms._NET_SUPPORTED);
 	foreach(n; netSupported)
 		XChangeProperty(dpy, root, Atoms._NET_SUPPORTED, XA_ATOM, 32, PropModeAppend, cast(ubyte*)&n, 1);
@@ -196,22 +205,22 @@ void setup(bool autostart){
 		config.autostart.each!((command){
 			if(!command.strip.length)
 				return;
-			"autostart '%s'".format(command).log;
+			Log.info("autostart '%s'".format(command));
 			task({
 				auto pipes = pipeShell(command);
 				auto reader = task({
 					foreach(line; pipes.stdout.byLineCopy){
 						if(line.length)
-							Log.fallback(Log.YELLOW ~ " \"%s\": %s".format(command, line));
+							Log.info("%s%s: %s%s".format(Log.YELLOW, command, Log.DEFAULT, line));
 					}
 				});
 				reader.executeInNewThread;
 				foreach(line; pipes.stderr.byLineCopy){
 					if(line.length)
-						Log.fallback((Log.RED ~ " \"%s\": %s".format(command, line)));
+						Log.info("%s%s: %s%s".format(Log.YELLOW, command, Log.RED, line));
 				}
 				reader.yieldForce;
-				Log.fallback("QUIT: %s".format(command));
+				Log.info("QUIT: %s".format(command));
 				pipes.pid.wait;
 			}).executeInNewThread;
 		});
@@ -242,7 +251,7 @@ void scan(){
 					try {
 						workspace = w.getprop!XA_CARDINAL(Atoms._NET_WM_DESKTOP);
 					}catch(Exception e){
-						Log.fallback(Log.RED ~ e.to!string);
+						Log.error(e.to!string);
 					}
 					workspaces[workspace] ~= w;
 				}
@@ -310,18 +319,23 @@ void loop(){
 
 	if(queueRestack){
 		with(Log("restack")){
-			XGrabServer(dpy);
+			auto stack = unmanaged;
 			foreach(monitor; monitors){
-				monitor.restack;
 				if(monitor.active && monitor.active.isfullscreen)
-					monitor.active.raise;
+					stack ~= monitor.active.win;
+				if(monitor.workspace){
+					stack ~= monitor.workspace.floating.stack;
+				}
 			}
-			foreach(w; unmanaged)
-				XRaiseWindow(dpy, w);
-			XSync(dpy, false);
-			while(XCheckMaskEvent(dpy, EnterWindowMask|LeaveWindowMask, &ev)){}
-			XUngrabServer(dpy);
+			foreach(monitor; monitors){
+				stack ~= monitor.globals.map!(a => a.win).array;
+			}
+			foreach(monitor; monitors){
+               stack ~= monitor.workspace.split.stack;
+			}
+			XRestackWindows(dpy, stack.ptr, stack.length.to!int);
 			queueRestack = false;
+			//while(XCheckMaskEvent(dpy, EnterWindowMask|LeaveWindowMask, &ev)){}
 		}
 	}
 }
@@ -511,7 +525,8 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
 		defaultTraceHandler.toString.log;
 		"flatman: X11 error: request code=%d %s, error code=%d %s".format(ee.request_code, cast(XRequestCode)ee.request_code, ee.error_code, cast(XErrorCode)ee.error_code).log;
 	}catch(Throwable) {}
-	return xerrorxlib(dpy, ee); /* may call exit */
+	return 0;
+	//return xerrorxlib(dpy, ee); /* may call exit */
 }
 
 extern(C) nothrow int xerrorfatal(Display* dpy){

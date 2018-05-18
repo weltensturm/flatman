@@ -29,7 +29,7 @@ void dragClient(Client client, int[2] offset){
             auto current = findMonitor(client);
             if(current != target){
                 current.remove(client);
-                target.add(client, monitor.workspaceActive);
+                target.add(client, target.workspaceActive);
             }
 
             auto snapBorder = 20;

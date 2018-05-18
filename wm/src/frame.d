@@ -153,9 +153,9 @@ class Frame: Base {
 		draw.setColor(background);
 		draw.rect([0,0], size);
 		
-		auto border = flatman.active == client ? config.tabs.border.active.color : config.tabs.border.normal.color;
+		auto border = flatman.active == client ? config.tabs.border.active : config.tabs.border.normal;
 		draw.setColor(border);
-		auto height = flatman.active == client ? config.tabs.border.active.height : config.tabs.border.normal.height;
+		auto height = config.tabs.border.height;
 		draw.rect([0, size.h-height], [size.x, height]);
 
 		auto textOffset = (size.w/2 - draw.width(client.name)/2).max(size.h);
@@ -173,6 +173,7 @@ class Frame: Base {
 				//: !containerFocused && client == active ? activeBg
 				: config.tabs.title.normal
 		);
+		draw.setColor(title);
 		draw.text([textOffset, 0], size.h, client.name);
 		if(client.icon.length){
 			if(!client.xicon){

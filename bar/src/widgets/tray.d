@@ -41,7 +41,8 @@ class Tray: Base {
             ClientMessage: (XEvent* e) => evClientMessage(&e.xclient),
             ReparentNotify: (XEvent* e) => evReparent(&e.xreparent),
             PropertyNotify: (XEvent* e) => evProperty(&e.xproperty),
-            DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window)
+            DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
+            //MapNotify: (XEvent* e) => update,
         ]);
         this.bar = bar;
         iconSize = [bar.size.h-2, bar.size.h-2];
@@ -150,6 +151,12 @@ class Tray: Base {
             writeln("WARNING: already docked");
             return;
         }
+        XColor color;
+        color.red = (0xffff*config.theme.background[0]).to!ushort;
+        color.green = (0xffff*config.theme.background[0]).to!ushort;
+        color.blue = (0xffff*config.theme.background[0]).to!ushort;
+        XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
+        XSetWindowBackground(wm.displayHandle, window, color.pixel);
         XSelectInput(wm.displayHandle, window, StructureNotifyMask | SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
         auto info = Xembed.get_info(window);
         Xembed.embed(window, bar.windowHandle);
@@ -164,15 +171,10 @@ class Tray: Base {
         XSync(wm.displayHandle, false);
         int offset = pos.x;
         foreach(client; clients){
-            XColor color;
-            color.red = (0xffff*config.background[0]).to!ushort;
-            color.green = (0xffff*config.background[0]).to!ushort;
-            color.blue = (0xffff*config.background[0]).to!ushort;
-            XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
-            XSetWindowBackground(wm.displayHandle, client.window, color.pixel);
-            XClearArea(wm.displayHandle, client.window, 0, 0, iconSize.w, iconSize.h, true);
+            //XClearArea(wm.displayHandle, client.window, 0, 0, iconSize.w, iconSize.h, true);
+            XMapWindow(wm.displayHandle, client.window);
             XMoveResizeWindow(wm.displayHandle, client.window, offset+1, +1, iconSize.w, iconSize.h);
-            offset += iconSize.w;
+            offset += iconSize.w+5;
             XSync(dpy, false);
         }
         foreach(cb; change)

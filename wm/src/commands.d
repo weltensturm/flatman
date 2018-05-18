@@ -107,7 +107,7 @@ void move(string what){
 void toggle(string what){
 	final switch(what){
 		case "titles":
-			
+
 			break;
 		case "floating":
 			if(active)
@@ -121,21 +121,13 @@ void toggle(string what){
 
 void workspace(string dir, string how){
 	if(dir == "+"){
-		if(how == "filled"){
-			switchWorkspace(monitor.workspaceActive+1);
-		}else if(how == "create"){
+		if(how == "create")
 			newWorkspace(monitor.workspaceActive+1);
-			switchWorkspace(monitor.workspaceActive+1);
-		}else
 		switchWorkspace(monitor.workspaceActive+1);
 	}else if(dir == "-"){
-		if(how == "filled"){
-			switchWorkspace(monitor.workspaceActive-1);
-		}else if(how == "create"){
+		if(how == "create")
 			newWorkspace(monitor.workspaceActive);
-			switchWorkspace(monitor.workspaceActive-1);
-		}else
-			switchWorkspace(monitor.workspaceActive-1);
+		switchWorkspace(monitor.workspaceActive-1);
 	}else if(dir == "first"){
 		if(how == "create")
 			newWorkspace(0);
@@ -198,4 +190,3 @@ void teleport(Client client, Client target, long mode){
 		monitor.add(client);
 	}
 }
-

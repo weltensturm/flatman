@@ -24,9 +24,9 @@ class RootDamage {
 
     int damageEvent;
     int damageError;
-    
+
     XserverRegion all;
-    
+
     this(){
         XDamageQueryExtension(wm.displayHandle, &damageEvent, &damageError);
         wm.on([
@@ -94,6 +94,10 @@ class RootDamage {
     }
 
     void damage(int[2] pos, int[2] size){
+        if(pos.x >= short.max || pos.y >= short.max || size.w >= ushort.max || size.h >= ushort.max){
+            writeln("Parameters out of bounds %s %s".format(pos, size));
+            return;
+        }
         XRectangle r;
         r.x = pos.x.to!short;
         r.y = pos.y.to!short;

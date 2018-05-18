@@ -2,9 +2,9 @@
 	"name" : "flatman-menu",
 	"description" : "menu for flatman",
 	"targetType": "executable",
-	"sourcePaths": ["src"],
+	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": ">=1.0.8"
+		"ws": "1.0.11"
 	},
 	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"]
 }

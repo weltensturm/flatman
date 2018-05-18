@@ -251,8 +251,6 @@ class CompositeClient: ws.wm.Window {
         resizeGhost = None;
     }
 
-    override void gcInit(){}
-
     override string toString(){
         return title ~ ":" ~ windowHandle.to!string;
     }

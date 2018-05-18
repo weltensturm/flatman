@@ -9,7 +9,7 @@ ButtonExec[][string] histories;
 void addHistory(DynamicList list){
 
 	auto expander = new HistoryRootButton;
-	expander.resize([5, config["button-tab", "height"].to!int]);
+	expander.resize([5, config.buttonTab.height]);
 	auto tree = list.addNew!Tree(expander);
 	tree.inset = 0;
 	tree.tail = 10;

@@ -25,12 +25,6 @@ class Workspace: Container {
 			context = "~/.flatman/current".expandTilde.readText;
 	}
 
-	void restack(){
-		"workspace.restack".log;
-		floating.restack;
-		split.restack;
-	}
-
 	void updateContext(string path){
 		context = path;
 	}
