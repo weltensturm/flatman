@@ -4,7 +4,7 @@
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": ">=1.0.11",
+		"ws": "1.0.11",
 		"backtrace-d": "~>0.1.2"
 	},
 	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage"]
