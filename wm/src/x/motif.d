@@ -4,13 +4,6 @@ module flatman.x.motif;
 import flatman;
 
 
-struct MotifAtoms {
-	@("_MOTIF_WM_HINTS") Atom hints;
-}
-
-MotifAtoms motif;
-
-
 bool getIsDecorated(Window window){
 	int di;
 	ulong dl;
@@ -21,11 +14,11 @@ bool getIsDecorated(Window window){
 	if(XGetWindowProperty(
 			dpy,
 			window,
-			motif.hints,
+			Atoms._MOTIF_WM_HINTS,
 			0L,
 			long.max,
 			false,
-			motif.hints,
+			Atoms._MOTIF_WM_HINTS,
 			&da,
 			&di,
 			&count,
@@ -34,5 +27,6 @@ bool getIsDecorated(Window window){
 		data = (cast(CARDINAL*)p)[0..count].dup;
 		XFree(p);
 	}
+	writeln("ASDF ", data);
 	return !data.length || !((data[0] & 2) && data[2] == 0);
 }

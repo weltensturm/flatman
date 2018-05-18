@@ -1,5 +1,0 @@
-#!/bin/sh
-mkdir -p ~/.config/flatman
-touch ~/.config/flatman/config.ws
-xdg-open /etc/flatman/config.ws &
-xdg-open ~/.config/flatman/config.ws &

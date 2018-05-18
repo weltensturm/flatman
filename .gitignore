@@ -25,3 +25,5 @@ trace.*
 callgrind.*
 trace.def
 trace.log
+
+\.vscode/

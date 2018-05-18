@@ -9,6 +9,8 @@ import
 	std.stdio,
 	ws.math,
 	ws.wm,
+    common.screens,
+    pulseaudio,
 	pactl;
 
 
@@ -23,6 +25,12 @@ class NotifyWindow: Window {
     int margin = 5;
     int barHeight = 4;
     SysTime showTime;
+
+    override void show(){
+        super.show;
+        auto screen = screens(wm.displayHandle)[0];
+        move([screen.x+50, screen.y+50+40]);
+    }
 
     override void onDraw(){
         draw.setColor([0,0,0]);
@@ -42,21 +50,27 @@ class NotifyWindow: Window {
 
 
 void main(){
+    auto pulseaudio = new Pulseaudio("flatman volume notify");
     auto window = new NotifyWindow;
     wm.add(window);
     window.hide;
+    Sink[] sinks;
     while(wm.hasActiveWindows){
         wm.processEvents;
-        window.onDraw;
-        auto selected = sinks.selected;
-        auto volume = (selected.volume*100).to!int;
+        pulseaudio.run;
+        if(!pulseaudio.defaultSink)
+            continue;
+        auto volume = pulseaudio.defaultSink.volume_percent;
         if(window.volume != volume){
         	window.volume = volume;
         	window.showTime = Clock.currTime;
         	window.show;
-        }else if(window.showTime < Clock.currTime - 2.seconds)
+        }else if(window.showTime < Clock.currTime - 2.seconds){
         	window.hide;
-    	Thread.sleep(20.msecs);
+        }
+        if(!window.hidden)
+            window.onDraw;
+    	Thread.sleep(16.msecs);
     }
 
 }

@@ -41,10 +41,11 @@ class Tray: Base {
             ClientMessage: (XEvent* e) => evClientMessage(&e.xclient),
             ReparentNotify: (XEvent* e) => evReparent(&e.xreparent),
             PropertyNotify: (XEvent* e) => evProperty(&e.xproperty),
-            DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window)
+            DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
+            //MapNotify: (XEvent* e) => update,
         ]);
         this.bar = bar;
-        iconSize = [bar.size.h, bar.size.h-1];
+        iconSize = [bar.size.h-2, bar.size.h-2];
         if(XGetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0) != None)
             throw new Exception("another systray already running");
         if(XSetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle, CurrentTime)){
@@ -125,9 +126,17 @@ class Tray: Base {
     }
 
     override void resize(int[2] size){
+        if(size == this.size)
+            return;
         super.resize(size);
-        foreach(cb; change)
-            cb(clients.length.to!int);
+        update;
+    }
+
+    override void move(int[2] pos){
+        if(pos == this.pos)
+            return;
+        super.move(pos);
+        update;
     }
 
     void destroy(){
@@ -142,32 +151,34 @@ class Tray: Base {
             writeln("WARNING: already docked");
             return;
         }
+        XColor color;
+        color.red = (0xffff*config.theme.background[0]).to!ushort;
+        color.green = (0xffff*config.theme.background[0]).to!ushort;
+        color.blue = (0xffff*config.theme.background[0]).to!ushort;
+        XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
+        XSetWindowBackground(wm.displayHandle, window, color.pixel);
         XSelectInput(wm.displayHandle, window, StructureNotifyMask | SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
-        Xembed.embed(window, bar.windowHandle);
         auto info = Xembed.get_info(window);
+        Xembed.embed(window, bar.windowHandle);
+        XSync(dpy, false);
         if(info.flags == XEMBED_MAPPED)
             XMapWindow(wm.displayHandle, window);
-        XSync(dpy, false);
         clients ~= new TrayClient(window);
         update;
     }
 
     void update(){
         XSync(wm.displayHandle, false);
-        foreach(cb; change)
-            cb(clients.length.to!int);
         int offset = pos.x;
         foreach(client; clients){
-            XMoveResizeWindow(wm.displayHandle, client.window, offset, 0, iconSize.w, iconSize.h);
-            XColor color;
-            color.red = (0xffff*config.background[0]).to!ushort;
-            color.green = (0xffff*config.background[0]).to!ushort;
-            color.blue = (0xffff*config.background[0]).to!ushort;
-            XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
-            XSetWindowBackground(wm.displayHandle, client.window, color.pixel);
-            XClearArea(wm.displayHandle, client.window, 0, 0, 0, 0, true);
-            offset += iconSize.w;
+            //XClearArea(wm.displayHandle, client.window, 0, 0, iconSize.w, iconSize.h, true);
+            XMapWindow(wm.displayHandle, client.window);
+            XMoveResizeWindow(wm.displayHandle, client.window, offset+1, +1, iconSize.w, iconSize.h);
+            offset += iconSize.w+5;
+            XSync(dpy, false);
         }
+        foreach(cb; change)
+            cb(clients.length.to!int);
     }
 
 }

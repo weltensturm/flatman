@@ -27,12 +27,19 @@ void main(){
 	XSetErrorHandler(&xerror);
 	signal(SIGINT, &stop);
 	auto app = new App;
-	while(wm.hasActiveWindows && running){
-		wm.processEvents;
-		app.bar.onDraw;
-		Thread.sleep(10.msecs);
+	try {
+		while(wm.hasActiveWindows && running){
+			Inotify.update;
+			wm.processEvents;
+			foreach(bar; app.bars){
+				bar.onDraw;
+			}
+			Thread.sleep(10.msecs);
+		}
+	}catch(Throwable t){}
+	foreach(bar; app.bars){
+		bar.onDestroy;
 	}
-	app.bar.onDestroy;
 	writeln("quit");
 }
 
@@ -45,22 +52,14 @@ class App {
 
 	Client[] clients;
 
-	Bar bar;
-
-    version(CompilePlugins){
-	    Plugins plugins;
-    }
+	Bar[] bars;
 
 	this(){
 
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
 		
-		try {
-			config.fillConfig(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"]);
-		}catch(Exception e){
-			writeln(e.to!string);
-		}
+        config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"], &configChanged);
 
 		wm.on([
 			CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
@@ -77,20 +76,31 @@ class App {
 		    | ExposureMask
 		    | PropertyChangeMask);
 
-
-		bar = new Bar(this);
-        version(CompilePlugins){
-    		plugins = new Plugins(bar);
-        }
-		bar.show;
-		wm.add(bar);
-
 		scan;
-
-		updateScreens;
 
 	}
 	
+	void configChanged(){
+		foreach(bar; bars){
+			bar.onDestroy;
+		}
+		void delegate()[] delay;
+		foreach(barConf; config.bars){
+			auto bar = new Bar(this);
+			bar.show;
+			bar.screen = barConf.screen;
+			if(!barConf.systray){
+				bar.systray(false);
+			}else{
+				delay ~= { bar.systray(true); };
+			}
+			wm.add(bar);
+			bars ~= bar;
+		}
+		foreach(d;delay){d();}
+		updateScreens;
+	}
+
 	void scan(){
 		XFlush(wm.displayHandle);
 		XGrabServer(wm.displayHandle);
@@ -112,14 +122,26 @@ class App {
 	void updateScreens(){
 		screens = .screens(wm.displayHandle);
 		writeln(screens);
-		bar.resize([screens[0].w, bar.size.h]);
-		bar.move([screens[0].x, screens[0].y]);
-		bar.screen = 0;
+		foreach(bar; bars){
+			if(bar.screen in screens){
+				bar.show;
+				bar.resize([screens[bar.screen].w, bar.size.h]);
+				bar.move([screens[bar.screen].x, screens[bar.screen].y]);
+			}else{
+				bar.hide;
+				writeln("WARNING: could not find screen ", bar.screen);
+			}
+		}
 	}
 
 	void evCreate(x11.X.Window window){
 		XWindowAttributes wa;
-		if(window == bar.windowHandle || !XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly){
+		foreach(bar; bars){
+			if(bar.windowHandle == window){
+				return;
+			}
+		}
+		if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly){
 			return;
 		}
 		auto client = new Client(window);
@@ -127,7 +149,9 @@ class App {
 			client.hidden = true;
 		client.screen = screens.findScreen([wa.x, wa.y], [wa.width, wa.height]);
 		clients ~= client;
-		bar.update = true;
+		foreach(bar; bars){
+			bar.update = true;
+		}
 	}
 
 	void evDestroy(x11.X.Window window){
@@ -138,7 +162,9 @@ class App {
 				return;
 			}
 		}
-		bar.update = true;
+		foreach(bar; bars){
+			bar.update = true;
+		}
 	}
 
 	void evConfigure(XEvent* e){
@@ -146,8 +172,10 @@ class App {
 			//resize([e.xconfigure.width, size.h]);
 			updateScreens;
 		}
-		if(e.xconfigure.window == bar.windowHandle)
-			return;
+		foreach(bar; bars){
+			if(e.xconfigure.window == bar.windowHandle)
+				return;
+		}
 		foreach(i, c; clients){
 			if(c.window == e.xconfigure.window){
 				c.screen = screens.findScreen([e.xconfigure.x, e.xconfigure.y], [e.xconfigure.width, e.xconfigure.height]);
@@ -164,7 +192,9 @@ class App {
 			}
 		}
 		evCreate(e.window);
-		bar.update = true;
+		foreach(bar; bars){
+			bar.update = true;
+		}
 	}
 
 	void evUnmap(XUnmapEvent* e){
@@ -174,7 +204,9 @@ class App {
 				return;
 			}
 		}
-		bar.update = true;
+		foreach(bar; bars){
+			bar.update = true;
+		}
 	}
 
 	void evProperty(XPropertyEvent* e){
@@ -186,10 +218,10 @@ class App {
 				}
 			}
 		}
-		bar.update = true;
+		foreach(bar; bars){
+			bar.update = true;
+		}
 	}
-
-
 
 }
 

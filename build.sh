@@ -1,7 +1,6 @@
 #!/bin/bash
 
-parts=(wm compositor dock menu context volume-icon battery-icon volume-notify backlight-notify bar)
-
+parts=($(cat build.conf))
 
 set -e
 

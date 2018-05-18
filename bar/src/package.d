@@ -3,7 +3,8 @@ module bar;
 public import
 	core.thread,
 	core.sys.posix.signal,
-	
+
+	std.range,
 	std.algorithm,
 	std.datetime,
 	std.string,
@@ -11,6 +12,9 @@ public import
 	std.traits,
 	std.conv,
 	std.math,
+	std.process,
+	std.regex,
+	std.random,
 
 	x11.X,
 	x11.Xlib,
@@ -21,11 +25,13 @@ public import
 	x11.extensions.Xrender,
 	x11.Xatom,
 
+	ws.time,
 	ws.gui.base,
 	ws.x.property,
 	ws.x.draw,
 	ws.math.vector,
     ws.wm,
+    ws.inotify,
 
 	common.configLoader,
 	common.screens,
@@ -34,20 +40,15 @@ public import
     bar.bar,
 	bar.config,
     bar.main,
-    bar.plugin,
     bar.plugins,
 	bar.powerButton,
+	bar.widget.widget,
+	bar.widget.battery,
 	bar.widget.taskList,
 	bar.widget.taskListEntry,
+	bar.widget.workspaceIndicator,
+	bar.widget.clock,
 	bar.alpha,
     bar.client,
 	bar.widget.tray,
 	bar.xembed;
-
-
-enum CompilePlugins = false;
-
-
-static if(CompilePlugins){
-	public import commando;
-}

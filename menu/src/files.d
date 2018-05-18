@@ -9,7 +9,7 @@ string[] contexts;
 
 Tree addFiles(DynamicList list){
 	auto buttonContexts = new RootButton("Files");
-	buttonContexts.resize([5, config["button-tab", "height"].to!int]);
+	buttonContexts.resize([5, config.buttonTab.height]);
 	auto contexts = list.addNew!FileTree(buttonContexts, false);
 	contexts.inset = 0;
 	contexts.tail = 10;
@@ -194,7 +194,7 @@ class ButtonFile: ButtonExec, Path {
 				parent.children = parent.children[0..1] ~ input ~ parent.children[1..$];
 				input.parent = parent;
 				parent.keyboardChild = input;
-				input.resize([5, config["button-tree", "height"].to!int]);
+				input.resize([5, config.buttonTree.height]);
 				input.onEnter ~= (s){
 					try {
 						std.file.write(file ~ '/' ~ input.text, "");
@@ -213,7 +213,7 @@ class ButtonFile: ButtonExec, Path {
 				parent.children = parent.children[0..1] ~ input ~ parent.children[1..$];
 				input.parent = parent;
 				parent.keyboardChild = input;
-				input.resize([5, config["button-tree", "height"].to!int]);
+				input.resize([5, config.buttonTree.height]);
 				input.onEnter ~= (s){
 					try {
 						mkdir(file ~ '/' ~ input.text);
@@ -286,7 +286,7 @@ class ButtonFile: ButtonExec, Path {
 		super.onDraw;
 		if(file == ".")
 			return;
-		draw.setFont(config["button-tab", "font"], config["button-tab", "font-size"].to!int);
+		draw.setFont(config.buttonTab.font, config.buttonTab.fontSize);
 		if(display != BaseName){
 			int advance = 10;
 			auto parts = name.split("/");
@@ -463,7 +463,7 @@ class DirectoryTree: FileTree, Path {
 	this(ButtonFile button){
 		queue = new shared Queue!string;
 		this.button = button;
-		button.resize([5,config["button-tab", "height"].to!int]);
+		button.resize([5,config.buttonTab.height]);
 		padding = 0;
 		super(button);
 		if(button.display == ButtonFile.FullPath && button.isSelectedContext)
@@ -562,7 +562,7 @@ auto addDir(FileTree container, string directory, bool isContext=false){
 
 void addFile(FileTree container, string path){
 	auto button = new ButtonFile(path, false);
-	button.resize([5, config["button-tree", "height"].to!int]);
+	button.resize([5, config.buttonTree.height]);
 	container.add(button);
 }
 

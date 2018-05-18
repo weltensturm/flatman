@@ -22,18 +22,29 @@ struct ConfigColor {
 
 struct Config {
 
-	ConfigColor foreground;
-	ConfigColor foregroundMain;
-	ConfigColor background;
+	struct Theme {
+		ConfigColor foreground;
+		ConfigColor foregroundMain;
+		ConfigColor background;
 
-	ConfigColor border;
+		ConfigColor border;
 
-    ConfigColor titleTextNormal;
-    ConfigColor titleTextActive;
-    ConfigColor titleTextHidden;
+		ConfigColor titleTextNormal;
+		ConfigColor titleTextActive;
+		ConfigColor titleTextHidden;
 
-    ConfigColor separatorColor;
-    int separatorWidth;
+		ConfigColor separatorColor;
+		int separatorWidth;
+	}
+	Theme theme;
+
+	struct Bar {
+		int screen = 0;
+		string aligned = "top";
+		bool systray = false;
+	}
+	Bar[string] bars;
+
 }
 
 

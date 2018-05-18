@@ -4,6 +4,23 @@ module flatman.events;
 import flatman;
 
 
+alias WmEvent = int;
+
+
+Event!(int[2]) mouseMoved;
+Event!(Mouse.button) mousePressed;
+Event!(Mouse.button) mouseReleased;
+Event!() tick;
+
+
+void eventsInit(){
+	mouseMoved = new Event!(int[2]);
+	mousePressed = new Event!(Mouse.button);
+	mouseReleased = new Event!(Mouse.button);
+	tick = new Event!();
+}
+
+
 struct EventMaskMapping {
 	int mask;
 	int type;
@@ -67,6 +84,7 @@ enum handlerNames = [
 	Expose: "Expose",
 	FocusIn: "FocusIn",
 	KeyPress: "KeyPress",
+	KeyRelease: "KeyRelease",
 	MappingNotify: "MappingNotify",
 	MapRequest: "MapRequest",
 	MotionNotify: "MotionNotify",
@@ -77,7 +95,7 @@ enum handlerNames = [
 
 void onButton(XButtonPressedEvent* ev){
 	Client c = wintoclient(ev.window);
-	Monitor m = wintomon(ev.window);
+	Monitor m = findMonitor(ev.window);
 	if(m && m != monitor){
 		if(monitor && monitor.active)
 			monitor.active.unfocus(true);
@@ -91,35 +109,31 @@ void onButton(XButtonPressedEvent* ev){
 			if(bind.button == ev.button && cleanMask(bind.mask) == cleanMask(ev.state))
 				bind.func();
 	}
+	mousePressed(ev.button);
 }
 
 void onButtonRelease(XButtonReleasedEvent* ev){
-	if(dragging){
-		if(ev.button == Mouse.buttonLeft){
-			dragging = null;
-			XUngrabPointer(dpy, CurrentTime);
-		}
-	}
+	mouseReleased(ev.button);
 }
 
 void onClientMessage(XClientMessageEvent* cme){
 	auto c = wintoclient(cme.window);
 	auto handler = [
-		net.currentDesktop: {
+		Atoms._NET_CURRENT_DESKTOP: {
 			if(cme.data.l[2] > 0)
 				newWorkspace(cme.data.l[0]);
 			switchWorkspace(cast(int)cme.data.l[0]);
 		},
-		net.state: {
+		Atoms._NET_WM_STATE: {
 			if(!c)
 				return;
 			auto sh = [
-				net.fullscreen: {
+				Atoms._NET_WM_STATE_FULLSCREEN: {
 					bool s = (cme.data.l[0] == _NET_WM_STATE_ADD
 		              || (cme.data.l[0] == _NET_WM_STATE_TOGGLE && !c.isfullscreen));
 					c.setFullscreen(s);
 				},
-				net.attention: {
+				Atoms._NET_WM_STATE_DEMANDS_ATTENTION: {
 					c.requestAttention;
 				}
 			];
@@ -128,7 +142,7 @@ void onClientMessage(XClientMessageEvent* cme){
 			if(cme.data.l[2] in sh)
 				sh[cme.data.l[2]]();
 		},
-		net.windowActive: {
+		Atoms._NET_ACTIVE_WINDOW: {
 			if(!c)
 				return;
 			if(cme.data.l[0] < 2){
@@ -136,37 +150,45 @@ void onClientMessage(XClientMessageEvent* cme){
 			}else
 				c.focus;
 		},
-		net.windowDesktop: {
+		Atoms._NET_WM_DESKTOP: {
 			if(!c)
 				return;
 			if(cme.data.l[2] == 1)
 				newWorkspace(cme.data.l[0]);
 			c.setWorkspace(cme.data.l[0]);
 		},
-		net.moveResize: {
+		Atoms._NET_MOVERESIZE_WINDOW: {
 			if(!c || !c.isFloating)
 				return;
 			c.moveResize(cme.data.l[0..2].to!(int[2]), cme.data.l[2..4].to!(int[2]));
 		},
-		net.restack: {
+		Atoms._NET_RESTACK_WINDOW: {
 			if(!c || c == monitor.active)
 				return;
 			c.requestAttention;
 		},
-		net.drag: {
+		Atoms._NET_WM_MOVERESIZE: {
 			if(!c)
 				return;
 			if(cme.data.l[2] == 8)
-				drag(c, c.pos.a - cme.data.l[0..2].to!(int[2]));
+				dragClient(c, c.pos.a - cme.data.l[0..2].to!(int[2]));
 		},
 		wm.state: {
 			if(cme.data.l[0] == IconicState){
 				"iconify %s".format(c).log;
-				/+
-				c.hide;
-				c.unmanage(true);
-				+/
 			}
+		},
+		Atoms._FLATMAN_OVERVIEW: {
+			if(cme.data.l[0] != 2)
+				return;
+			overview(cme.data.l[1] > 0);
+		},
+		Atoms._FLATMAN_TELEPORT: {
+			if(cme.data.l[0] != 2 || !c)
+				return;
+			auto target = wintoclient(cme.data.l[0]);
+			if(target)
+				teleport(c, target, cme.data.l[1]);
 		}
 	];
 	if(cme.message_type in handler)
@@ -192,6 +214,12 @@ void onConfigure(Window window, int x, int y, int width, int height){
 		if(updateMonitors() || dirty){
 			updateWorkarea;
 			restack;
+		}
+	}else{
+		foreach(c; clients){
+			if(c.win == window){
+				c.onConfigure([x,y], [width, height]);
+			}
 		}
 	}
 }
@@ -234,7 +262,7 @@ void onDestroy(XEvent* e){
 		unmanaged = unmanaged.without(ev.window);
 	Client c = wintoclient(ev.window);
 	if(c)
-		c.unmanage(true);
+		c.destroy;
 }
 
 void onEnter(XCrossingEvent* ev){
@@ -247,15 +275,15 @@ void onEnter(XCrossingEvent* ev){
 
 void onExpose(XEvent *e){
 	XExposeEvent *ev = &e.xexpose;
-	Monitor m = wintomon(ev.window);
+	Monitor m = findMonitor(ev.window);
 	if(ev.count == 0 && m)
 		redraw = true;
 }
 
 void onFocus(XEvent* e){ /* there are some broken focus acquiring clients */
-	//XFocusChangeEvent *ev = &e.xfocus;
-	//if(monitor.active && ev.window != monitor.active.win)
-	//	setfocus(monitor.active);
+	XFocusChangeEvent *ev = &e.xfocus;
+	if(monitor.active && ev.window == monitor.active.win)
+		monitor.active.focus;
 	//auto c = wintoclient(ev.window);
 	//if(c && c != active)
 	//	c.requestAttention;
@@ -276,7 +304,7 @@ void onKeyRelease(XEvent* e){
 	KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)ev.keycode, 0);
 	"key release %s".format(keysym).log;
 	foreach(key; flatman.keys){
-		if(keysym == key.keysym && cleanMask(key.mod) == cleanMask(ev.state) && key.func)
+		if(keysym == key.keysym && key.func)
 			key.func(false);
 	}
 }
@@ -289,7 +317,7 @@ void onMapping(XEvent *e){
 }
 
 void onMapRequest(XEvent *e){
-	static XWindowAttributes wa;
+	__gshared XWindowAttributes wa;
 	XMapRequestEvent *ev = &e.xmaprequest;
 	if(!XGetWindowAttributes(dpy, ev.window, &wa)){
 		return;
@@ -322,9 +350,8 @@ void onMotion(XEvent* e){
 			c.focus;
 	}
 	+/
-	if(dragging){
-		dragUpdate = [ev.x_root, ev.y_root];
-	}
+	mouseMoved([ev.x_root, ev.y_root]);
+	focus(findMonitor([ev.x_root, ev.y_root]));
 }
 
 enum XRequestCode {

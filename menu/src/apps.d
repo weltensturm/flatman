@@ -124,7 +124,7 @@ class ButtonDesktop: ButtonExec {
 			draw.setColor([0.15*mul, 0.15*mul, 0.15*mul]);
 			draw.rect(pos, size);
 		}
-		draw.setFont(config["button-tree", "font"], config["button-tree", "font-size"].to!int);
+		draw.setFont(config.buttonTree.font, config.buttonTree.fontSize);
 		draw.setColor([189/255.0, 221/255.0, 255/255.0]);
 		draw.text(pos.a+[10,0], size.h, name);
 		auto textw = draw.width(name) + draw.fontHeight*2;
@@ -193,7 +193,7 @@ class ButtonScript: ButtonExec {
 
 	override void onDraw(){
 		drawStatus;
-		draw.setFont(config["button-tree", "font"], config["button-tree", "font-size"].to!int);
+		draw.setFont(config.buttonTree.font, config.buttonTree.fontSize);
 		super.onDraw;
 		draw.setColor([187/255.0,187/255.0,255/255.0]);
 		draw.text(pos.a+[10,0], size.h, exec);

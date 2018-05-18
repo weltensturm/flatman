@@ -10,8 +10,14 @@ class TaskList: Base {
     int start;
     int extents;
 
+    Properties!(
+        "currentWorkspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false
+    ) properties;
+
     this(Bar bar){
         this.bar = bar;
+        properties.window(.root);
+        wm.on([PropertyNotify: (XEvent* e) => properties.update(&e.xproperty)]);
     }
 
     void update(Client[] clients){
@@ -19,7 +25,7 @@ class TaskList: Base {
         children = [];
 		Client[][] tabs;
 		foreach(client; clients){
-			if(client.workspace.value == bar.currentWorkspace.value && client.title.length && client.icon.length){
+			if(client.workspace.value == properties.currentWorkspace.value && client.title.length && client.icon.length){
 				if(client.screen != bar.screen)
 					continue;
                 if(client.flatmanTabs.value == 0)
@@ -42,10 +48,10 @@ class TaskList: Base {
 		}
         if(!tabs.length)
         	return;
-		int width = ((size.w - config.separatorWidth - tabs.length*config.separatorWidth - (bar.left.max(bar.right)*2)).to!double/(tabs.map!(a => a.length).sum))
+		int width = ((size.w - config.theme.separatorWidth - tabs.length*config.theme.separatorWidth - (200*2)).to!double/(tabs.map!(a => a.length).sum))
 					.min(250)
 					.to!int;
-        extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.separatorWidth).to!int;
+        extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.theme.separatorWidth).to!int;
         start = size.w/2 - extents/2;
         int offset = start;
 		foreach(i, tab; tabs){
@@ -57,14 +63,14 @@ class TaskList: Base {
                 listEntry.resize([width, size.h]);
 				offset += width;
 			}
-			offset += config.separatorWidth;
+			offset += config.theme.separatorWidth;
 		}
     }
 
     override void onDraw(){
         foreach(separator; separators){//} ~ [start+extents-10]){
-            draw.setColor(config.separatorColor);
-            draw.text([separator-config.separatorWidth/2-5,7], "●");
+            draw.setColor(config.theme.separatorColor);
+            draw.text([separator-config.theme.separatorWidth/2-5,7], "|");
         }
         super.onDraw;
     }

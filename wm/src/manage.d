@@ -87,7 +87,10 @@ void killClient(Client client=null){
 			return;
 		client = monitor.active;
 	}
-	if(!client.sendEvent(wm.delete_)){
+	if(!client.sentDelete){
+		client.sendEvent(wm.delete_);
+		client.sentDelete = true;
+	}else{
 		XGrabServer(dpy);
 		XSetErrorHandler(&xerrordummy);
 		XSetCloseDownMode(dpy, CloseDownMode.DestroyAll);
@@ -97,8 +100,8 @@ void killClient(Client client=null){
 		//XSetErrorHandler(xerrorxlib);
 		XUngrabServer(dpy);
 	}
-	client.unmanage;
 }
+
 
 void toggleFullscreen(){
 	auto client = active;
@@ -106,6 +109,7 @@ void toggleFullscreen(){
 		return;
 	client.setFullscreen(!client.isfullscreen);
 }
+
 
 void newWorkspace(long pos){
 	"new workspace: %s".format(pos).log;
@@ -125,8 +129,9 @@ void newWorkspace(long pos){
 	updateWorkspaces;
 }
 
+
 void switchWorkspace(int pos){
-	if(!cfg.workspaceWrap){
+	if(!config.workspaceWrap){
 		pos = pos.min(monitor.workspaces.length.to!int-1).max(0);
 	}
 	if(pos == monitor.workspaceActive)
@@ -155,24 +160,30 @@ void switchWorkspace(int pos){
 			monitor.workspace.show;
 		}
 		assert(monitors.map!(a => a.workspaces.length).uniq.array.length == 1);
+		if(monitor.active)
+			monitor.active.focus;
 		updateDesktopCount;
 		updateWorkspaces;
 		updateCurrentDesktop;
 	}
 }
 
+
 void moveWorkspace(int pos){
 	if(flatman.active)
 		flatman.active.setWorkspace(pos);
 }
 
+
 void moveLeft(){
 	monitor.workspace.split.moveClient(-1);
 }
 
+
 void moveRight(){
 	monitor.workspace.split.moveClient(1);
 }
+
 
 void moveDown(){
 	if(monitor.workspaceActive == monitor.workspaces.length-1)
@@ -184,6 +195,7 @@ void moveDown(){
 	if(win)
 		win.focus;
 }
+
 
 void moveUp(){
 	if(monitor.workspaceActive == 0)

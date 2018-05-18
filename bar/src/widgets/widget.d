@@ -1,4 +1,4 @@
-module bar.widgets.widget;
+module bar.widget.widget;
 
 
 import bar;
@@ -6,6 +6,12 @@ import bar;
 
 class Widget: Base {
 
-    int width;
+    int savedWidth;
+
+    int width(){
+        return 0;
+    }
+
+    void tick(){}
 
 }

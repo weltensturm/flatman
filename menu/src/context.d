@@ -9,12 +9,12 @@ __gshared:
 
 class Context {
 	
-	static string current;
-	static string currentPath;
+	__gshared string current;
+	__gshared string currentPath;
 
-	static ws.event.Event!(string) change;
+	__gshared ws.event.Event!(string) change;
 
-	shared static this(){
+	static void init(){
 		change = new ws.event.Event!string;
 		string currentContext = "";
 		Inotify.watch("~/.flatman/current".normalize, (path, file, action){

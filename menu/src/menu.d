@@ -36,9 +36,10 @@ enum categories = [
 
 void main(string[] args){
 	options.fill(args);
-	XInitThreads();
+	Context.init;
 	new Menu(600, 500, "flatman-menu");
 	wm.add(menuWindow);
+	menuWindow.show;
 	while(wm.hasActiveWindows){
 		auto frameStart = now;
 		wm.processEvents;
@@ -98,13 +99,13 @@ class Menu: ws.wm.Window {
 
 	Base keyboardFocus;
 
+	GlContext context;
+
 	this(int w, int h, string title){
 		menuWindow = this;
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
 		currentDesktop = new CardinalProperty(.root, "_NET_CURRENT_DESKTOP");
-		auto screens = screens;
-		auto screen = [screens[options.screen].w, screens[options.screen].h];
 
 		inotify = new Inotify;
 
@@ -141,7 +142,7 @@ class Menu: ws.wm.Window {
 		appList.addHistory;
 		appList.addApps(appCategories, categories);
 
-		super(w, screen.h/2, title);
+		super(w, h, title);
 		updateSize;
 
 		draw.setColor([0,0,0]);
@@ -153,18 +154,24 @@ class Menu: ws.wm.Window {
 		]);
 	}
 
-	void updateSize(){
+	Screen targetScreen(){
 		auto screens = screens;
-		auto screen = [screens[options.screen].w, screens[options.screen].h];
-		XResizeWindow(wm.displayHandle, windowHandle, size.w, screen.h);
+		return screens[options.screen];
 	}
 
+	void updateSize(){
+		resize([size.w, targetScreen.h]);
+	}
+
+	/+
 	override void drawInit(){
-		_draw = new XDraw(this);
-		_draw.setFont(config["font"], config["font-size"].to!int);
+		context = new GlContext(windowHandle);
+		context.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		context.enable(GL_BLEND);
+		draw = new GlDraw(context);
+		draw.setFont(config.font, config.fontSize);
 	}
-
-	override void gcInit(){}
+	+/
 
 	override void show(){
 		new CardinalProperty(windowHandle, "_NET_WM_DESKTOP").set(-1);
@@ -173,12 +180,23 @@ class Menu: ws.wm.Window {
 	}
 
 	void tick(){
-		auto target = [active ? 0 : -size.w+1, active ? 0 : -size.h+1];
-		if(target != pos){
-			pos = target;
-			XMoveWindow(dpy, windowHandle, pos.x, pos.y);
+		/+
+		auto screen = targetScreen;
+		auto targetPos = [screen.x, screen.y];
+		auto targetSize = [active ? 600 : 1, active ? screen.h : 1];
+		if(targetPos != pos){
+			move(pos);
+			pos = targetPos;
+			writeln("pos ", pos);
 			XSync(dpy, false);
 		}
+		if(targetSize != size){
+			resize(size);
+			size = targetSize;
+			writeln("size ", size);
+			XSync(dpy, false);
+		}
+		+/
 		if(active){
 			try {
 				Inotify.update;
@@ -189,8 +207,8 @@ class Menu: ws.wm.Window {
 		}
 	}
 
-	override void resize(int[2] size){
-		super.resize(size);
+	override void resized(int[2] size){
+		super.resized(size);
 		scroller.move([0,0]);
 		scroller.resize([size.w/2-1,size.h-2]);
 		appScroller.move([size.w/2,0]);
@@ -202,20 +220,25 @@ class Menu: ws.wm.Window {
 	}
 
 	override void onDraw(){
-		if(!active)
+		if(!active){
+			draw.setColor([0,0,0]);
+			draw.rect(pos, size);
+			draw.finishFrame;
 			return;
+		}
 		Animation.update;
 		//draw.setColor([0.867,0.514,0]);
-		draw.setColor([0.2,0.2,0.2]);
+		draw.setColor(config.border);
 		draw.rect([0,0], size);
-		draw.setColor([0.1,0.1,0.1]);
-		draw.rect(pos.a+[0,1], size.a-[2,1]);
-		draw.setColor([0.2,0.2,0.2]);
+		draw.setColor(config.background);
+		draw.rect([0,0], size.a-[2,0]);
+		draw.setColor(config.border);
 		draw.rect([size.w/2-1,0], [1, size.h]);
-		super.onDraw;
+
 		draw.setColor([0,0,0]);
-		draw.rect(pos.a + [size.w-1,0], [1,size.h]);
-		draw.finishFrame;
+		draw.rect([size.w-1,0], [1,size.h]);
+		super.onDraw;
+		//draw.finishFrame;
 	}
 
 	override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -234,11 +257,18 @@ class Menu: ws.wm.Window {
 	}
 
 	override void onMouseFocus(bool focus){
-		if(active != focus && !active){
-			resize(size);
-		}
-		if(focus || !popups.length)
+		if(focus || !popups.length){
 			active = focus;
+			auto screen = targetScreen;
+			int[2] targetPos = [screen.x, screen.y];
+			int[2] targetSize = [active ? 600 : 1, screen.h];
+			if(targetPos != pos){
+				move(targetPos);
+			}
+			if(targetSize != size){
+				resize(targetSize);
+			}
+		}
 		super.onMouseFocus(focus);
 	}
 
@@ -316,7 +346,7 @@ class RootButton: Button {
 			draw.setColor([0.15,0.15,0.15]);
 			draw.rect(pos, size);
 		}
-		draw.setFont(config["button-tab", "font"], config["button-tab", "font-size"].to!int);
+		draw.setFont(config.buttonTab.font, config.buttonTab.fontSize);
 		auto mod = (tree && tree.expanded ? 1 : 0.7);
 		draw.setColor([0.9*mod,0.9*mod,0.9*mod]);
 		draw.text(pos.a + [10, 0], size.h, name);

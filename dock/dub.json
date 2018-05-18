@@ -4,8 +4,7 @@
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": ">=1.0.7",
-		"gtk-d": ">=3.2.0"
+		"ws": "1.0.11"
 	},
 	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama", "Xdamage"]
 }

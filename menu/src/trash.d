@@ -6,7 +6,7 @@ import menu;
 
 void addTrash(DynamicList list){
 	auto b = new RootButton("Trash");
-	b.resize([5, config["button-tab", "height"].to!int]);
+	b.resize([5, config.buttonTab.height]);
 	auto t = list.addNew!Tree(b);
 	b.set(t);
 
@@ -21,8 +21,12 @@ void addTrash(DynamicList list){
 
 	ButtonTrash[] buttons;
 
+	if(!"~/.local/share/Trash/info".normalize.exists){
+		return;
+	}
+
 	foreach(entry; "~/.local/share/Trash/info".normalize.dirEntries(SpanMode.shallow))
-		if(entry.name.endsWith(".trashinfo"))
+		if(entry.name.isFile && entry.name.endsWith(".trashinfo"))
 			try
 				buttons ~= new ButtonTrash(entry.name);
 			catch(Exception e)
@@ -31,16 +35,16 @@ void addTrash(DynamicList list){
 	buttons.sort!((a, b) => a.date > b.date);
 
 	void addButton(ButtonTrash button){
-		button.font = config["button-tree", "font"];
-		button.fontSize = config["button-tree", "font-size"].to!int;
-		button.resize([5, config["button-tree", "height"].to!int]);
+		button.font = config.buttonTree.font;
+		button.fontSize = config.buttonTree.fontSize;
+		button.resize([5, config.buttonTree.height]);
 		auto menu = t.addNew!Tree(button);
 		menu.inset = 20;
 
 		auto mb = new Button("View");
 		mb.font = button.font;
 		mb.fontSize = button.fontSize;
-		mb.resize([5, config["button-tree", "height"].to!int]);
+		mb.resize([5, config.buttonTree.height]);
 		mb.leftClick ~= {
 			if(button.isDir)
 				contextPath.openDir("~/.local/share/Trash/files/".expandTilde ~ button.trashPath.baseName.stripExtension);
@@ -52,13 +56,13 @@ void addTrash(DynamicList list){
 		mb = new Button("Restore");
 		mb.font = button.font;
 		mb.fontSize = button.fontSize;
-		mb.resize([5, config["button-tree", "height"].to!int]);
+		mb.resize([5, config.buttonTree.height]);
 		menu.add(mb);
 
 		mb = new Button("Delete");
 		mb.font = button.font;
 		mb.fontSize = button.fontSize;
-		mb.resize([5, config["button-tree", "height"].to!int]);
+		mb.resize([5, config.buttonTree.height]);
 		menu.add(mb);
 	}
 
@@ -112,7 +116,7 @@ class ButtonTrash: ButtonExec {
 		auto parts = path.split("/");
 
 		draw.clip(pos.a, [pathWidth, size.h]);
-		draw.setFont(config["button-tree", "font"], config["button-tree", "font-size"].to!int);
+		draw.setFont(config.buttonTree.font, config.buttonTree.fontSize);
 
 		foreach(i, part; parts){
 			draw.setColor(!isDir && i == parts.length-1 ? [1,1,1.0] : [0.733,0.933,0.733]);
