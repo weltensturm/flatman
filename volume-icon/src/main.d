@@ -1,372 +1,229 @@
 module icon;
 
 import
-	std.algorithm,
-	std.array,
-	std.regex,
-	std.process,
-	std.stdio,
-	std.string,
-	std.conv,
-	std.math,
-	gdk.Screen,
-	gdk.Rectangle,
-	glib.ListSG,
-	glib.Timeout,
-	cairo.Context,
-	gtk.Main,
-	gtk.VBox,
-	gtk.Grid,
-	gtk.Scale,
-	gtk.Label,
-	gtk.RadioButton,
-	gtk.Table,
-	gtk.Notebook,
-	gtk.DrawingArea,
-	gtk.StatusIcon,
-	gtk.Separator,
-	gtk.IconTheme,
-	gtk.MainWindow;
+    core.thread,
+
+    std.algorithm,
+    std.array,
+    std.regex,
+    std.process,
+    std.stdio,
+    std.string,
+    std.conv,
+    std.math,
+    std.traits,
+
+    x11.X,
+    x11.Xlib,
+
+    ws.gui.base,
+    ws.wm,
+
+    common.atoms,
+
+    pulseaudio_h,
+    pulseaudio;
 
 
+enum SYSTEM_TRAY_REQUEST_DOCK = 0;
 
-class DeviceViewer: Scale {
 
-	Device device;
+void delegate() IconClicked;
+void delegate() OtherEvent;
 
-	this(Device device){
-		super(GtkOrientation.HORIZONTAL, 0, 100, 1);
-		this.device = device;
-		setShowFillLevel(false);
-		setValue(cast(long)(device.volume*100));
-		addOnValueChanged((range){
-			device.setVolume(getValue/100.0);
-		});
-		setMinSliderSize(100);
-	}
+
+template Event(alias T) if(isSomeFunction!T) {
+    pragma(msg, fullyQualifiedName!T);
+    static ReturnType!T delegate(Parameters!T)[] callbacks;
+    struct Event {
+        static void opCall(Args...)(Args args){
+            foreach(cb; callbacks){
+                cb(args);
+            }
+        }
+        static void opOpAssign(string op)(ReturnType!T delegate(Parameters!T) cb) if(op == "~"){
+            callbacks ~= cb;
+        }
+    }
+}
+
+
+void sendMessage(x11.X.Window window, long type, long[4] data){
+    XClientMessageEvent ev;
+    ev.type = ClientMessage;
+    ev.window = window;
+    ev.message_type = type;
+    ev.format = 32;
+    ev.data.l = [cast(long)CurrentTime] ~ data;
+    XSendEvent(wm.displayHandle, window, false, StructureNotifyMask, cast(XEvent*) &ev);
+}
+
+
+class TrayIcon: ws.wm.Window {
+
+    Pulseaudio pa;
+
+    this(Pulseaudio pa){
+        this.pa = pa;
+        super(10, 10, "Flatman Volume Icon", true);
+    }
+
+    void dock(){
+        auto tray = XGetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0);
+        writeln(tray);
+        sendMessage(tray, Atoms._NET_SYSTEM_TRAY_OPCODE, [SYSTEM_TRAY_REQUEST_DOCK, windowHandle, 0, 0]);
+    }
+
+    override void show(){
+        super.show();
+    }
+
+    override void onDraw(){
+        if(hidden)
+            return;
+        draw.setColor([0,0,0]);
+        draw.rect([0,0], size);
+        if(pa.defaultSink){
+            draw.setColor([1,1,1]);
+            foreach(bar; 0..size.w/2){
+                if(size.w*pa.defaultSink.volume_percent/100.0 <= bar*2)
+                    break;
+                if(size.w*(pa.defaultSink.volume_percent-100)/100.0 <= bar*2)
+                    draw.setColor([1,1,1]);
+                else
+                    draw.setColor([1,0.3,0.3]);
+                draw.rect([bar*2,size.w/2-bar], [1, bar*2]);
+            }
+        }
+        super.onDraw;
+    }
+
+    override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        if(button == Mouse.wheelDown || button == Mouse.wheelUp){
+            auto direction = button == Mouse.wheelDown ? -1 : 1;
+            if(pa.defaultSink){
+                writeln(direction, " ", pa.defaultSink.volume_percent);
+                pa.volume(pa.defaultSink, (pa.defaultSink.volume_percent/100.0+direction/30.0).min(2));
+            }
+        }else if(button == Mouse.buttonLeft && !pressed){
+            Event!IconClicked();
+        }
+    }
 
 }
 
 
-class DeviceContainer: Grid {
+class SinkRow: Base {
 
-	Device[] devices;
-	Device[] apps;
+    Device sink;
 
-	this(Device[] devices, Device[] apps){
-		this.devices = devices;
-		this.apps = apps;
-		setBorderWidth(10);
-		setColumnHomogeneous(true);
-		RadioButton radio;
-		int row;
-		devices.each!((Device device){
-			if(!radio)
-				radio = new RadioButton(cast(ListSG)null, device.name);
-			else
-				radio = new RadioButton(radio, device.name);
-			if(device.selected)
-				radio.setActive(true);
-			attach(radio, 0, row, 2, 1);
-			radio.addOnToggled((self){
-				if(!radio && self.getActive){
-					device.select;
-				}
-			});
-			auto deviceViewer = new DeviceViewer(device);
-			//deviceViewer.setSizeRequest(50, 0);
-			attach(deviceViewer, 2, row, 1, 1);
-			row++;
-		});
-		radio = null;
-		attach(new Separator(GtkOrientation.VERTICAL), 0, row, 3, 1);
-		row++;
-		apps.each!((Device device){
-			auto label = new Label(device.name);
-			label.setJustify(GtkJustification.LEFT);
-			attach(label, 0, row, 2, 1);
-			auto deviceViewer = new DeviceViewer(device);
-			//deviceViewer.setSizeRequest(50, 0);
-			attach(deviceViewer, 2, row, 1, 1);
-			row++;
-		});
-	}
+    this(Device sink){
+        this.sink = sink;
+        import ws.gui.slider;
+        auto slider = addNew!Slider;
+        slider.set(sink.volume_percent, 0, 100);
+        slider.onSlide ~= (value){
+            writeln(value);
+        };
+    }
+
+    override void resize(int[2] size){
+        super.resize(size);
+        foreach(c; children)
+            c.resize([size.x, 20]);
+    }
+
+    override void onDraw(){
+        draw.setColor([1,1,1]);
+        draw.text([pos.x+5, pos.y+20], 30, sink.description);
+        super.onDraw();
+    }
 
 }
 
 
-void spawnMainWindow(GdkRectangle area, int iconSize){
-	auto w = new MainWindow("Sound Settings");
-	w.setModal(true);
-	w.setBorderWidth(2);
-	w.setDefaultSize(300, cast(int)(sinks.length+sources.length*40));
-	/+
-	auto vbox = new VBox(true, 0);
-	vbox.packStart(new DeviceContainer(sinks, "Output"), false, false, 0);
-	vbox.packStart(new DeviceContainer(sources, "Input"), false, false, 0);
-	w.add(vbox);
-	+/
-	auto nb = new Notebook;
-	auto sinks = sinks.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
-	auto sources = sources.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
-	auto appsInput = appsInput.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
-	auto appsOutput = appsOutput.sort!("toUpper(a.name) < toUpper(b.name)", SwapStrategy.stable);
-	nb.appendPage(new DeviceContainer(sinks.array, appsOutput.array), "Output");
-	nb.appendPage(new DeviceContainer(sources.array, appsInput.array), "Input");
-	w.add(nb);
-	bool focus;
-	w.addOnFocusIn((GdkEventFocus* c, w){
-		focus = true;
-		return true;
-	});
-	w.addOnFocusOut((GdkEventFocus* c, w){
-		if(focus)
-			w.hide;
-		return true;
-	});
-	w.showAll;
-	auto screen = w.getScreen();
-	int width, h;
-	w.getSize(width, h);
-	w.move(
-		(area.x-width).max(iconSize).min(screen.width-width-iconSize),
-		area.y.max(iconSize).min(screen.height-h-iconSize)
-	);
+class AudioPanel: ws.wm.Window {
+
+    Device[] sinks;
+    Device[] sources;
+    Pulseaudio pa;
+    TrayIcon icon;
+
+    this(TrayIcon icon, Pulseaudio pa){
+        this.icon = icon;
+        this.pa = pa;
+        super(600, 30, "Flatman Volume Panel", true);
+    }
+
+    override void onShow(){
+        sinks = pa.sinks;
+        sources = pa.sources;
+        draw.setFont("sans", 9);
+        auto width = sinks.map!(a => draw.width(a.description)).fold!max+20;
+        resize([width, sinks.length.to!int*50]);
+        writeln(icon.pos.x, ' ', size.w, ' ', icon.size.w);
+
+        int x, y;
+        x11.X.Window dummy;
+        XTranslateCoordinates(wm.displayHandle, icon.windowHandle, DefaultRootWindow(wm.displayHandle), 0, 0, &x, &y, &dummy);
+
+        move([x-size.w+icon.size.w, y+icon.size.h]);
+        super.onShow;
+    
+        XGrabPointer(
+                wm.displayHandle,
+                windowHandle,
+                False,
+                ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                GrabModeAsync,
+                GrabModeAsync,
+                None,
+                None,
+                CurrentTime
+        );
+
+        foreach(c; children)
+            remove(c);
+        foreach(i, sink; pa.sinks){
+            auto row = addNew!SinkRow(sink);
+            row.move([0,i.to!int*50]);
+            row.resize([width, 50]);
+        }
+    }
+
+    override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        if(pressed && (x < 0 || y < 0 || x > size.w || y > size.h)){
+            XUngrabPointer(wm.displayHandle, CurrentTime);
+            hide;
+        }
+        super.onMouseButton(button, pressed, x, y);
+    }
+
+    override void onDraw(){
+        draw.setColor([0.1,0.1,0.1]);
+        draw.rect([0,0], size);
+        super.onDraw;
+    }
+
 }
 
 
 void main(string[] args){
-	Main.init(args);
-	auto icon = new StatusIcon;
-	icon.addOnButtonPress((GdkEventButton* event, icon){
-		//spawnProcess("/home/weltensturm/Projects/d/flatman/speakers/flatman-speaker-menu");
-		Screen screen;
-		GdkRectangle area;
-		GtkOrientation orientation;
-		icon.getGeometry(screen, area, orientation);
-		spawnMainWindow(area, icon.getSize);
-		return true;
-	});
-	string visual;
-	auto updateIcon = (int size){
-		auto old = visual;
-		auto sink = sinks.selected;
-		if(sink.muted || sink.volume <= 0)
-			visual = "audio-volume-muted";
-		else if(sink.volume > 2.0/3)
-			visual = "audio-volume-high";
-		else if(sink.volume > 1.0/3)
-			visual = "audio-volume-medium";
-		else
-			visual = "audio-volume-low";
-		if(visual != old)
-			icon.setFromGicon(IconTheme.getDefault.loadIcon(visual, size, GtkIconLookupFlags.DIR_LTR));
-	};
-	icon.addOnScroll((GdkEventScroll* event, icon){
-		auto sink = sinks.selected;
-		writeln("vol ", sink.volume);
-		if(event.direction == GdkScrollDirection.UP)
-			sink.setVolume((sink.volume+0.05).min(1));
-		else if(event.direction == GdkScrollDirection.DOWN)
-			sink.setVolume((sink.volume-0.05).max(0));
-		updateIcon(icon.getSize);
-		return true;
-	});
-	icon.addOnSizeChanged((size, icon){
-		updateIcon(size);
-		return true;
-	});
-	updateIcon(icon.getSize);
-	new Timeout(400, { updateIcon(icon.getSize); return true; });
-	Main.run;
-}
-
-
-string run(string command){
-	auto c = command.executeShell;
-	writeln(command);
-	if(c.status)
-		writeln("%s failed".format(command));
-	return c.output;
-}
-
-
-Device[] sinks(){
-	auto p = executeShell("pactl list sinks");
-	Device[] devices;
-	foreach(s; p.output.splitLines){
-		if(s.canFind("Sink #")){
-			devices ~= new Sink;
-			devices[$-1].index = s.matchFirst(r"Sink #([0-9]+)")[1].to!int;
-		}else{
-			if(s.canFind("Mute: "))
-				devices[$-1].muted = s.canFind("Mute: yes");
-			else if(s.canFind("Name: ")){
-				devices[$-1].systemName = s.matchFirst(r"Name: (.*)")[1].to!string;
-			}else if(s.canFind("device.description")){
-				devices[$-1].name = s.matchFirst(`device.description = "(.*)"`)[1].to!string;
-			}else if(s.canFind("Volume: front")){
-				devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
-			}
-		}
-	}
-	return devices;
-}
-
-Device[] sources(){
-	auto p = executeShell("pactl list sources");
-	Device[] devices;
-	foreach(s; p.output.splitLines){
-		if(s.canFind("Source #")){
-			devices ~= new Source;
-			devices[$-1].index = s.matchFirst(r"Source #([0-9]+)")[1].to!int;
-		}else{
-			if(s.canFind("Name: ")){
-				devices[$-1].systemName = s.matchFirst(r"Name: (.*)")[1].to!string;
-			}else if(s.canFind("device.description")){
-				devices[$-1].name = s.matchFirst(`device.description = "(.*)"`)[1].to!string;
-			}else if(s.canFind("Volume: front")){
-				devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
-			}
-		}
-	}
-	return devices;
-}
-
-Device selected(Device[] sinks){
-	auto p = executeShell("pactl info");
-	foreach(s; p.output.splitLines){
-		if(s.canFind("Default Sink:")){
-			auto name = s.matchFirst(r"Default Sink: (.*)")[1];
-			foreach(sink; sinks){
-				if(sink.systemName == name)
-					return sink;
-			}
-		}
-	}
-	return null;
-}
-
-
-Device[] appsInput(){
-	auto p = executeShell("pactl list source-outputs");
-	Device[] devices;
-	foreach(s; p.output.splitLines){
-		if(s.canFind("Source Output #")){
-			devices ~= new AppOutput;
-			devices[$-1].index = s.matchFirst(r"Source Output #([0-9]+)")[1].to!int;
-			devices[$-1].name = "unknown";
-		}else if(s.canFind("application.name")){
-			devices[$-1].name = s.matchFirst(`application.name = "(.*)"`)[1].to!string;
-		}else if(s.canFind("Volume: ")){
-			devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
-		}
-	}
-	return devices;
-}
-
-
-Device[] appsOutput(){
-	auto p = executeShell("pactl list sink-inputs");
-	Device[] devices;
-	foreach(s; p.output.splitLines){
-		if(s.canFind("Sink Input #")){
-			devices ~= new AppOutput;
-			devices[$-1].index = s.matchFirst(r"Sink Input #([0-9]+)")[1].to!int;
-			devices[$-1].name = "unknown";
-		}else if(s.canFind("application.name")){
-			devices[$-1].name = s.matchFirst(`application.name = "(.*)"`)[1].to!string;
-		}else if(s.canFind("Volume: ")){
-			devices[$-1].volume = s.matchFirst(r"([0-9]+)%")[1].to!double/100;
-		}
-	}
-	return devices;
-}
-
-
-class Device {
-
-	int index;
-	string systemName;
-	string name;
-	double volume;
-	bool muted;
-
-	void select(){}
-
-	void setVolume(double){}
-
-	bool selected(){return false;}
-
-}
-
-class Sink: Device {
-
-	override void select(){
-		"pactl set-default-sink %s".format(systemName).run;
-		auto p = executeShell("pactl list sink-inputs");
-		foreach(s; p.output.splitLines){
-			if(s.canFind("Sink Input #")){
-				"pactl move-sink-input %s %s".format(s.matchFirst("Sink Input #([0-9]+)")[1], systemName).run;
-			}
-		}
-	}
-
-	override void setVolume(double volume){
-		"pactl set-sink-volume %s %s%%".format(systemName, (volume*100).lround).run;
-		this.volume = volume;
-	}
-
-	override bool selected(){
-		auto p = executeShell("pactl info");
-		foreach(s; p.output.splitLines){
-			if(s.canFind("Default Sink:")){
-				auto name = s.matchFirst(r"Default Sink: (.*)")[1];
-				return systemName == name;
-			}
-		}
-		return false;
-	}
-
-}
-
-class Source: Device {
-
-	override void select(){
-		"pactl set-default-source %s".format(systemName).run;
-		auto p = executeShell("pactl list source-outputs");
-		foreach(s; p.output.splitLines){
-			if(s.canFind("Source Output #")){
-				"pactl move-source-output %s %s".format(s.matchFirst("Source Output #([0-9]+)")[1], systemName).run;
-			}
-		}
-	}
-
-	override void setVolume(double volume){
-		"pactl set-source-volume %s %s%%".format(systemName, (volume*100).lround).run;
-		this.volume = volume;
-	}
-
-	override bool selected(){
-		auto p = executeShell("pactl info");
-		return p.output.canFind("Default Source: %s".format(systemName));
-	}
-}
-
-class AppInput: Device {
-
-	override void setVolume(double volume){
-		"pactl set-source-output-volume %s %s%%".format(index, (volume*100).lround).run;
-		this.volume = volume;
-	}
-
-}
-
-class AppOutput: Device {
-
-	override void setVolume(double volume){
-		"pactl set-sink-input-volume %s %s%%".format(index, (volume*100).lround).run;
-		this.volume = volume;
-	}
-
+    auto pa = new Pulseaudio("Flatman Volume Settings");
+    auto icon = new TrayIcon(pa);
+    auto main = new AudioPanel(icon, pa);
+    Event!IconClicked ~= &main.show;
+    wm.add(icon);
+    wm.add(main);
+    icon.show;
+    icon.dock;
+    while(wm.hasActiveWindows){
+        icon.onDraw;
+        if(!main.hidden){
+            main.onDraw;
+        }
+        pa.run;
+        wm.processEvents;
+        Thread.sleep(12.msecs);
+    }
 }
