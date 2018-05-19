@@ -822,3 +822,76 @@ pa_operation* pa_context_subscribe(pa_context *c, pa_subscription_mask_t m, pa_c
 
 /** Set the context specific call back function that is called whenever the state of the daemon changes */
 void pa_context_set_subscribe_callback(pa_context *c, pa_context_subscribe_cb_t cb, void *userdata);
+
+
+/** Set the name of the default sink. */
+pa_operation* pa_context_set_default_sink(pa_context *c, const char *name, pa_context_success_cb_t cb, void *userdata);
+
+/** Set the name of the default source. */
+pa_operation* pa_context_set_default_source(pa_context *c, const char *name, pa_context_success_cb_t cb, void *userdata);
+
+/** Move the specified sink input to a different sink. \since 0.9.5 */
+pa_operation* pa_context_move_sink_input_by_index(pa_context *c, uint idx, uint sink_idx, pa_context_success_cb_t cb, void* userdata);
+
+/** Move the specified source output to a different source. \since 0.9.5 */
+pa_operation* pa_context_move_source_output_by_index(pa_context *c, uint idx, uint source_idx, pa_context_success_cb_t cb, void* userdata);
+
+/** Stores information about source outputs. Please note that this structure
+ * can be extended as part of evolutionary API updates at any time in
+ * any new release. */
+struct pa_source_output_info {
+    uint index;                      /**< Index of the source output */
+    const char *name;                    /**< Name of the source output */
+    uint owner_module;               /**< Index of the module this source output belongs to, or PA_INVALID_INDEX when it does not belong to any module. */
+    uint client;                     /**< Index of the client this source output belongs to, or PA_INVALID_INDEX when it does not belong to any client. */
+    uint source;                     /**< Index of the connected source */
+    pa_sample_spec sample_spec;          /**< The sample specification of the source output */
+    pa_channel_map channel_map;          /**< Channel map */
+    pa_usec_t buffer_usec;               /**< Latency due to buffering in the source output, see pa_timing_info for details. */
+    pa_usec_t source_usec;               /**< Latency of the source device, see pa_timing_info for details. */
+    const char *resample_method;         /**< The resampling method used by this source output. */
+    const char *driver;                  /**< Driver name */
+    pa_proplist *proplist;               /**< Property list \since 0.9.11 */
+    int corked;                          /**< Stream corked \since 1.0 */
+    pa_cvolume volume;                   /**< The volume of this source output \since 1.0 */
+    int mute;                            /**< Stream muted \since 1.0 */
+    int has_volume;                      /**< Stream has volume. If not set, then the meaning of this struct's volume member is unspecified. \since 1.0 */
+    int volume_writable;                 /**< The volume can be set. If not set, the volume can still change even though clients can't control the volume. \since 1.0 */
+    pa_format_info *format;              /**< Stream format information. \since 1.0 */
+}
+
+/** Stores information about sink inputs. Please note that this structure
+ * can be extended as part of evolutionary API updates at any time in
+ * any new release. */
+struct pa_sink_input_info {
+    uint index;                      /**< Index of the sink input */
+    const char *name;                    /**< Name of the sink input */
+    uint owner_module;               /**< Index of the module this sink input belongs to, or PA_INVALID_INDEX when it does not belong to any module. */
+    uint client;                     /**< Index of the client this sink input belongs to, or PA_INVALID_INDEX when it does not belong to any client. */
+    uint sink;                       /**< Index of the connected sink */
+    pa_sample_spec sample_spec;          /**< The sample specification of the sink input. */
+    pa_channel_map channel_map;          /**< Channel map */
+    pa_cvolume volume;                   /**< The volume of this sink input. */
+    pa_usec_t buffer_usec;               /**< Latency due to buffering in sink input, see pa_timing_info for details. */
+    pa_usec_t sink_usec;                 /**< Latency of the sink device, see pa_timing_info for details. */
+    const char *resample_method;         /**< The resampling method used by this sink input. */
+    const char *driver;                  /**< Driver name */
+    int mute;                            /**< Stream muted \since 0.9.7 */
+    pa_proplist *proplist;               /**< Property list \since 0.9.11 */
+    int corked;                          /**< Stream corked \since 1.0 */
+    int has_volume;                      /**< Stream has volume. If not set, then the meaning of this struct's volume member is unspecified. \since 1.0 */
+    int volume_writable;                 /**< The volume can be set. If not set, the volume can still change even though clients can't control the volume. \since 1.0 */
+    pa_format_info *format;              /**< Stream format information. \since 1.0 */
+}
+
+/** Callback prototype for pa_context_get_sink_input_info() and friends */
+alias pa_sink_input_info_cb_t = void function(pa_context *c, const pa_sink_input_info *i, int eol, void *userdata);
+
+/** Get the complete sink input list */
+pa_operation* pa_context_get_sink_input_info_list(pa_context *c, pa_sink_input_info_cb_t cb, void *userdata);
+
+/** Callback prototype for pa_context_get_source_output_info() and friends */
+alias pa_source_output_info_cb_t = void function(pa_context *c, const pa_source_output_info *i, int eol, void *userdata);
+
+/** Get the complete list of source outputs */
+pa_operation* pa_context_get_source_output_info_list(pa_context *c, pa_source_output_info_cb_t cb, void *userdata);

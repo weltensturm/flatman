@@ -37,6 +37,20 @@ extern(C){
         devices.list ~= new Device(i);
     }
 
+    void sink_input_list_cb(pa_context* c, const pa_sink_input_info* i, int eol, void* user){
+        if(eol)
+            return;
+        auto list = cast(JackList)user;
+        list.list ~= new Jack(i);
+    }
+
+    void source_output_list_cb(pa_context* c, const pa_source_output_info* i, int eol, void* user){
+        if(eol)
+            return;
+        auto list = cast(JackList)user;
+        list.list ~= new Jack(i);
+    }
+
     void server_info_cb(pa_context* context, const pa_server_info* i, void* user) {
         auto pulseaudio = cast(Pulseaudio)user;
         pulseaudio.info.default_sink_name = i.default_sink_name.to!string;
@@ -84,7 +98,7 @@ class Device {
         name            = info.name.to!string;
         description     = info.description.to!string;
         mute            = info.mute == 1;
-        setVolume(&(info.volume));
+        updateVolume(&(info.volume));
     }
 
     this(const pa_sink_info* info) {
@@ -93,15 +107,15 @@ class Device {
         name            = info.name.to!string;
         description     = info.description.to!string;
         mute            = info.mute == 1;
-        setVolume(&(info.volume));
+        updateVolume(&(info.volume));
     }
 
-    void setVolume(const pa_cvolume* v) {
+    void updateVolume(const pa_cvolume* v) {
         volume         = *v;
         volume_avg     = pa_cvolume_avg(v);
         volume_percent = (volume_avg*100.0/PA_VOLUME_NORM).lround.to!int;
     }
-    
+
 };
 
 
@@ -116,6 +130,28 @@ class ServerInfo {
 };
 
 
+class Jack {
+    uint index;
+    enum Type { input, output }
+    Type type;
+
+    this(const pa_sink_input_info* info){
+        type            = Type.output;
+        index           = info.index;
+    }
+
+    this(const pa_source_output_info* info) {
+        type            = Type.input;
+        index           = info.index;
+    }
+
+}
+
+
+class JackList {
+    Jack[] list;
+}
+
 
 class Pulseaudio {
 
@@ -129,6 +165,8 @@ class Pulseaudio {
     ServerInfo info;
     Device defaultSink;
     Device defaultSource;
+
+    void delegate()[] onUpdate;
 
     void run(Op, Cb, Args...)(Op operation, Args args, Cb cb, void* user){
         pa_operation* op = operation(context, args, cb, user);
@@ -190,6 +228,31 @@ class Pulseaudio {
         writeln(info.default_source_name);
         defaultSink = sink(info.default_sink_name);
         defaultSource = source(info.default_source_name);
+        onUpdate.each!(a => a());
+    }
+
+    Jack[] sinkInputs(){
+        auto sinkInputs = new JackList;
+        run(&pa_context_get_sink_input_info_list, &sink_input_list_cb, cast(void*)sinkInputs);
+        return sinkInputs.list;
+    }
+
+    Jack[] sourceOutputs(){
+        auto sourceOutputs = new JackList;
+        run(&pa_context_get_source_output_info_list, &source_output_list_cb, cast(void*)sourceOutputs);
+        return sourceOutputs.list;
+    }
+
+    void setDefault(Device device){
+        if(device.type == Device.Type.sink){
+            foreach(jack; sinkInputs)
+                run(&pa_context_move_sink_input_by_index, jack.index, device.index, &success_cb, null);
+            run(&pa_context_set_default_sink, device.name.toStringz, &success_cb, null);
+        }else{
+            foreach(jack; sourceOutputs)
+                run(&pa_context_move_source_output_by_index, jack.index, device.index, &success_cb, null);
+            run(&pa_context_set_default_source, device.name.toStringz, &success_cb, null);
+        }
     }
 
     Device[] sinks(){
@@ -235,7 +298,7 @@ class Pulseaudio {
             throw new Exception("Source \"%s\" does not exist".format(name));
         return sources.list[0];
     }
-    
+
     void volume(Device device, double new_volume){
          volume(device, (new_volume*PA_VOLUME_NORM).lround.max(0).min(PA_VOLUME_MAX).to!pa_volume_t);
     }
@@ -258,4 +321,3 @@ class Pulseaudio {
             run(&pa_context_set_source_mute_by_index, device.index, cast(int)mute, &success_cb, null);
     }
 };
-
