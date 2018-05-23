@@ -81,18 +81,23 @@ class TrayIcon: ws.wm.Window {
     override void onDraw(){
         if(hidden)
             return;
-        draw.setColor([0,0,0]);
-        draw.rect([0,0], size);
+        draw.clear;
         if(pa.defaultSink){
             draw.setColor([1,1,1]);
-            foreach(bar; 0..size.w/2){
-                if(size.w*pa.defaultSink.volume_percent/100.0 <= bar*2)
+            auto barsWidth = size.w*2/3;
+            foreach(bar; 0..barsWidth/2){
+                if(barsWidth*pa.defaultSink.volume_percent/100.0 <= bar*2)
                     break;
-                if(size.w*(pa.defaultSink.volume_percent-100)/100.0 <= bar*2)
+                if(barsWidth*(pa.defaultSink.volume_percent-100)/100.0 <= bar*2)
                     draw.setColor([1,1,1]);
                 else
                     draw.setColor([1,0.3,0.3]);
-                draw.rect([bar*2,size.w/2-bar], [1, bar*2]);
+                draw.rect([size.w-barsWidth+bar*2,size.h/2-(size.h/5/2+bar)], [1, size.h/5+bar*2]);
+            }
+            draw.setColor([0.7,0.7,0.7]);
+            draw.rect([0, size.h/2-3], [size.w-barsWidth-1, 6]);
+            foreach(i; 0..4){
+                draw.rect([size.w-barsWidth-5+i, size.h/2-3-i], [1, 6+i*2]);
             }
         }
         super.onDraw;
@@ -213,11 +218,6 @@ class SinkRow: Base {
             draw.rect(pos, size);
         }
         draw.setColor([inUse ? 1 : 0.7,inUse ? 1 : 0.7,inUse ? 1 : 0.7]);
-        /+
-        draw.clip(pos.a+[15,20], [size.w-30, 30]);
-        draw.text([pos.x+15, pos.y+20], 30, sink.description, 0);
-        draw.noclip;
-        +/
         super.onDraw();
     }
 
