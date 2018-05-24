@@ -426,6 +426,7 @@ class Client: Base {
     void setWorkspace(long i){
         if(!monitor)
             return;
+        auto monitor = monitor;
         if(i >= 0 && i < monitor.workspaces.length && monitor.workspaces[i].clients.canFind(this))
             return;
         "%s set workspace %s".format(this, i).log;

@@ -70,6 +70,7 @@ enum handler = [
 	MappingNotify: (XEvent* e) => onMapping(e),
 	MapRequest: &onMapRequest,
 	PropertyNotify: (XEvent* e) => onProperty(&e.xproperty),
+	MapNotify: (XEvent* e) => onMap(&e.xmap, wintoclient(e.xmap.window)),
 	UnmapNotify: (XEvent* e) => onUnmap(&e.xunmap, wintoclient(e.xunmap.window))
 ];
 
@@ -90,6 +91,7 @@ enum handlerNames = [
 	MotionNotify: "MotionNotify",
 	PropertyNotify: "PropertyNotify",
 	UnmapNotify: "UnmapNotify",
+	MapNotify: "MapNotify"
 ];
 
 
@@ -333,6 +335,12 @@ void onMapRequest(XEvent *e){
 		}catch(Throwable t){
 			t.toString.log;
 		}
+	}
+}
+
+void onMap(XMapEvent* ev, Client client){
+	if(client){
+		client.onMap(ev);
 	}
 }
 
