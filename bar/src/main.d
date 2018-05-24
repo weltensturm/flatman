@@ -38,7 +38,7 @@ void main(){
 		}
 	}catch(Throwable t){}
 	foreach(bar; app.bars){
-		bar.onDestroy;
+		bar.close;
 	}
 	writeln("quit");
 }
@@ -58,7 +58,7 @@ class App {
 
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
-		
+
         config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"], &configChanged);
 
 		wm.on([
@@ -79,14 +79,16 @@ class App {
 		scan;
 
 	}
-	
+
 	void configChanged(){
 		foreach(bar; bars){
-			bar.onDestroy;
+			bar.close;
 		}
+		bars = [];
 		void delegate()[] delay;
 		foreach(barConf; config.bars){
 			auto bar = new Bar(this);
+			wm.add(bar);
 			bar.show;
 			bar.screen = barConf.screen;
 			if(!barConf.systray){
@@ -94,7 +96,6 @@ class App {
 			}else{
 				delay ~= { bar.systray(true); };
 			}
-			wm.add(bar);
 			bars ~= bar;
 		}
 		foreach(d;delay){d();}
@@ -224,4 +225,3 @@ class App {
 	}
 
 }
-

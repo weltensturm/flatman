@@ -145,6 +145,7 @@ class Bar: ws.wm.Window {
 	}
 
 	override void onDraw(){
+		draw.clear;
 		tick;
 		auto time = Clock.currTime;
 		if(update || time.second != second){

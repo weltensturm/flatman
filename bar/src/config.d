@@ -20,12 +20,28 @@ struct ConfigColor {
 }
 
 
+struct ConfigColor4 {
+
+	float[4] color;
+	alias color this;
+
+	this(string text){
+		color = [
+			text[0..2].to!int(16)/255.0,
+			text[2..4].to!int(16)/255.0,
+			text[4..6].to!int(16)/255.0,
+			text[6..8].to!int(16)/255.0
+		];
+	}
+}
+
+
 struct Config {
 
 	struct Theme {
 		ConfigColor foreground;
 		ConfigColor foregroundMain;
-		ConfigColor background;
+		ConfigColor4 background;
 
 		ConfigColor border;
 

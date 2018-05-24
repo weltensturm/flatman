@@ -13,11 +13,11 @@ enum _NET_SYSTEM_TRAY_ORIENTATION_VERT = 1;
 
 
 class TrayClient: Base {
-    
+
     this(x11.X.Window window){
         this.window = window;
     }
-    
+
     x11.X.Window window;
 
 }
@@ -151,13 +151,15 @@ class Tray: Base {
             writeln("WARNING: already docked");
             return;
         }
+
         XColor color;
         color.red = (0xffff*config.theme.background[0]).to!ushort;
-        color.green = (0xffff*config.theme.background[0]).to!ushort;
-        color.blue = (0xffff*config.theme.background[0]).to!ushort;
+        color.green = (0xffff*config.theme.background[1]).to!ushort;
+        color.blue = (0xffff*config.theme.background[2]).to!ushort;
         XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
         XSetWindowBackground(wm.displayHandle, window, color.pixel);
-        XSelectInput(wm.displayHandle, window, StructureNotifyMask | SubstructureNotifyMask | PropertyChangeMask | EnterWindowMask);
+
+        XSelectInput(wm.displayHandle, window, StructureNotifyMask | PropertyChangeMask | EnterWindowMask);
         auto info = Xembed.get_info(window);
         Xembed.embed(window, bar.windowHandle);
         XSync(dpy, false);
@@ -182,5 +184,3 @@ class Tray: Base {
     }
 
 }
-
-
