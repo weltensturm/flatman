@@ -6,9 +6,9 @@ import bar;
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	try {
-		char[128] buffer;
-		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
-		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
+		lastXerror = "X11 error: %s %s"
+				.format(cast(XRequestCode)e.request_code, cast(XErrorCode)e.error_code);
+		lastXerror.writeln;
 	}
 	catch(Throwable){}
 	return 0;
@@ -36,7 +36,9 @@ void main(){
 			}
 			Thread.sleep(10.msecs);
 		}
-	}catch(Throwable t){}
+	}catch(Throwable t){
+		writeln(t);
+	}
 	foreach(bar; app.bars){
 		bar.close;
 	}
@@ -58,6 +60,10 @@ class App {
 
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
+
+		debug(XError){
+			XSynchronize(dpy, true);
+		}
 
         config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"], &configChanged);
 
@@ -83,10 +89,14 @@ class App {
 	void configChanged(){
 		foreach(bar; bars){
 			bar.close;
+			bar.destroy;
 		}
 		bars = [];
 		void delegate()[] delay;
+		auto screens = .screens(wm.displayHandle);
 		foreach(barConf; config.bars){
+			if(barConf.screen !in screens)
+				continue;
 			auto bar = new Bar(this);
 			wm.add(bar);
 			bar.show;
@@ -98,6 +108,8 @@ class App {
 			}
 			bars ~= bar;
 		}
+		if(!bars.length)
+			writeln("WARNING: no bars created");
 		foreach(d;delay){d();}
 		updateScreens;
 	}

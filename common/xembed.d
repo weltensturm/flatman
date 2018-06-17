@@ -1,8 +1,13 @@
-module bar.xembed;
+module common.xembed;
 
 
-import bar;
-
+import
+    x11.X,
+    x11.Xatom,
+    x11.Xlib,
+    ws.x.property,
+    ws.wm,
+    common.xerror;
 
 enum XEMBED_VERSION =  0;
 
@@ -50,19 +55,18 @@ struct XembedWindow {
 
 
 class Xembed {
-    
+
     static void embedNotify(x11.X.Window client, x11.X.Window embedder, long version_){
         message_send(client, XEMBED_EMBEDDED_NOTIFY, 0, embedder, version_);
     }
 
     static void embed(x11.X.Window child, x11.X.Window parent){
-        XReparentWindow(wm.displayHandle, child, parent, 1000, 1000);
-        XMapWindow(wm.displayHandle, child);
+        X.ReparentWindow(wm.displayHandle, child, parent, 0, 0);
         embedNotify(child, parent, XEMBED_VERSION);
     }
 
     static void unembed(x11.X.Window child){
-        XReparentWindow(wm.displayHandle, child, .root, 0, 0);
+        X.ReparentWindow(wm.displayHandle, child, DefaultRootWindow(wm.displayHandle), 0, 0);
     }
 
     static void focus_in(x11.X.Window client, long focus_type){
@@ -91,8 +95,8 @@ class Xembed {
         ev.data.l[2] = d1;
         ev.data.l[3] = d2;
         ev.data.l[4] = d3;
-        ev.message_type = XInternAtom(wm.displayHandle, "_XEMBED", false);
-        XSendEvent(wm.displayHandle, window, false, None, cast(XEvent*)&ev);
+        ev.message_type = X.InternAtom(wm.displayHandle, "_XEMBED", false);
+        X.SendEvent(wm.displayHandle, window, false, None, cast(XEvent*)&ev);
     }
 
     static XembedInfo get_info(x11.X.Window win){
@@ -111,12 +115,10 @@ class Xembed {
         if(flagsChanged & XEMBED_MAPPED){
         +/
             if(info.flags & XEMBED_MAPPED){
-                writeln("mapping ", window);
-                XMapWindow(wm.displayHandle, window);
+                X.MapWindow(wm.displayHandle, window);
                 window_activate(window);
             }else{
-                writeln("unmapping ", window);
-                XUnmapWindow(wm.displayHandle, window);
+                X.UnmapWindow(wm.displayHandle, window);
                 window_deactivate(window);
                 focus_out(window);
             }
@@ -124,4 +126,3 @@ class Xembed {
     }
 
 }
-

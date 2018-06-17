@@ -58,6 +58,7 @@ public import
 	common.configLoader,
 	common.screens,
 	common.atoms,
+	common.xerror,
 
 	flatman.x.atoms,
 	flatman.x.ewmh,

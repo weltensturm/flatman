@@ -3,7 +3,7 @@ module bar.widget.taskList;
 import bar;
 
 
-class TaskList: Base {
+class TaskList: Widget {
 
     Bar bar;
     int[] separators;
@@ -13,6 +13,10 @@ class TaskList: Base {
     Properties!(
         "currentWorkspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false
     ) properties;
+
+    override int width(){
+        return size.w;
+    }
 
     this(Bar bar){
         this.bar = bar;
@@ -48,11 +52,11 @@ class TaskList: Base {
 		}
         if(!tabs.length)
         	return;
-		int width = ((size.w - config.theme.separatorWidth - tabs.length*config.theme.separatorWidth - (200*2)).to!double/(tabs.map!(a => a.length).sum))
+		int width = ((size.w - tabs.length*config.theme.separatorWidth).to!double/(tabs.map!(a => a.length).sum))
 					.min(250)
 					.to!int;
         extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.theme.separatorWidth).to!int;
-        start = size.w/2 - extents/2;
+        start = pos.x + size.w/2 - extents/2;
         int offset = start;
 		foreach(i, tab; tabs){
             if(i != 0)

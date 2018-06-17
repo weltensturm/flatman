@@ -14,4 +14,14 @@ class Widget: Base {
 
     void tick(){}
 
+    void destroy(){}
+
+    enum Alignment {
+        left,
+        right,
+        center
+    }
+
+    Alignment alignment;
+
 }

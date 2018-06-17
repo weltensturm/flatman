@@ -49,7 +49,7 @@ class Battery: Widget {
 
     override int width(){
         if(batteryInfo.enabled)
-            return draw.width("0:0000");
+            return draw.width("000:0");
         return 0;
     }
 

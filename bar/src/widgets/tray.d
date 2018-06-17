@@ -12,68 +12,227 @@ enum _NET_SYSTEM_TRAY_ORIENTATION_HORZ = 0;
 enum _NET_SYSTEM_TRAY_ORIENTATION_VERT = 1;
 
 
+class Managed(T){
+    T object;
+    private void delegate(T) deleter;
+    alias object this;
+    this(T object, void delegate(T) deleter){
+        this.object = object;
+        this.deleter = deleter;
+    }
+    ~this(){
+        deleter(object);
+    }
+}
+
+
+void repair(XDamageNotifyEvent* event){
+    XDamageSubtract(wm.displayHandle, event.damage, None, None);
+}
+
+
 class TrayClient: Base {
+
+    Damage damage;
 
     this(x11.X.Window window){
         this.window = window;
+        XWindowAttributes wa;
+        X.GetWindowAttributes(wm.displayHandle, window, &wa);
+        pos = [wa.x, wa.y];
+        size = [wa.width, wa.height];
+        damage = XDamageCreate(wm.displayHandle, window, XDamageReportNonEmpty);
     }
 
     x11.X.Window window;
+    Managed!Pixmap pixmap;
+    Managed!Picture picture;
+
+    void property(XPropertyEvent* e){
+        if(e.atom == Atoms._XEMBED_INFO)
+            Xembed.property_update(window);
+    }
+
+    void configure(XConfigureEvent* e){
+        writeln("configured ", pos, size);
+        pos = [e.x, e.y];
+        size = [e.width, e.height];
+        createPicture;
+    }
+
+    void show(XMapEvent*){
+        writeln("shown");
+        createPicture;
+    }
+
+    void remove(){
+        XDamageDestroy(wm.displayHandle, damage);
+    }
+
+    // when a client asks anything, say NO
+    void configureRequest(XConfigureRequestEvent* e){
+        XEvent event;
+        event.xconfigure.type = ConfigureNotify;
+        event.xconfigure.serial = LastKnownRequestProcessed(dpy);
+        event.xconfigure.send_event = True;
+        event.xconfigure.display = dpy;
+        event.xconfigure.event = e.window;
+        event.xconfigure.window = e.window;
+        event.xconfigure.x = pos.x;
+        event.xconfigure.y = pos.y;
+        event.xconfigure.width = size.w;
+        event.xconfigure.height = size.h;
+        event.xconfigure.above = None;
+        event.xconfigure.override_redirect = False;
+        X.SendEvent(dpy, e.window, False, 0, &event);
+    }
+
+    void delegate(XReparentEvent*) onReparent;
+    void delegate(XDestroyWindowEvent*) onDestroy;
+
+    void createPicture(){
+        XWindowAttributes a;
+        X.GetWindowAttributes(wm.displayHandle, window, &a);
+        if(!(a.map_state & IsViewable))
+            return;
+        XRenderPictFormat* format = X.RenderFindVisualFormat(wm.displayHandle, a.visual);
+        //hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
+        XRenderPictureAttributes pa;
+        pa.subwindow_mode = IncludeInferiors;
+        pixmap = new Managed!Pixmap(X.CompositeNameWindowPixmap(wm.displayHandle, window),
+                                    (Pixmap a){ X.FreePixmap(wm.displayHandle, a); });
+        picture = new Managed!Picture(X.RenderCreatePicture(wm.displayHandle, pixmap, format, CPSubwindowMode, &pa),
+                                      (Picture a){ X.RenderFreePicture(wm.displayHandle, a); });
+        //XRenderColor color = { 0, 0, 0, 0 };
+        //X.RenderFillRectangle(dpy, PictOpSrc, picture, &color, 0, 0, a.width, a.height);
+        window.sendExpose;
+        writeln("Created picture");
+    }
+
+    void drawTo(Picture target){
+        if(!picture)
+            return;
+        X.RenderComposite(
+            wm.displayHandle,
+            PictOpOver,
+            picture,
+            None,
+            target,
+            0,
+            0,
+            0,
+            0,
+            pos.x,
+            pos.y,
+            size.w,
+            size.h
+        );
+    }
 
 }
 
 
-class Tray: Base {
+TrayClient find(TrayClient[] windows, x11.X.Window window){
+    foreach(c; windows){
+        if(c.window == window)
+            return c;
+    }
+    return null;
+}
+
+
+void setSelection(x11.X.Window window, Atom atom){
+    if(X.GetSelectionOwner(wm.displayHandle, atom) != None)
+        throw new Exception("someone else already has selection");
+    if(!X.SetSelectionOwner(wm.displayHandle, atom, window, CurrentTime))
+        throw new Exception("could not get selection");
+}
+
+
+void set(WindowHandle window, Atom atom, int type, int format, long[] data){
+	X.ChangeProperty(wm.displayHandle, window, atom, type, format, PropModeReplace, cast(ubyte*)data.ptr, cast(int)data.length);
+}
+
+
+void sendExpose(x11.X.Window window){
+    XEvent xev;
+    xev.type = Expose;
+    xev.xexpose.window = window;
+    X.SendEvent(wm.displayHandle, window, False, ExposureMask, &xev);
+
+}
+
+void send(x11.X.Window window, Atom message, int format, long[] data){
+    XClientMessageEvent xev;
+    xev.type = ClientMessage;
+    xev.window = window;
+    xev.message_type = message;
+    xev.format = format;
+    xev.data.l[0..data.length] = data[];
+    X.SendEvent(wm.displayHandle, window, true, StructureNotifyMask, cast(XEvent*) &xev);
+
+}
+
+class Tray: Widget {
 
     Bar bar;
+    bool enabled;
 
     TrayClient[] clients;
-
     int[2] iconSize;
 
-    Atom selectionAtom;
-    Atom xembedInfo;
+    bool updateQueued;
 
-    void delegate(int)[] change;
+    override int width(){
+        return (iconSize.w)*clients.length.to!int;
+    }
+
+    int damageEvent;
+    int damageError;
 
     this(Bar bar){
-        wm.on([
-            ClientMessage: (XEvent* e) => evClientMessage(&e.xclient),
-            ReparentNotify: (XEvent* e) => evReparent(&e.xreparent),
-            PropertyNotify: (XEvent* e) => evProperty(&e.xproperty),
-            DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
-            //MapNotify: (XEvent* e) => update,
-        ]);
         this.bar = bar;
-        iconSize = [bar.size.h-2, bar.size.h-2];
-        if(XGetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0) != None)
-            throw new Exception("another systray already running");
-        if(XSetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle, CurrentTime)){
-            auto data = _NET_SYSTEM_TRAY_ORIENTATION_HORZ;
-            XChangeProperty(
-                wm.displayHandle,
-                bar.windowHandle,
-                Atoms._NET_SYSTEM_TRAY_ORIENTATION,
-                XA_CARDINAL, 32,
-                PropModeReplace,
-                cast(ubyte*)&data, 1);
-            XClientMessageEvent xev;
-            xev.type = ClientMessage;
-            xev.window = .root;
-            xev.message_type = Atoms.MANAGER;
-            xev.format = 32;
-            xev.data.l[0] = CurrentTime;
-            xev.data.l[1] = Atoms._NET_SYSTEM_TRAY_S0;
-            xev.data.l[2] = bar.windowHandle;
-            xev.data.l[3] = 0;
-            xev.data.l[4] = 0;
-            XSendEvent(wm.displayHandle, .root, false, StructureNotifyMask, cast(XEvent*) &xev);
-        }else{
-            throw new Exception("tray: System tray didn't get the system tray manager selection\n");
+    }
+
+    void enable(){
+        if(enabled)
+            return;
+        enabled = true;
+        X.CompositeRedirectSubwindows(wm.displayHandle, bar.windowHandle, CompositeRedirectManual);
+        iconSize = [24, 24];
+        bar.windowHandle.setSelection(Atoms._NET_SYSTEM_TRAY_S0);
+        bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_ORIENTATION, XA_CARDINAL, 32, [_NET_SYSTEM_TRAY_ORIENTATION_HORZ]);
+        bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_VISUAL, XA_VISUALID, 32, [wm.graphicsInfo.visualid]);
+        .root.send(Atoms.MANAGER, 32, [CurrentTime, Atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle]);
+        wm.on(bar.windowHandle, [ClientMessage: (XEvent* e) => clientMessage(&e.xclient)]);
+        XDamageQueryExtension(wm.displayHandle, &damageEvent, &damageError);
+        wm.on([
+            damageEvent + XDamageNotify: (XEvent* e){
+                auto ev = cast(XDamageNotifyEvent*)e;
+                foreach(c; clients){
+                    if(c.window == e.xany.window){
+                        bar.update = true;
+                    }
+                    repair(ev);
+                }
+            }
+        ]);
+    }
+
+    void disable(){
+        if(!enabled)
+            return;
+        enabled = false;
+        X.CompositeUnredirectSubwindows(wm.displayHandle, bar.windowHandle, CompositeRedirectManual);
+        X.SetSelectionOwner(wm.displayHandle, Atoms._NET_SYSTEM_TRAY_S0, None, CurrentTime);
+        foreach(client; clients){
+            writeln("removing ", client);
+            Xembed.unembed(client.window);
+            X.UnmapWindow(dpy, client.window);
         }
     }
 
-    void evClientMessage(XClientMessageEvent* e){
+    void clientMessage(XClientMessageEvent* e){
         if (e.message_type == Atoms._NET_SYSTEM_TRAY_OPCODE){
             switch (e.data.l[1]){
                 case SYSTEM_TRAY_REQUEST_DOCK:
@@ -81,46 +240,16 @@ class Tray: Base {
                         dock(e.data.l[2]);
                     }
                     break;
-                default: break;
+                default:
+                    writeln("unknown systray message ", e.data);
             }
         }else if(e.message_type == Atoms._XEMBED){
             switch(e.data.l[1]){
                 case XEMBED_REQUEST_FOCUS:
-                    writeln("focus ", e.window);
                     Xembed.focus_in(e.window, XEMBED_FOCUS_CURRENT);
                     break;
-                default: break;
-            }
-        }
-    }
-
-    void evProperty(XPropertyEvent* e){
-        if(e.atom == xembedInfo){
-            foreach(client; clients){
-                if(client.window == e.window){
-                    Xembed.property_update(client.window);
-                    update;
-                }
-            }
-        }
-    }
-
-    void evReparent(XReparentEvent* e){
-        foreach(client; clients){
-            if(client.window == e.window && e.parent != bar.windowHandle){
-                writeln("removing ", e.window);
-                clients = clients.without(client);
-                update;
-            }
-        }
-    }
-
-    void evDestroy(x11.X.Window window){
-        foreach(client; clients){
-            if(client.window == window){
-                writeln("removing ", window);
-                clients = clients.without(client);
-                update;
+                default:
+                    writeln("unknown xembed message ", e.data);
             }
         }
     }
@@ -129,20 +258,19 @@ class Tray: Base {
         if(size == this.size)
             return;
         super.resize(size);
-        update;
+        iconSize = [size.h-2, size.h-2];
+        updateQueued = true;
     }
 
     override void move(int[2] pos){
         if(pos == this.pos)
             return;
         super.move(pos);
-        update;
+        updateQueued = true;
     }
 
-    void destroy(){
-        foreach(client; clients)
-            Xembed.unembed(client.window);
-        XSetSelectionOwner(wm.displayHandle, selectionAtom, None, CurrentTime);
+    override void destroy(){
+        disable;
     }
 
     void dock(x11.X.Window window){
@@ -152,35 +280,65 @@ class Tray: Base {
             return;
         }
 
-        XColor color;
-        color.red = (0xffff*config.theme.background[0]).to!ushort;
-        color.green = (0xffff*config.theme.background[1]).to!ushort;
-        color.blue = (0xffff*config.theme.background[2]).to!ushort;
-        XAllocColor(wm.displayHandle, bar.windowAttributes.colormap, &color);
-        XSetWindowBackground(wm.displayHandle, window, color.pixel);
+        auto client = new TrayClient(window);
+        client.onDestroy = (e){
+            writeln("destroyed window");
+            undock(client);
+        };
+        client.onReparent = (e){
+            if(e.parent != bar.windowHandle){
+                writeln("reparented window");
+                undock(client);
+            }
+        };
+        X.SelectInput(wm.displayHandle, window, StructureNotifyMask | PropertyChangeMask | EnterWindowMask);
+        
+        XSetWindowBackgroundPixmap(wm.displayHandle, window, None);
 
-        XSelectInput(wm.displayHandle, window, StructureNotifyMask | PropertyChangeMask | EnterWindowMask);
-        auto info = Xembed.get_info(window);
         Xembed.embed(window, bar.windowHandle);
-        XSync(dpy, false);
-        if(info.flags == XEMBED_MAPPED)
-            XMapWindow(wm.displayHandle, window);
-        clients ~= new TrayClient(window);
-        update;
+        auto info = Xembed.get_info(window);
+        if(info.flags & XEMBED_MAPPED)
+            X.MapWindow(wm.displayHandle, window);
+        X.AddToSaveSet(wm.displayHandle, window);
+        wm.on(
+            window,
+            &client.property,
+            &client.configure,
+            &client.configureRequest,
+            &client.show,
+            client.onReparent,
+            client.onDestroy
+        );
+        clients ~= client;
+        updateQueued = true;
+    }
+
+    void undock(TrayClient client){
+        writeln("undock ", client.window);
+        clients = clients.without(client);
+        //wm.unhook(client.window);
     }
 
     void update(){
-        XSync(wm.displayHandle, false);
+        "update %s".format(clients.length).writeln;
         int offset = pos.x;
         foreach(client; clients){
-            //XClearArea(wm.displayHandle, client.window, 0, 0, iconSize.w, iconSize.h, true);
-            XMapWindow(wm.displayHandle, client.window);
-            XMoveResizeWindow(wm.displayHandle, client.window, offset+1, +1, iconSize.w, iconSize.h);
-            offset += iconSize.w+5;
-            XSync(dpy, false);
+            X.MoveResizeWindow(wm.displayHandle, client.window, offset+3, +3, iconSize.w-4, iconSize.h-4);
+            offset += iconSize.w;
         }
-        foreach(cb; change)
-            cb(clients.length.to!int);
+    }
+
+    override void onDraw(){
+        foreach(c; clients){
+            c.drawTo(bar.draw.to!XDraw.picture);
+        }
+    }
+
+    override void tick(){
+        if(updateQueued){
+            update;
+            updateQueued = false;
+        }
     }
 
 }
