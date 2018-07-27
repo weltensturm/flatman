@@ -29,7 +29,7 @@ class Tabs: Container {
         hidden = false;
         resize(size);
         if(active)
-            active.showSoft;
+            active.configure;
     }
 
     override void hide(){

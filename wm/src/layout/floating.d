@@ -38,7 +38,7 @@ class Floating: Container {
 		if(!hidden)
 			return;
 		foreach(c; clients)
-			c.showSoft;
+			c.configure;
 		hidden = false;
 	}
 

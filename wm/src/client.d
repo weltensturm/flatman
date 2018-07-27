@@ -117,13 +117,11 @@ class Client: Base {
     void focus(){
         if(!clients.canFind(this))
             return;
-        "%s focus".format(this).log;
         .monitor = monitor;
-        if(currentFocus)
+        if(currentFocus && currentFocus != this)
             currentFocus.unfocus(false);
         if(isUrgent)
             clearUrgent;
-        show;
         grabButtons(true);
         currentFocus = this;
         previousFocus = this;
@@ -132,6 +130,7 @@ class Client: Base {
         configure;
         .monitor.setActive(this);
         setFocus;
+        "%s focus".format(this).log;
     }
 
     void onConfigureRequest(XConfigureRequestEvent* e){
@@ -293,10 +292,6 @@ class Client: Base {
 
     void lower(){
         XLowerWindow(dpy, win);
-    }
-
-    void showSoft(){
-        configure;
     }
 
     void hideSoft(){
@@ -657,8 +652,12 @@ class Client: Base {
         }
     }
 
+    void onMap(XMapEvent* e){
+        configure;
+    }
+
     void onUnmap(XUnmapEvent* e){
-        hide;
+        configure;
     }
 
 };
