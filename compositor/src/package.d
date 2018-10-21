@@ -5,6 +5,7 @@ public import
 	core.thread,
 	core.sys.posix.signal,
 	core.memory,
+	
 	std.process,
 	std.algorithm,
 	std.array,
@@ -17,8 +18,10 @@ public import
 	std.conv,
 	std.traits,
 	std.random,
+
 	derelict.opengl3.gl,
 	derelict.opengl3.glx,
+
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
@@ -32,6 +35,7 @@ public import
 	x11.extensions.Xrender,
 	x11.extensions.Xdamage,
 	x11.keysymdef,
+
 	ws.wm,
 	ws.event,
 	ws.gui.input,
@@ -44,10 +48,13 @@ public import
 	ws.gl.context,
 	ws.gl.draw,
 	ws.draw,
+
 	common.window,
 	common.screens,
 	common.atoms,
 	common.configLoader,
+	common.queryTree,
+
 	composite.util,
 	composite.main,
 	composite.config,

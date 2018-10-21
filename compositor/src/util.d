@@ -56,7 +56,7 @@ class X {
 }
 
 bool inside(int[2] pos, int[2] rectPos, int[2] rectSize, int height){
-    return 
+    return
         pos.x > rectPos.x
         && pos.y > height - rectPos.y - rectSize.h
         && pos.x < rectPos.x + rectSize.w
@@ -101,22 +101,6 @@ struct Profile {
             writeln(" ".replicate(level*4) ~ "%3.5f".format(diff) ~ ": " ~ name);
         }
     }
-}
-
-
-x11.X.Window[] queryTree(){
-    x11.X.Window[] result;
-    XGrabServer(wm.displayHandle);
-    x11.X.Window root_return, parent_return;
-    x11.X.Window* children;
-    uint count;
-    XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &count);
-    if(children && root == root_return){
-        result = children[0..count].dup;
-        XFree(children);
-    }
-    XUngrabServer(wm.displayHandle);
-    return result;
 }
 
 
@@ -293,4 +277,3 @@ enum XRequestCodes = [
     119:	"X_GetModifierMapping",
     127:	"X_NoOperation"
 ];
-

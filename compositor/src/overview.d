@@ -58,6 +58,7 @@ class Overview {
             resetPos = true;
             doOverview = true;
             window.show;
+            window.active = true;
             window.move([0, 0]);
             window.resize([manager.width, manager.height]);
             XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
@@ -90,6 +91,7 @@ class Overview {
         if(now){
             doOverview = false;
             //window.hide;
+            XUngrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle);
             XUngrabPointer(wm.displayHandle, CurrentTime);
             zoomList = [];
             foreach(c; manager.clients ~ manager.destroyed){
@@ -146,8 +148,9 @@ class Overview {
     }
 
     void tick(double[4] strut){
-        if(!doOverview && !visible && !window.hidden){
+        if(!doOverview && !visible && window.active){
             window.hide;
+            window.active = false;
         }
         if(!visible){
             return;
@@ -248,7 +251,8 @@ class Overview {
         return false;
     }
 
-	void calcWindow(CompositeClient client, ref int[2] pos, ref double[2] offset, ref int[2] size, ref double scale, ref double alpha){
+	void calcWindow(CompositeClient client, ref int[2] pos, ref double[2] offset, ref int[2] size,
+                    ref double scale, ref double alpha, ref double ghostAlpha){
         if(!visible)
             return;
         if(has(client)){
@@ -441,10 +445,10 @@ class Overview {
                             auto c = w.window;
                             if(!c.picture || c.hidden)
                                 continue;
-                            c.updateScale(scale);
+                            c.picture.scale([scale, scale]);
                             backend.render(
                                 c.picture,
-                                state < 1 || c.hasAlpha,
+                                state < 1 || c.picture.hasAlpha,
                                 state,
                                 [(c.pos.x*scale+wsp.x - m.pos.x*scale).to!int,
                                 (c.pos.y*scale+wsp.y - m.pos.y*scale).to!int],

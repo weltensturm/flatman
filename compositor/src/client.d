@@ -19,14 +19,78 @@ class OverviewAnimation {
 }
 
 
-class CompositeClient: ws.wm.Window {
+class ClientFramebuffer {
+
+    Picture picture;
+    Pixmap pixmap;
+    int[2] size;
+    double[2] pictureScale;
+
+    alias picture this;
 
     bool hasAlpha;
-    Picture picture;
-    Picture resizeGhost;
-    Pixmap resizeGhostPixmap;
-    int[2] resizeGhostSize;
-    Pixmap pixmap;
+
+    this(x11.X.Window window, XWindowAttributes a){
+        XRenderPictFormat* format = XRenderFindVisualFormat(wm.displayHandle, a.visual);
+        if(!format){
+            "failed to find format".writeln;
+            return;
+        }
+        hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
+        XRenderPictureAttributes pa;
+        pa.subwindow_mode = IncludeInferiors;
+        pixmap = XCompositeNameWindowPixmap(wm.displayHandle, window);
+
+        x11.X.Window root_return;
+        int int_return;
+        uint short_return;
+
+        auto s = XGetGeometry(wm.displayHandle, pixmap, &root_return, &int_return, &int_return, &short_return,
+                              &short_return, &short_return, &short_return);
+        if(!s){
+            "XCompositeNameWindowPixmap failed for ".writeln(window);
+            pixmap = None;
+            picture = None;
+            return;
+        }
+
+        picture = XRenderCreatePicture(wm.displayHandle, pixmap, format, CPSubwindowMode, &pa);
+        XRenderSetPictureFilter(wm.displayHandle, picture, "best", null, 0);
+        pictureScale = [1,1];
+        size = [a.width, a.height];
+    }
+
+    ~this(){
+        if(pixmap){
+            XFreePixmap(wm.displayHandle, pixmap);
+            pixmap = None;
+        }
+        if(picture){
+            XRenderFreePicture(wm.displayHandle, picture);
+            picture = None;
+        }
+    }
+
+    void scale(double[2] factor){
+        if(pictureScale == factor)
+            return;
+        pictureScale = factor;
+        XTransform xf = {[
+            [XDoubleToFixed( 1/factor[0] ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
+            [XDoubleToFixed( 0 ), XDoubleToFixed( 1/factor[1] ), XDoubleToFixed( 0 )],
+            [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( 1 )]
+        ]};
+        XRenderSetPictureTransform(wm.displayHandle, picture, &xf);
+    }
+
+}
+
+
+class CompositeClient: ws.wm.Window {
+
+    ClientFramebuffer picture;
+    ClientFramebuffer ghost;
+
     XWindowAttributes a;
     bool destroyed;
     long sortIndex;
@@ -46,8 +110,9 @@ class CompositeClient: ws.wm.Window {
     double[2] animOffset;
     double animScale;
     double animAlpha;
+    double animGhostAlpha;
     bool stale = true;
-    bool hiddenRedrawn = false;
+    bool hiddenRedrawn;
 
     Properties!(
         "workspace", "_NET_WM_DESKTOP", XA_CARDINAL, false,
@@ -98,7 +163,6 @@ class CompositeClient: ws.wm.Window {
         if(hidden)
             return;
         stale = false;
-        cleanup;
         "create picture".writeln;
         if(!XGetWindowAttributes(wm.displayHandle, windowHandle, &a)){
             "could not get attributes".writeln;
@@ -106,101 +170,20 @@ class CompositeClient: ws.wm.Window {
         }
         if(!(a.map_state & IsViewable))
             return;
-        XRenderPictFormat* format = XRenderFindVisualFormat(wm.displayHandle, a.visual);
-        if(!format){
-            "failed to find format".writeln;
-            return;
-        }
-        hasAlpha = (format.type == PictTypeDirect && format.direct.alphaMask);
-        XRenderPictureAttributes pa;
-        pa.subwindow_mode = IncludeInferiors;
-        pixmap = XCompositeNameWindowPixmap(wm.displayHandle, windowHandle);
-
-        x11.X.Window root_return;
-        int int_return;
-        uint short_return;
-
-        auto s = XGetGeometry(wm.displayHandle, pixmap, &root_return, &int_return, &int_return, &short_return, &short_return, &short_return, &short_return);
-        if(!s){
-            "XCompositeNameWindowPixmap failed for ".writeln(windowHandle);
-            pixmap = None;
-            picture = None;
-            return;
-        }
-
-        picture = XRenderCreatePicture(wm.displayHandle, pixmap, format, CPSubwindowMode, &pa);
-        XRenderSetPictureFilter(wm.displayHandle, picture, "best", null, 0);
-
-        scale = 0;
-        resizeGhostScale = 0;
-    }
-
-    void cleanup(){
-        if(pixmap){
-            XFreePixmap(wm.displayHandle, pixmap);
-            pixmap = None;
-        }
-        if(picture){
-            XRenderFreePicture(wm.displayHandle, picture);
-            picture = None;
-        }
-    }
-
-    double scale;
-
-    void updateScale(double scale){
-        if(this.scale == scale)
-            return;
-        this.scale = scale;
-        XTransform xf = {[
-            [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-            [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
-            [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
-        ]};
-        XRenderSetPictureTransform(wm.displayHandle, picture, &xf);
-    }
-
-    double resizeGhostScale;
-
-    void updateResizeGhostScale(double scale){
-        if(scale == resizeGhostScale)
-            return;
-        resizeGhostScale = scale;
-        XTransform xf = {[
-            [XDoubleToFixed( 1 ), XDoubleToFixed( 0 ), XDoubleToFixed( 0 )],
-            [XDoubleToFixed( 0 ), XDoubleToFixed( 1 ), XDoubleToFixed( 0 )],
-            [XDoubleToFixed( 0 ), XDoubleToFixed( 0 ), XDoubleToFixed( scale )]
-        ]};
-        XRenderSetPictureTransform(wm.displayHandle, resizeGhost, &xf);
+        ghost = picture;
+        picture = new ClientFramebuffer(windowHandle, a);
     }
 
     void destroy(){
-        if(pixmap)
-            XFreePixmap(wm.displayHandle, pixmap);
-        if(picture)
-            XRenderFreePicture(wm.displayHandle, picture);
-        if(resizeGhostPixmap)
-            XFreePixmap(wm.displayHandle, resizeGhostPixmap);
-        if(resizeGhost)
-            XRenderFreePicture(wm.displayHandle, resizeGhost);
+        picture = null;
+        ghost = null;
     }
 
     override void resized(int[2] size){
-        if(animation.fade.completion < 0.1)
+        if(animation.fade.completion < 0.1 || a.override_redirect)
             animation.size = [size.x, size.y];
-        resizeGhostSize = this.size;
         "resize %s %s old %s".format(title, size, this.size).writeln;
         this.size = size;
-
-        if(resizeGhostPixmap)
-            XFreePixmap(wm.displayHandle, resizeGhostPixmap);
-        resizeGhostPixmap = pixmap;
-        pixmap = None;
-
-        if(resizeGhost)
-            XRenderFreePicture(wm.displayHandle, resizeGhost);
-        resizeGhost = picture;
-        picture = None;
         createPicture;
     }
 
@@ -208,7 +191,7 @@ class CompositeClient: ws.wm.Window {
         auto monitor = manager.screens[manager.screens.findScreen(pos, size)];
         if(pos.y <= this.pos.y-monitor.h || pos == this.pos)
             return;
-        if(properties.workspace.value < 0 || animation.fade.completion < 0.1){
+        if(properties.workspace.value < 0 || animation.fade.completion < 0.1 || a.override_redirect){
             animation.pos = [pos.x, pos.y];
         }
         this.pos = pos;
@@ -243,12 +226,6 @@ class CompositeClient: ws.wm.Window {
         hidden = true;
         "onHide %s".format(title).writeln;
         animation.fade.change(0);
-        if(resizeGhostPixmap)
-            XFreePixmap(wm.displayHandle, resizeGhostPixmap);
-        resizeGhostPixmap = None;
-        if(resizeGhost)
-            XRenderFreePicture(wm.displayHandle, resizeGhost);
-        resizeGhost = None;
     }
 
     override string toString(){

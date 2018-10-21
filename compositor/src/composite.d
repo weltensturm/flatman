@@ -215,7 +215,7 @@ class CompositeManager {
 
     void cleanup(){
         foreach(client; clients)
-            client.cleanup;
+            client.destroy;
         backend.destroy;
     }
 
@@ -409,6 +409,14 @@ class CompositeManager {
     void animate(CompositeClient c){
         c.animScale = 1;//alpha/4+0.75;
         c.animAlpha = c.animation.fade.calculate;
+        if(c.ghost && c.animation.size != c.size){
+            auto transition = ((c.animSize.w - c.ghost.size.w.to!double)/(c.size.x - c.ghost.size.w.to!double)
+                            .min((c.animSize.h - c.ghost.size.h.to!double)/(c.size.h - c.ghost.size.h.to!double))
+                            ).min(1).max(0);
+            c.animGhostAlpha = (1-transition);
+        }else{
+            c.animGhostAlpha = 0;
+        }
         c.animPos = [
             c.animation.pos.x.lround.to!int,
             c.animation.pos.y.lround.to!int
@@ -421,7 +429,7 @@ class CompositeManager {
             c.animation.size.x.lround.to!int,
             c.animation.size.y.lround.to!int
         ];
-        overview.calcWindow(c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
+        overview.calcWindow(c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha, c.animGhostAlpha);
         if(c.animPos != c.oldPos || c.animSize != c.oldSize){
             moved(c, c.animPos, c.animSize);
             c.oldPos = c.animPos;
@@ -467,22 +475,27 @@ class CompositeManager {
         with(Profile("Draw(" ~ c.title ~ ":" ~ c.windowHandle.to!string ~ ")")){
 
             overview.drawPre(backend, c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
-        
-            c.updateScale(c.animScale);
+    
+            if(c.picture){
+                auto w1 = c.animSize.w/c.size.w.to!double;
+                auto h1 = c.animSize.h/c.size.h.to!double;
+                c.picture.scale([w1, h1]);
+            }
 
-            if(c.resizeGhost && c.animation.size != c.size){
-                c.updateResizeGhostScale(c.animScale);
-                int[2] ghostSize = [(c.animSize.x*c.animScale).lround.to!int, (c.animSize.y*c.animScale).lround.to!int];
-                auto ghostAlpha = c.animAlpha; // * (1-c.animation.size.x.completion).max(0).min(1);
-                if(c.animation.size != c.size){
-                    damage.damage(c.animPos, ghostSize);
-                    backend.render(c.resizeGhost, c.hasAlpha, ghostAlpha, c.animOffset.to!(int[2]), c.animPos, ghostSize);
-                }
+            double transition = 1;
+
+            if(c.ghost && c.animation.size != c.size){
+                transition = ((c.animSize.w - c.ghost.size.w.to!double)/(c.size.x - c.ghost.size.w.to!double)
+                              .min((c.animSize.h - c.ghost.size.h.to!double)/(c.size.h - c.ghost.size.h.to!double))
+                              ).min(1).max(0);
+                auto w = c.animSize.w.to!double/c.ghost.size.w;
+                auto h = c.animSize.h.to!double/c.ghost.size.h;
+                c.ghost.scale([w, h]);
+                backend.render(c.ghost, c.ghost.hasAlpha, (1-transition)*c.animAlpha, c.animOffset.to!(int[2]), c.animPos, c.animSize);
             }
 
             if(c.picture){
-                c.animAlpha = c.animAlpha*(c.resizeGhost ? 1-((c.animation.size.x-c.size.x).abs/512.0).min(1) : 1).max(0);
-                backend.render(c.picture, c.hasAlpha, c.animAlpha, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+                backend.render(c.picture, c.picture.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
             }
             //drawShadow(c.animPos, c.animSize);
             overview.drawPost(backend, c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
