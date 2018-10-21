@@ -59,16 +59,6 @@ keys {
 }
 
 
-autostart {
-    flatman-bar
-    flatman-volume-notify
-    flatman-battery-notify
-    flatman-backlight-notify
-    flatman-compositor
-    flatman-volume-icon
-}
-
-
 workspace-wrap false
 
 

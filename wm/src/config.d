@@ -42,7 +42,6 @@ struct NestedConfig {
 
 	string mod;
 	string[string] keys;
-	string[] autostart;
 
 	bool workspaceWrap;
 

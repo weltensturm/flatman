@@ -19,10 +19,16 @@ private {
 	shared static this(){
 		mutex = new shared Mutex;
 		logger = spawn({
-			while(true){
-				receive((string s){
-					"/tmp/flatman.log".append(s);
-				});
+            bool run = true;
+			while(run){
+				receive(
+                    (string s){
+					    "/tmp/flatman.log".append(s);
+    				},
+                    (bool){
+                        run = false;
+                    }
+                );
 			}
 		});
 	}
@@ -57,7 +63,7 @@ struct Log {
 				GREY,
 				Clock.currTime.toISOExtString[0..19],
 				Clock.currTime.fracSecs.total!"msecs"/10,
-				" ".replicate(indent*8),
+				" ".replicate(indent*2),
 				DEFAULT ~ s ~ DEFAULT
 		);
 	}
@@ -74,9 +80,16 @@ struct Log {
 		text.write;
 	}
 
+    static void shutdown(){
+        logger.send(false);
+    }
+
 }
 
 
 void log(string s){
 	Log.info(s);
 }
+
+
+

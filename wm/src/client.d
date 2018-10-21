@@ -12,10 +12,30 @@ enum MOUSEMASK = BUTTONMASK|PointerMotionMask;
 Atom[] unknown;
 
 
-Client currentFocus;
+
+string getTitle(Window window){
+    Atom actType;
+    size_t nItems, bytes;
+    int actFormat;
+    ubyte* data;
+    XGetWindowProperty(
+            dpy, window, Atoms._NET_WM_NAME, 0, 0x77777777, False, Atoms.UTF8_STRING,
+            &actType, &actFormat, &nItems, &bytes, &data
+    );
+    auto text = to!string(cast(char*)data);
+    XFree(data);
+    if(!text.length){
+        if(!gettextprop(window, Atoms._NET_WM_NAME, text))
+            gettextprop(window, XA_WM_NAME, text);
+    }
+    return text;
+}
 
 
 class Client: Base {
+
+    Window win;
+    Window orig;
 
     string name;
     float[2] aspectRange;
@@ -31,21 +51,17 @@ class Client: Base {
     bool global;
     bool isfixed, neverfocus, isfullscreen;
     bool sentDelete;
-    Window win;
-    Window orig;
     Frame frame;
     bool strut;
     bool destroyed;
+    bool iconified;
 
     ubyte[] icon;
     Icon xicon;
     long[2] iconSize;
 
-    long ignoreUnmap;
-
     this(Window client){
         hidden = false;
-        XSync(dpy, false);
 
         XWindowAttributes attr;
         XGetWindowAttributes(dpy, client, &attr);
@@ -58,7 +74,7 @@ class Client: Base {
         win = client;
 
         Window trans = None;
-        if(XGetTransientForHint(dpy, orig, &trans) && wintoclient(trans)){
+        if(XGetTransientForHint(dpy, orig, &trans) && find(trans)){
         }else
             applyRules;
 
@@ -69,10 +85,12 @@ class Client: Base {
         updateIcon;
         updateTitle;
         updateDecorated;
+
+        Events[orig] ~= this;
     }
 
     override string toString(){
-        return "(%s:%s)".format(win, name);
+        return Log.YELLOW ~ "(%s:%s)".format(win, name) ~ Log.DEFAULT;
     }
 
     void applyRules(){
@@ -114,6 +132,7 @@ class Client: Base {
         XFree(wmh);
     }
 
+    /+
     void focus(){
         if(!clients.canFind(this))
             return;
@@ -126,12 +145,12 @@ class Client: Base {
         currentFocus = this;
         previousFocus = this;
         restack;
-        XSync(dpy, false);
         configure;
         .monitor.setActive(this);
         setFocus;
         "%s focus".format(this).log;
     }
+    +/
 
     void onConfigureRequest(XConfigureRequestEvent* e){
         if(global || isFloating){
@@ -140,6 +159,21 @@ class Client: Base {
                 move([e.x, e.y]);
             if(e.value_mask & (CWWidth | CWHeight))
                 resize([e.width, e.height]);
+        }else{
+            XEvent event;
+            event.xconfigure.type = ConfigureNotify;
+            event.xconfigure.serial = LastKnownRequestProcessed(dpy);
+            event.xconfigure.send_event = True;
+            event.xconfigure.display = dpy;
+            event.xconfigure.event = e.window;
+            event.xconfigure.window = e.window;
+            event.xconfigure.x = pos.x;
+            event.xconfigure.y = pos.y;
+            event.xconfigure.width = size.w;
+            event.xconfigure.height = size.h;
+            event.xconfigure.above = None;
+            event.xconfigure.override_redirect = False;
+            XSendEvent(dpy, e.window, False, 0, &event);
         }
     }
 
@@ -152,10 +186,11 @@ class Client: Base {
         }
     }
 
-    void onConfigure(int[2] pos, int[2] size){
+    @WindowConfigure
+    void onConfigure(XConfigureEvent* e){
         if(isFloating || global){
             auto current = findMonitor(this);
-            auto target = findMonitor(pos, size);
+            auto target = findMonitor([e.x, e.y], [e.width, e.height]);
             if(current != target){
                 current.remove(this);
                 target.add(this, current.workspaceActive);
@@ -234,7 +269,8 @@ class Client: Base {
         ulong bytes, items, count;
         ubyte* data;
         Atom actualType, atom;
-        if(XGetWindowProperty(dpy, orig, Atoms._NET_WM_STRUT_PARTIAL, 0, 12, false, XA_CARDINAL, &actualType, &actualFormat, &count, &bytes, &data) == Success && data){
+        if(XGetWindowProperty(dpy, orig, Atoms._NET_WM_STRUT_PARTIAL, 0, 12, false, XA_CARDINAL, &actualType,
+                              &actualFormat, &count, &bytes, &data) == Success && data){
             assert(actualType == XA_CARDINAL);
             assert(actualFormat == 32);
             assert(count == 12);
@@ -250,21 +286,7 @@ class Client: Base {
     }
 
     string getTitle(){
-        Atom actType;
-        size_t nItems, bytes;
-        int actFormat;
-        ubyte* data;
-        XGetWindowProperty(
-                dpy, orig, Atoms._NET_WM_NAME, 0, 0x77777777, False, Atoms.UTF8_STRING,
-                &actType, &actFormat, &nItems, &bytes, &data
-        );
-        auto text = to!string(cast(char*)data);
-        XFree(data);
-        if(!text.length){
-            if(!gettextprop(orig, Atoms._NET_WM_NAME, text))
-                gettextprop(orig, XA_WM_NAME, text);
-        }
-        return text;
+        return orig.getTitle;
     }
 
     void grabButtons(bool focused){
@@ -276,7 +298,8 @@ class Client: Base {
         if(focused){
             foreach(button; .buttons){
                 foreach(modifier; modifiers){
-                    XGrabButton(dpy, button.button, button.mask | modifier, orig, false, BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
+                    XGrabButton(dpy, button.button, button.mask | modifier, orig, false, BUTTONMASK,
+                                GrabModeAsync, GrabModeSync, None, None);
                 }
             }
         }else
@@ -308,22 +331,28 @@ class Client: Base {
         "%s show".format(this).log;
         setState(NormalState);
         hidden = false;
+        iconified = false;
         XMapWindow(dpy, win);
-        configure;
-        if(frame)
-            XMapWindow(dpy, frame.window);
-        XSync(dpy, false);
     }
 
     override void hide(){
         "%s hide".format(this).log;
-        setState(WithdrawnState);
+        setState(IconicState);
+        iconified = true;
         hidden = true;
-        ignoreUnmap += 1;
         XUnmapWindow(dpy, win);
+    }
+
+    @WindowUnmap
+    void onUnmap(){
         if(frame)
             frame.hide;
-        XSync(dpy, false);
+    }
+
+    @WindowMap
+    void shown(){
+        if(frame)
+            frame.show;
     }
 
     auto isVisible(){
@@ -334,7 +363,6 @@ class Client: Base {
         string env;
         /+
         try {
-            XSync(dpy, false);
             env = "/proc/%d/environ".format(orig.getprop!CARDINAL(Atoms._NET_WM_PID)).readText;
             auto match = matchFirst(env, r"FLATMAN_WORKSPACE=([0-9]+)");
             "%s origin=%s".format(this, match).log;
@@ -386,16 +414,6 @@ class Client: Base {
         return exists;
     }
 
-    void setFocus(){
-        if(!neverfocus){
-            XSetInputFocus(dpy, orig, RevertToPointerRoot, CurrentTime);
-            XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
-                             XA_WINDOW, 32, PropModeReplace,
-                             cast(ubyte*) &(orig), 1);
-        }
-        sendEvent(wm.takeFocus);
-    }
-
     void setFullscreen(bool fullscreen){
         "%s fullscreen=%s".format(this, fullscreen).log;
         isfullscreen = fullscreen;
@@ -409,7 +427,7 @@ class Client: Base {
         }
         monitor.update(this);
         if(this == flatman.active)
-            focus;
+            focus(this);
         restack;
     }
 
@@ -427,7 +445,7 @@ class Client: Base {
         "%s set workspace %s".format(this, i).log;
         monitor.remove(this);
         monitor.add(this, i < 0 ? monitor.workspaces.length-1 : i);
-        updateWindowDesktop(this, i);
+        ewmh.updateWindowDesktop(this, i);
         "set workspace done".log;
     }
 
@@ -441,6 +459,7 @@ class Client: Base {
         }
     }
 
+    /+
     void unfocus(bool setfocus){
         "%s unfocus".format(this).log;
         grabButtons(false);
@@ -453,15 +472,18 @@ class Client: Base {
             restack;
         }
     }
+    +/
 
+    @WindowDestroy
     void destroy(){
-                if(previousFocus == this)
-                    previousFocus = null;
+        if(previousFocus == this)
+            previousFocus = null;
         destroyed = true;
         monitor.remove(this);
         if(previousFocus && previousFocus != this)
             previousFocus.focus;
-        updateClientList;
+        ewmh.updateClientList;
+        Events.forget(this);
     }
 
     void updateStrut(){
@@ -538,7 +560,8 @@ class Client: Base {
         if(sizeMax.h > int.max || sizeMax.h < 0)
             sizeMax.h = int.max;
 
-        isfixed = (sizeMax.w && sizeMin.w && sizeMax.h && sizeMin.h && sizeMax.w == sizeMin.w && sizeMax.h == sizeMin.h);
+        isfixed = (sizeMax.w && sizeMin.w && sizeMax.h && sizeMin.h &&
+                   sizeMax.w == sizeMin.w && sizeMax.h == sizeMin.h);
         "%s sizeMin=%s sizeMax=%s".format(this, sizeMin, sizeMax).log;
     }
 
@@ -614,21 +637,19 @@ class Client: Base {
         Window trans;
         if(!isFloating){
             XGetTransientForHint(dpy, orig, &trans);
-            isFloating = (wintoclient(trans) !is null) || isfixed;
+            isFloating = (find(trans) !is null) || isfixed;
         }
     }
 
     void updateState(){
         auto state = win.getstate;
+        /+
         if(state == IconicState)
             hide;
+        +/
     }
 
-    void onEnter(XCrossingEvent* e){
-        if(!hidden)
-            focus;
-    }
-
+    @WindowProperty
     void onProperty(XPropertyEvent* ev){
         auto handler = [
             XA_WM_TRANSIENT_FOR:            &updateFloating,
@@ -652,12 +673,4 @@ class Client: Base {
         }
     }
 
-    void onMap(XMapEvent* e){
-        configure;
-    }
-
-    void onUnmap(XUnmapEvent* e){
-        configure;
-    }
-
-};
+}

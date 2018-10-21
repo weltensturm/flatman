@@ -5,24 +5,6 @@ import flatman;
 __gshared:
 
 
-Monitor dirtomon(int dir){
-    return monitors[0];
-}
-
-
-void focusmon(int arg){
-    Monitor m = dirtomon(arg);
-    if(!m)
-        return;
-    if(m == monitor)
-        return;
-    monitor.active.unfocus(false); /* s/true/false/ fixes input focus issues
-                    in gedit and anjuta */
-    monitor = m;
-    //focus(null);
-}
-
-
 class Monitor {
 
     int id;
@@ -50,7 +32,7 @@ class Monitor {
                 workspace.updateContext("~/.flatman/current".expandTilde.readText);
             }
             if(file.endsWith("current") || file.endsWith(".context"))
-                updateDesktopNames;
+                ewmh.updateDesktopNames;
         });
     }
 
@@ -110,10 +92,10 @@ class Monitor {
             auto l = workspaces.length;
             auto pos = workspaces.countUntil!(a => a.clients.canFind(client));
             this.workspace.remove(client);
-            if(l < workspaces.length-1){
+            if(l+1 < workspaces.length){
                 if(workspace < pos)
                     workspace--;
-                updateWorkspaces();
+                ewmh.updateWorkspaces();
             }
             workspaces[workspace].add(client);
         }
@@ -135,7 +117,6 @@ class Monitor {
             }
             if(!found)
                 throw new Exception("Monitor does not have %s".format(client));
-            XSync(dpy, false);
             if(client.strut)
                 resize(size);
         }
@@ -146,10 +127,6 @@ class Monitor {
             if(ws.clients.canFind(client))
                 workspace.update(client);
         }
-    }
-
-    void onDraw(){
-        workspace.onDraw;
     }
 
     void destroy(){

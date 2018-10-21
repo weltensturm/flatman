@@ -1,0 +1,9 @@
+{
+	"name" : "flatman-launcher",
+	"description" : "flatman launcher",
+	"targetType": "executable",
+	"sourcePaths": ["src", "../common"],
+	"dependencies" : {
+		"ws": "1.0.11"
+    }
+}

@@ -4,7 +4,7 @@ installdir=$1
 
 parts=($(cat build.conf))
 
-configs=(config.ws bar.ws menu composite.ws)
+configs=(config.ws bar.ws menu composite.ws autostart)
 
 paths=(usr/bin etc/flatman usr/share/xsessions usr/share/applications)
 

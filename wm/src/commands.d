@@ -53,8 +53,15 @@ void register(T, Args...)(string name, T function(Args) fn){
 }
 
 
+void spawnCommand(string command){
+	auto t = new Thread({ spawnShell(command).wait; });
+	t.isDaemon = true;
+	t.start;
+}
+
+
 void registerFunctions(){
-	register("exec", function(string command) => task({ spawnShell(command).wait; }).executeInNewThread);
+	register("exec", &spawnCommand);
 	register("focus", &focus);
 	register("resize", &resize);
 	register("move", &move);
@@ -154,7 +161,6 @@ void toggleTabs(){
 		auto tabs = s.children[s.clientActive].to!Tabs;
 		tabs.showTabs = !tabs.showTabs;
 		tabs.resize(tabs.size);
-		tabs.onDraw;
 	}
 }
 

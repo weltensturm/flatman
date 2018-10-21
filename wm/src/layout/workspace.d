@@ -41,7 +41,7 @@ class Workspace: Container {
 
 	override void add(Client client){
 		with(Log("workspace(%s).add %s floating=%s fullscreen=%s".format(cast(void*)this, client, client.isFloating, client.isfullscreen))){
-			updateWindowDesktop(client, monitor.workspaces.countUntil(this));
+			ewmh.updateWindowDesktop(client, monitor.workspaces.countUntil(this));
 			if(client.isFloating && !client.isfullscreen){
 				floating.add(client);
 			}else{
@@ -131,16 +131,9 @@ class Workspace: Container {
 		return split.clients ~ floating.clients;
 	}
 
-	override void onDraw(){
-		foreach(c; children)
-			c.onDraw;
-	}
-
 	void destroy(){
 		floating.destroy;
 		split.destroy;
 	}
 
 }
-
-

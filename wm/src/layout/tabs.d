@@ -74,7 +74,6 @@ class Tabs: Container {
             c.win.replace(Atoms._FLATMAN_TAB, cast(long)i);
             c.win.replace(Atoms._FLATMAN_TABS, parent.children.countUntil(this)+1);
         }
-        XSync(dpy, false);
     }
 
     Client next(){
@@ -138,7 +137,6 @@ class Tabs: Container {
         super.active = client;
         if(!hidden)
             resize(size);
-        XSync(dpy, false);
     }
 
     override void resize(int[2] size){

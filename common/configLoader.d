@@ -65,8 +65,15 @@ void fillConfig(T)(ref T config, string[] paths){
 
     Entry[] values;
 
-    foreach(path; paths)
-        loadBlock!T(path.expandTilde.readText, "", values);
+    foreach(path; paths){
+        if(!path.exists){
+            try {
+                path.write("");
+            }catch(FileException e){}
+        }else{
+            loadBlock!T(path.expandTilde.readText, "", values);
+        }
+    }
 
     foreach(field; FieldNameTuple!T){
         string splitName;
@@ -165,10 +172,16 @@ void fillConfigNested(T)(ref T config, string[] paths){
 
     Entry[] values;
 
-    foreach(path; paths)
-        loadBlock!T(path.expandTilde.readText, "", values);
-
-    writeln(values);
+    foreach(path; paths){
+        path = path.expandTilde;
+        if(!path.exists){
+            try {
+                std.file.write(path, "");
+            }catch(FileException e){}
+        }else{
+            loadBlock!T(path.expandTilde.readText, "", values);
+        }
+    }
 
     config.fillStruct("", values);
 

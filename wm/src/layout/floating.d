@@ -50,12 +50,6 @@ class Floating: Container {
 		hidden = true;
 	}
 
-	override void onDraw(){
-		foreach(c; clients)
-			if(c.frame)
-				c.frame.onDraw;
-	}
-
 	void raise(Client client){
 		children = children.without(client) ~ client;
 		.restack;
@@ -97,7 +91,6 @@ class Floating: Container {
 		"floating(%s).active %s".format(cast(void*)this, client).log;
 		raise(client);
 		super.active = client;
-		onDraw;
 	}
 
 	override Client[] clients(){
@@ -120,7 +113,7 @@ class Floating: Container {
 			newActive = 0;
 		else if(newActive < 0)
 			newActive = children.length-1;
-		children[newActive].to!Client.focus;
+		focus(children[newActive].to!Client);
 	}
 
 }

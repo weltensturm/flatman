@@ -4,6 +4,48 @@ module flatman.manage;
 import flatman;
 
 
+Client previousFocus;
+Client currentFocus;
+Client requestFocus;
+
+void focus(Client client){
+    if(client.destroyed)
+        return;
+	"queue focus %s".format(client).log;
+	requestFocus = client;
+	focus(client.monitor);
+	monitor.setActive(client);
+	restack;
+}
+
+
+void focus(Monitor monitor){
+	if(monitor != .monitor)
+		.monitor = monitor;
+}
+
+
+void manage(Window w, XWindowAttributes* wa, bool map){
+	if(!w)
+		throw new Exception("No window given");
+	if(find(w))
+		return;
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
+	auto c = new Client(w);
+	auto monitor = monitor;
+	if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
+		c.pos = monitor.size.a/2 - c.size.a/2;
+	monitor.add(c, c.originWorkspace);
+	XChangeProperty(dpy, root, Atoms._NET_CLIENT_LIST, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
+	c.updateStrut;
+	if(map){
+		c.show;
+		//focus(c);
+	}else
+		c.requestAttention;
+}
+
+
 void mouseMove(){
 	Client c = monitor.active;
 	if(!c || !c.isFloating || c.isfullscreen)
@@ -24,7 +66,7 @@ void mouseMove(){
 			case ConfigureRequest:
 			case Expose:
 			case MapRequest:
-				handler[ev.type](&ev);
+				//handler[ev.type](&ev);
 				break;
 			case MotionNotify:
 				if ((ev.xmotion.time - lasttime) <= (1000 / 60))
@@ -61,13 +103,13 @@ void mouseResize(){
 			case ConfigureRequest:
 			case Expose:
 			case MapRequest:
-				handler[ev.type](&ev);
+				//handler[ev.type](&ev);
 				break;
 			case MotionNotify:
 				if ((ev.xmotion.time - lasttime) <= (1000 / 60))
 					continue;
 				lasttime = ev.xmotion.time;
-	
+
 				nw = max(ev.xmotion.x - ocx - 2 * c.bw + 1, 1);
 				nh = max(ev.xmotion.y - ocy - 2 * c.bw + 1, 1);
 				c.moveResize(c.pos, [nw, nh]);
@@ -95,7 +137,6 @@ void killClient(Client client=null){
 		XSetErrorHandler(&xerrordummy);
 		XSetCloseDownMode(dpy, CloseDownMode.DestroyAll);
 		XKillClient(dpy, client.win);
-		XSync(dpy, false);
 		XSetErrorHandler(&xerror);
 		//XSetErrorHandler(xerrorxlib);
 		XUngrabServer(dpy);
@@ -125,8 +166,8 @@ void newWorkspace(long pos){
 			monitor.workspaceActive++;
 	}
 	monitor.resize(monitor.size);
-	updateDesktopCount;
-	updateWorkspaces;
+	ewmh.updateDesktopCount;
+	ewmh.updateWorkspaces;
 }
 
 
@@ -161,10 +202,10 @@ void switchWorkspace(int pos){
 		}
 		assert(monitors.map!(a => a.workspaces.length).uniq.array.length == 1);
 		if(monitor.active)
-			monitor.active.focus;
-		updateDesktopCount;
-		updateWorkspaces;
-		updateCurrentDesktop;
+			focus(monitor.active);
+		ewmh.updateDesktopCount;
+		ewmh.updateWorkspaces;
+		ewmh.updateCurrentDesktop;
 	}
 }
 
@@ -205,5 +246,5 @@ void moveUp(){
 		win.setWorkspace(monitor.workspaceActive-1);
 	switchWorkspace(monitor.workspaceActive-1);
 	if(win)
-		win.focus;
+		focus(win);
 }
