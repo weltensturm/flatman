@@ -19,10 +19,6 @@ addons:
       - libclang-3.9-dev
       - g++-7
 
-install:
-  - gem install bundler
-  - bundle install
-
 
 script:
   - ./ci.sh
