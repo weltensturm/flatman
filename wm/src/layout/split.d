@@ -375,6 +375,26 @@ class Split: Container {
         return n;
     }
 
+    Client clientDir(short direction){
+        foreach(container; [clientActive, clientActive+direction]){
+            if(container < 0 || container >= children.length)
+                continue;
+            auto target = children[container]
+                .to!Tabs
+                .clientDir(container == clientActive ? direction : 0);
+            if(target)
+                return target;
+        }
+        return null;
+    }
+
+    Client clientContainerDir(short direction){
+        auto target = clientActive+direction;
+        if(target < 0 || target >= children.length)
+            return null;
+        return children[target].to!Tabs.active;
+    }
+
     void focusDir(int dir){
         auto client = dir == 0 ? active : (dir > 0 ? next : prev);
         if(client){

@@ -82,6 +82,23 @@ class Workspace: Container {
 		}
 	}
 
+    Client clientDir(short direction){
+		Client result;
+		if(focusFloating)
+			result = floating.clientDir(direction);
+		else
+			result = split.clientDir(direction);
+		if(!result)
+			result = split.clientDir(direction);
+		if(!result)
+			result = floating.clientDir(direction);
+		return result;
+    }
+
+    Client clientContainerDir(short direction){
+		return split.clientContainerDir(direction);
+    }
+
 	void focusDir(int dir){
 		if(focusFloating)
 			floating.focusDir(dir);

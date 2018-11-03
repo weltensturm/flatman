@@ -25,6 +25,54 @@ void focus(Monitor monitor){
 }
 
 
+void focusDir(short direction){
+	auto client = monitor.workspace.clientDir(direction);
+	if(!client){
+		auto sorted = monitors
+			.enumerate
+			.array
+			.multiSort!(
+				(a, b) => a.value.pos.x < b.value.pos.x,
+				(a, b) => a.value.pos.y < b.value.pos.y,
+				(a, b) => a.index < b.index
+			);
+		
+		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + direction;
+
+		if(index >= 0 && index < sorted.length){
+			client = monitors[sorted[index][0]].active;
+		}
+		
+	}
+	if(client)
+		client.focus;
+}
+
+
+void focusTabs(short direction){
+	auto client = monitor.workspace.clientContainerDir(direction);
+	if(!client){
+		auto sorted = monitors
+			.enumerate
+			.array
+			.multiSort!(
+				(a, b) => a.value.pos.x < b.value.pos.x,
+				(a, b) => a.value.pos.y < b.value.pos.y,
+				(a, b) => a.index < b.index
+			);
+		
+		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + direction;
+
+		if(index >= 0 && index < sorted.length){
+			client = monitors[sorted[index][0]].active;
+		}
+		
+	}
+	if(client)
+		client.focus;
+}
+
+
 void manage(Window w, XWindowAttributes* wa, bool map){
 	if(!w)
 		throw new Exception("No window given");

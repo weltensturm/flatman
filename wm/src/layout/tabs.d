@@ -88,6 +88,13 @@ class Tabs: Container {
         return children[clientActive-1].to!Client;
     }
 
+    Client clientDir(short direction){
+        auto target = clientActive+direction;
+        if(target < 0 || target >= children.length)
+            return null;
+        return children[target].to!Client;
+    }
+
     void moveLeft(){
         if(clientActive <= 0)
             return;

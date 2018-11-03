@@ -105,6 +105,25 @@ class Floating: Container {
 		}
 	}
 
+	Client clientDir(short direction){
+
+		auto sorted = children
+			.enumerate
+			.array
+			.multiSort!(
+				(a, b) => a.value.pos.x < b.value.pos.x,
+				(a, b) => a.value.pos.y < b.value.pos.y,
+				(a, b) => a.index < b.index
+			);
+		
+		auto index = sorted.countUntil!(a => a.index == clientActive) + direction;
+
+		if(index >= 0 && index < sorted.length)
+			return children[sorted[index][0]].to!Client;
+
+		return null;
+	}
+
 	void focusDir(int dir){
 		if(!children.length)
 			return;
