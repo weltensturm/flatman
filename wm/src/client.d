@@ -179,7 +179,7 @@ class Client: Base {
 
     void configure(){
         "%s configure %s %s".format(this, pos, size).log;
-        auto hide = (parent && parent.hidden ? monitor.size.h : 0).to!int;
+        auto hide = (parent && parent.hidden ? this.monitor.size.h : 0).to!int;
         XMoveResizeWindow(dpy, win, pos.x, pos.y-hide, size.w, size.h);
         if(frame){
             frame.moveResize(pos.a-[0,config.tabs.title.height], [size.w, config.tabs.title.height]);
@@ -207,7 +207,7 @@ class Client: Base {
         if(isFloating && !isfullscreen)
             posFloating = pos;
         this.pos = pos;
-        auto hide = (parent && parent.hidden ? monitor.size.h : 0).to!int;
+        auto hide = (parent && parent.hidden ? this.monitor.size.h : 0).to!int;
         XMoveWindow(dpy, win, pos.x, pos.y - hide);
         if(frame){
             frame.moveResize(pos.a-[0,config.tabs.title.height+hide], [size.w,config.tabs.title.height]);
@@ -380,7 +380,7 @@ class Client: Base {
     }
 
     void requestAttention(){
-        if(this == monitor.active){
+        if(this == this.monitor.active){
             isUrgent = false;
             return;
         }
@@ -425,7 +425,7 @@ class Client: Base {
             if(proplist.canFind(Atoms._NET_WM_STATE_FULLSCREEN))
                 replace(win, Atoms._NET_WM_STATE, proplist.without(Atoms._NET_WM_STATE_FULLSCREEN));
         }
-        monitor.update(this);
+        this.monitor.update(this);
         if(this == flatman.active)
             focus(this);
         restack;
@@ -437,9 +437,7 @@ class Client: Base {
     }
 
     void setWorkspace(long i){
-        if(!monitor)
-            return;
-        auto monitor = monitor;
+        auto monitor = this.monitor;
         if(i >= 0 && i < monitor.workspaces.length && monitor.workspaces[i].clients.canFind(this))
             return;
         "%s set workspace %s".format(this, i).log;
@@ -455,7 +453,7 @@ class Client: Base {
         else {
             isFloating = !isFloating;
             "%s floating=%s".format(this, isFloating).log;
-            monitor.update(this);
+            this.monitor.update(this);
         }
     }
 
@@ -479,7 +477,7 @@ class Client: Base {
         if(previousFocus == this)
             previousFocus = null;
         destroyed = true;
-        monitor.remove(this);
+        this.monitor.remove(this);
         if(previousFocus && previousFocus != this)
             previousFocus.focus;
         ewmh.updateClientList;
@@ -496,7 +494,7 @@ class Client: Base {
 
     void updateType(){
         Atom[] state = this.getPropList(Atoms._NET_WM_STATE);
-        if(state.canFind(Atoms._NET_WM_STATE_FULLSCREEN)/+ || size == monitor.size +/)
+        if(state.canFind(Atoms._NET_WM_STATE_FULLSCREEN)/+ || size == this.monitor.size +/)
             isfullscreen = true;
         if(state.canFind(Atoms._NET_WM_STATE_MODAL))
             isFloating = true;
