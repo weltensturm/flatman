@@ -49,8 +49,6 @@ bool running = true;
 bool restart;
 Window[] unmanaged;
 
-uint numlockmask;
-
 ws.x.draw.Cur[CurLast] cursor;
 
 Monitor monitor;

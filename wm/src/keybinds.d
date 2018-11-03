@@ -20,6 +20,9 @@ struct Key {
 }
 
 
+uint numlockmask;
+
+
 class KeybindSystem {
 
 	int mod;
@@ -103,10 +106,10 @@ class KeybindSystem {
 	void onKey(Window, bool pressed, int mask, Keyboard.key key){
 		foreach(bind; binds){
 			if(key == bind.keysym && (!pressed || cleanMask(bind.mod) == cleanMask(mask)) && bind.func){
-					bind.func(pressed);
-				}
+				bind.func(pressed);
 			}
 		}
+	}
 
 	@KeyboardMapping
 	void onMapping(XMappingEvent *ev){
@@ -130,6 +133,9 @@ class KeybindSystem {
 
 }
 
+T cleanMask(T)(T mask){
+	return mask & ~(numlockmask|LockMask) & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask);
+}
 
 void updatenumlockmask(){
 	uint i, j;
