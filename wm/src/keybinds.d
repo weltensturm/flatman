@@ -103,12 +103,10 @@ class KeybindSystem {
 	void onKey(Window, bool pressed, int mask, Keyboard.key key){
 		foreach(bind; binds){
 			if(key == bind.keysym && (!pressed || cleanMask(bind.mod) == cleanMask(mask)) && bind.func){
-				with(Log("key %s %s".format(key, pressed ? "pressed" : "released"))){
 					bind.func(pressed);
 				}
 			}
 		}
-	}
 
 	@KeyboardMapping
 	void onMapping(XMappingEvent *ev){

@@ -40,13 +40,16 @@ void handleEvent(XEvent* e){
             WindowMouseButton(e.xbutton.window, false, e.xbutton.button);
             WindowMouseButton(e.xbutton.window, false, e.xbutton.state, e.xbutton.button);
             break;
+
     	case MotionNotify:
             WindowMouseMove(e.xmotion.window, [e.xmotion.x, e.xmotion.y].to!(int[2]));
             MouseMove([e.xmotion.x_root, e.xmotion.y_root].to!(int[2]));
             break;
+
     	case ClientMessage:
             WindowClientMessage(e.xclient.window, &e.xclient);
             break;
+
     	case ConfigureRequest:
             WindowConfigureRequest(e.xconfigurerequest.window, &e.xconfigurerequest);
             break;
@@ -55,24 +58,29 @@ void handleEvent(XEvent* e){
             WindowResize(e.xconfigure.window, [e.xconfigure.width, e.xconfigure.height]);
             WindowMove(e.xconfigure.window, [e.xconfigure.x, e.xconfigure.y]);
             break;
+
     	case CreateNotify:
             WindowCreate(e.xcreatewindow.override_redirect > 0, e.xcreatewindow.window);
             break;
     	case DestroyNotify:
             WindowDestroy(e.xdestroywindow.window);
             break;
+
     	case EnterNotify:
             WindowEnter(e.xcrossing.window);
             break;
         case LeaveNotify:
             WindowLeave(e.xcrossing.window);
             break;
+
     	case Expose:
             WindowExpose(e.xexpose.window);
             break;
+
     	case FocusIn:
             WindowFocusIn(e.xfocus.window);
             break;
+
     	case KeyPress:
         	KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)e.xkey.keycode, 0);
             WindowKey(e.xkey.window, true, e.xkey.state, keysym);
@@ -83,21 +91,26 @@ void handleEvent(XEvent* e){
             WindowKey(e.xkey.window, false, e.xkey.state, keysym);
             WindowKey(e.xkey.window, false, keysym);
             break;
+
     	case MapRequest:
             WindowMapRequest(e.xmaprequest.parent, e.xmaprequest.window);
             break;
+
     	case PropertyNotify:
             WindowProperty(e.xproperty.window, &e.xproperty);
             break;
+
     	case MapNotify:
             WindowMap(e.xmap.window);
             break;
     	case UnmapNotify:
             WindowUnmap(e.xmap.window);
             break;
+
     	case MappingNotify:
             KeyboardMapping(&e.xmapping);
             break;
+
         default:
             break;
     }
@@ -109,10 +122,69 @@ void handleEvents(){
 	XSync(dpy, false);
 	while(XPending(dpy)){
 		XNextEvent(dpy, &ev);
-		with(Log(Log.BOLD ~ "%s ev %s".format(ev.xany.window, handlerNames.get(ev.type, ev.type.to!string)))){
+		with(Log(formatEvent(&ev))){
             handleEvent(&ev);
 		}
 	}
+}
+
+
+auto formatEvent(XEvent* ev){
+
+    auto formatButton = {
+        return "%s (%s)".format(ev.xbutton.button, ev.xbutton.state);
+    };
+
+    auto formatMotion = {
+        return "[%s, %s] root[%s, %s]".format(ev.xmotion.x, ev.xmotion.y, ev.xmotion.x_root, ev.xmotion.y_root);
+    };
+
+    auto formatKey = {
+        KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)ev.xkey.keycode, 0);
+        return "%s %s (%s)".format(ev.xkey.keycode, keysym, ev.xkey.state);
+    };
+
+    alias events = AliasSeq!(
+        tuple(ButtonPress,       "ButtonPress",       "xbutton",           () => formatButton()),
+        tuple(ButtonRelease,     "ButtonRelease",     "xbutton",           () => formatButton()),
+
+        tuple(MotionNotify,      "MotionNotify",      "xmotion",           () => formatMotion()),
+
+        tuple(ClientMessage,     "ClientMessage",     "xclient",           () => ev.xclient.to!string),
+        tuple(ConfigureRequest,  "ConfigureRequest",  "xconfigurerequest", () => ev.xconfigurerequest.to!string),
+        tuple(ConfigureNotify,   "ConfigureNotify",   "xconfigure",        () => ev.xconfigure.to!string),
+        tuple(DestroyNotify,     "DestroyNotify",     "xdestroywindow",    () => ev.xdestroywindow.to!string),
+        tuple(EnterNotify,       "EnterNotify",       "xcrossing",         () => ev.xcrossing.to!string),
+        tuple(Expose,            "Expose",            "xexpose",           () => ev.xexpose.to!string),
+        tuple(FocusIn,           "FocusIn",           "xfocus",            () => ev.xfocus.to!string),
+        tuple(KeyPress,          "KeyPress",          "xkey",              () => formatKey()),
+        tuple(KeyRelease,        "KeyRelease",        "xkey",              () => formatKey()),
+        tuple(MappingNotify,     "MappingNotify",     "",                  () => ""),
+        tuple(MapRequest,        "MapRequest",        "xmaprequest",       () => ""),
+        tuple(PropertyNotify,    "PropertyNotify",    "xproperty",         () => XGetAtomName(dpy, ev.xproperty.atom).to!string),
+        tuple(UnmapNotify,       "UnmapNotify",       "xmap",              () => ""),
+        tuple(MapNotify,         "MapNotify",         "xmap",              () => "")
+    );
+
+    static foreach(event; events){
+        if(event[0] == ev.type){
+            auto msg = "";
+            static if(event[2].length){
+                auto win = __traits(getMember, ev, event[2]).window;
+                auto client = find(win);
+                if(client)
+                    msg ~= "%s".format(client);
+                else if(win == root)
+                    msg ~= Log.RED ~ "%s:root".format(win) ~ Log.DEFAULT;
+                else
+                    msg ~= Log.YELLOW ~ "%s".format(win) ~ Log.DEFAULT;
+            }
+            return msg ~ " " ~ event[1] ~ " " ~ event[3]();
+        }
+    }
+
+    return "Event %s".format(ev.type);
+
 }
 
 
@@ -129,27 +201,6 @@ void registerAll(){
 	WindowMap[AnyValue] ~= &restack;
 
 }
-
-
-enum handlerNames = [
-	ButtonPress: "ButtonPress",
-	ButtonRelease: "ButtonRelease",
-	ClientMessage: "ClientMessage",
-	ConfigureRequest: "ConfigureRequest",
-	ConfigureNotify: "ConfigureNotify",
-	DestroyNotify: "DestroyNotify",
-	EnterNotify: "EnterNotify",
-	Expose: "Expose",
-	FocusIn: "FocusIn",
-	KeyPress: "KeyPress",
-	KeyRelease: "KeyRelease",
-	MappingNotify: "MappingNotify",
-	MapRequest: "MapRequest",
-	MotionNotify: "MotionNotify",
-	PropertyNotify: "PropertyNotify",
-	UnmapNotify: "UnmapNotify",
-	MapNotify: "MapNotify"
-];
 
 
 void onButton(Window window, bool pressed, int mask, Mouse.button button){

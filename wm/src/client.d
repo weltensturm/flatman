@@ -90,7 +90,7 @@ class Client: Base {
     }
 
     override string toString(){
-        return Log.YELLOW ~ "(%s:%s)".format(win, name) ~ Log.DEFAULT;
+        return Log.YELLOW ~ "%s:%s".format(win, name) ~ Log.DEFAULT;
     }
 
     void applyRules(){
@@ -623,12 +623,10 @@ class Client: Base {
 
     void updateTitle(){
         name = getTitle;
-        "%s title='%s'".format(this, name).log;
     }
 
     void updateDecorated(){
         decorations = win.getIsDecorated;
-        "%s decorated=%s".format(this, decorations).log;
     }
 
     void updateFloating(){

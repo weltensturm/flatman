@@ -8,7 +8,8 @@ import
 	std.file,
 	std.range,
 	std.datetime,
-	std.concurrency;
+	std.concurrency,
+	flatman.config;
 
 
 private {
@@ -44,7 +45,7 @@ struct Log {
 	enum GREY = "\033[90m";
 	enum BOLD = "\033[1m";
 
-	this(string s){
+	this(lazy string s){
 		info(s);
 		synchronized(mutex)
 			indent++;
@@ -74,10 +75,12 @@ struct Log {
 		text.write;
 	}
 
-	static void info(string s){
-		string text = format(s);
-		logger.send(text);
-		text.write;
+	static void info(lazy string s){
+		if(config.logging){
+			string text = format(s());
+			logger.send(text);
+			text.write;
+		}
 	}
 
     static void shutdown(){
@@ -87,7 +90,7 @@ struct Log {
 }
 
 
-void log(string s){
+void log(lazy string s){
 	Log.info(s);
 }
 

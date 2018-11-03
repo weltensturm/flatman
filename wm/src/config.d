@@ -40,6 +40,8 @@ __gshared const Rule[] rules = [
 
 struct NestedConfig {
 
+	bool logging;
+
 	string mod;
 	string[string] keys;
 
