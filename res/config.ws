@@ -1,4 +1,5 @@
 
+logging true
 
 mod super
 
@@ -6,7 +7,7 @@ keys {
     Super_L				overview
     Super_R				overview
     alt+d				exec dinu -f -fn Ubuntu-10 -as 0 -l 0 -r 0.3333 -y 24 -c "$(flatman-context -p)"
-    mod+Return			exec cd "$(flatman-context)" && terminator || terminator
+    mod+Return			exec flatman-terminal
     mod+n				exec firefox
     mod+shift+w			exec i3lock -c 000000 && systemctl suspend
     mod+j				focus dir -

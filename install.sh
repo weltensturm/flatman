@@ -24,6 +24,8 @@ for part in "${configs[@]}"; do
 	cp -f res/$part "$installdir/etc/flatman/"
 done
 
+cp -f terminal/flatman-terminal "$installdir/usr/bin/flatman-terminal"
+
 chmod -R 755 "$installdir/etc/flatman/"*
 chmod -R 755 "$installdir/usr/bin/flatman"*
 
