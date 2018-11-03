@@ -24,6 +24,9 @@ extern(C) nothrow @nogc @system void stop(int){
 
 
 void main(){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
 	XSetErrorHandler(&xerror);
 	signal(SIGINT, &stop);
 	auto app = new App;

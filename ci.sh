@@ -2,17 +2,20 @@
 
 set -euo pipefail
 
+dub -q fetch covered
+
 DC="${DC:-dmd}"
 
 parts=($(cat build.conf))
 
 for part in "${parts[@]}"; do
-    dub test --build=unittest-cov --compiler="$DC" -- ~@notravis
-    dub build --compiler="$DC"
-
-    if [[ "$DC" == "dmd" ]]; then
-        bundle exec cucumber --tags ~@wip --tags ~@notravis
-    fi
-
+    pushd $part > /dev/null
+    echo $part
+    rm dub.selections.json
+    dub -q test --build=unittest-cov --compiler="$DC"
+    find . -name "-home*.lst" -exec rm {} \;
+    dub -q run covered -- -a
+    find . -name "*.lst" -exec rm {} \;
+    popd > /dev/null
 done
 

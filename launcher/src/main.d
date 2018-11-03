@@ -159,6 +159,8 @@ void autostart(){
 
 void main(){
 
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
     bool autostarted = false;
 
     while(true){

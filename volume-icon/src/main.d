@@ -510,6 +510,9 @@ class AudioPanel: ws.wm.Window {
 
 
 void main(string[] args){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
 	auto pa = new Pulseaudio("Flatman Volume Settings");
 	auto icon = new TrayIcon(pa);
 	auto main = new AudioPanel(icon, pa);

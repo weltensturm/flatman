@@ -4,7 +4,13 @@
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": "18.1.0"
+		"ws": "18.10.1"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama"],
+	
+	"configurations": [
+		{ "name": "default" },
+		{ "name": "unittest" }
+	]
+	
 }

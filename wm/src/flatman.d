@@ -65,6 +65,9 @@ KeybindSystem keys;
 
 
 int main(string[] args){
+	
+	version(unittest){ exit(0); }
+
 	(Log.BOLD ~ Log.GREEN ~ "===== FLATMAN =====").log;
 	"args %s".format(args[1..$]).log;
 	try{

@@ -22,6 +22,9 @@ RotatingArray!(30, double) frameTimes;
 
 
 void main(){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
     try {
         signal(SIGINT, &stop);
         XSetErrorHandler(&xerror);

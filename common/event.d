@@ -247,6 +247,7 @@ unittest {
     assert(slots1.d == 0.5);
     assert(slots1.s == "");
     assert(slots2.s == "test");
+    import std.math: isNaN;
     assert(slots2.d.isNaN);
 
 
