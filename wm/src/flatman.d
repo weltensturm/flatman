@@ -250,6 +250,21 @@ void loop(){
 
 	Tick();
 
+	if(requestFocus){
+		"focus %s".format(requestFocus).log;
+		previousFocus = currentFocus;
+		currentFocus = requestFocus;
+		requestFocus = null;
+		focus(currentFocus.monitor);
+		monitor.setActive(currentFocus);
+		XSetInputFocus(dpy, currentFocus.orig, RevertToPointerRoot, CurrentTime);
+		XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
+	                    XA_WINDOW, 32, PropModeReplace,
+	                    cast(ubyte*) &(currentFocus.orig), 1);
+        currentFocus.sendEvent(wm.takeFocus);
+		restack;
+	}
+	
 	if(queueRestack){
 		with(Log("restack")){
 			auto stack = unmanaged;
@@ -271,17 +286,6 @@ void loop(){
 			//while(XCheckMaskEvent(dpy, EnterWindowMask|LeaveWindowMask, &ev)){}
 		}
 
-		if(requestFocus){
-			"focus %s".format(requestFocus).log;
-			XSetInputFocus(dpy, requestFocus.orig, RevertToPointerRoot, CurrentTime);
-			XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
-		                    XA_WINDOW, 32, PropModeReplace,
-		                    cast(ubyte*) &(requestFocus.orig), 1);
-	        requestFocus.sendEvent(wm.takeFocus);
-			previousFocus = currentFocus;
-			currentFocus = requestFocus;
-			requestFocus = null;
-		}
 	}
 
 	handleEvents;

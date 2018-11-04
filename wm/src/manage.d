@@ -8,14 +8,12 @@ Client previousFocus;
 Client currentFocus;
 Client requestFocus;
 
+
 void focus(Client client){
-    if(client.destroyed)
+    if(client.destroyed || client == currentFocus && !requestFocus || requestFocus == client)
         return;
 	"queue focus %s".format(client).log;
 	requestFocus = client;
-	focus(client.monitor);
-	monitor.setActive(client);
-	restack;
 }
 
 

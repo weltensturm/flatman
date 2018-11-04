@@ -245,7 +245,7 @@ void onClientMessage(XClientMessageEvent* cme){
 		Atoms._NET_ACTIVE_WINDOW: {
 			if(!c)
 				return;
-			if(cme.data.l[0] < 2){
+			if(cme.data.l[0] < 2 && (!active || cme.data.l[2] != active.win)){
 				c.requestAttention;
 			}else
 				focus(c);
@@ -374,6 +374,7 @@ void onMapRequest(Window parent, Window window){
 	}
 	if(auto c = find(window)){
 		c.show;
+        c.focus;
 		return;
 	}
 	if(parent != root){
