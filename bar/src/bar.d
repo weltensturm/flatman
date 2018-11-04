@@ -91,6 +91,16 @@ class Bar: ws.wm.Window {
 			hidden = true;
 		}else
 			resize(size);
+
+        auto state = new Property!(XA_ATOM, true)(windowHandle, "_NET_WM_STATE");
+        state = [Atoms._NET_WM_STATE_SKIP_PAGER, Atoms._NET_WM_STATE_SKIP_TASKBAR, Atoms._NET_WM_STATE_STICKY];
+
+        auto motifHints = new Property!(XA_CARDINAL, true)(windowHandle, "_MOTIF_WM_HINTS");
+        motifHints = [2, 0, 0, 0, 0];
+
+        auto windowType = new Property!(XA_ATOM, false)(windowHandle, "_NET_WM_WINDOW_TYPE");
+        windowType = Atoms._NET_WM_WINDOW_TYPE_DOCK;
+
 	}
 
 	void systray(bool enable){
