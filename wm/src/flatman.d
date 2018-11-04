@@ -362,6 +362,9 @@ void cleanup(){
 		XSync(dpy, false);
 		XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
 		XDeleteProperty(dpy, root, Atoms._NET_ACTIVE_WINDOW);
+
+		Log.shutdown;
+
 		taskPool.stop;
 
 		drag.destroy;

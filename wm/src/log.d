@@ -25,6 +25,7 @@ private {
 				receive(
                     (string s){
 					    "/tmp/flatman.log".append(s);
+						s.write;
     				},
                     (bool){
                         run = false;
@@ -72,14 +73,12 @@ struct Log {
 	static void error(string s){
 		string text = format(RED ~ s);
 		logger.send(s);
-		text.write;
 	}
 
 	static void info(lazy string s){
 		if(config.logging){
 			string text = format(s());
 			logger.send(text);
-			text.write;
 		}
 	}
 
