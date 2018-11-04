@@ -318,9 +318,9 @@ class Client: Base {
     }
 
     void hideSoft(){
-        XMoveWindow(dpy, win, pos.x, -rootSize.h+pos.y);
+        XMoveWindow(dpy, win, pos.x, rootSize.h+pos.y);
         if(frame)
-            XMoveWindow(dpy, frame.window, frame.pos.x, -rootSize.h+frame.pos.y);
+            XMoveWindow(dpy, frame.window, frame.pos.x, rootSize.h+frame.pos.y);
     }
 
     auto monitor(){

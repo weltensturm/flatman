@@ -36,6 +36,8 @@ Client[] clientsVisible(){
 Monitor findMonitor(int[2] pos, int[2] size=[1,1]){
 	Monitor result = monitor;
 	int a, area = 0;
+	if(pos.y >= rootSize.h)
+		pos.y -= rootSize.h;
 	foreach(monitor; monitors)
 		if((a = intersectArea(pos.x, pos.y, size.w, size.h, monitor)) > area){
 			area = a;

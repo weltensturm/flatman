@@ -153,7 +153,7 @@ class Tabs: Container {
             if(active){
                 auto monitor = findMonitor(active);
                 if(active.isfullscreen){
-                    active.moveResize(monitor.pos.a + [0, hidden ? -rootSize.h : 0], monitor.size);
+                    active.moveResize(monitor.pos.a + [0, hidden ? rootSize.h : 0], monitor.size);
                 }else{
                     active.moveResize(
                         pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? monitor.size.h : 0)],

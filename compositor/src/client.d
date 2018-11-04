@@ -130,8 +130,6 @@ class CompositeClient: ws.wm.Window {
 
     this(x11.X.Window window, int[2] pos, int[2] size, XWindowAttributes a){
         super(window);
-        this.pos = pos;
-        this.size = size;
         this.a = a;
         damage = new WindowDamage(this);
         animation = new ClientAnimation(pos, size);
@@ -153,6 +151,8 @@ class CompositeClient: ws.wm.Window {
         if(a.map_state & IsViewable)
             onShow;
         properties.update;
+        moved(pos);
+        this.size = size;
     }
 
     bool floating(){
@@ -188,8 +188,9 @@ class CompositeClient: ws.wm.Window {
     }
 
     override void moved(int[2] pos){
-        auto monitor = manager.screens[manager.screens.findScreen(pos, size)];
-        if(pos.y <= this.pos.y-monitor.h || pos == this.pos)
+        if(pos.y >= manager.height)
+            pos.y -= manager.height;
+        if(pos == this.pos)
             return;
         if(properties.workspace.value < 0 || animation.fade.completion < 0.1 || a.override_redirect){
             animation.pos = [pos.x, pos.y];
