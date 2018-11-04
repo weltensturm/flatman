@@ -183,7 +183,7 @@ class Monitor {
     }
 
     override string toString(){
-        return "Monitor %s".format(id);
+        return Log.YELLOW ~ "monitor(%s)".format(id) ~ Log.DEFAULT;
     }
 
 }

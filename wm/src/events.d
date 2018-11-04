@@ -177,7 +177,7 @@ auto formatEvent(XEvent* ev){
                 else if(win == root)
                     msg ~= Log.RED ~ "%s:root".format(win) ~ Log.DEFAULT;
                 else
-                    msg ~= Log.YELLOW ~ "%s".format(win) ~ Log.DEFAULT;
+                    msg ~= Log.GREY ~ "%s".format(win) ~ Log.DEFAULT;
             }
             return msg ~ " " ~ event[1] ~ " " ~ event[3]();
         }

@@ -71,14 +71,16 @@ void focusTabs(short direction){
 }
 
 
-void manage(Window w, XWindowAttributes* wa, bool map){
+void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 	if(!w)
 		throw new Exception("No window given");
 	if(find(w))
 		return;
 	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
 	auto c = new Client(w);
-	auto monitor = monitor;
+	auto monitor = findMonitor(c.pos, c.size);
+    if(!monitor || !scan)
+        monitor = .monitor;
 	if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
 		c.pos = monitor.size.a/2 - c.size.a/2;
 	monitor.add(c, c.originWorkspace);
@@ -87,7 +89,7 @@ void manage(Window w, XWindowAttributes* wa, bool map){
 	if(map){
 		c.show;
 		//focus(c);
-	}else
+	}else if(!scan)
 		c.requestAttention;
 }
 
@@ -198,22 +200,26 @@ void toggleFullscreen(){
 }
 
 
-void newWorkspace(long pos){
-	"new workspace: %s".format(pos).log;
-	foreach(monitor; monitors){
-		auto ws = new Workspace(monitor.pos, monitor.size);
-		if(pos <= 0)
-			monitor.workspaces = ws ~ monitor.workspaces;
-		else if(pos > monitor.workspaces.length-1)
-			monitor.workspaces ~= ws;
-		else
-			monitor.workspaces.insertInPlace(pos, ws);
-		if(monitor.workspaceActive >= pos)
-			monitor.workspaceActive++;
+void newWorkspace(long pos, string path=""){
+	with(Log(Log.YELLOW ~ "new workspace %s".format(pos) ~ Log.DEFAULT)){
+		foreach(monitor; monitors){
+			auto ws = new Workspace(monitor.pos, monitor.size);
+			if(pos <= 0)
+				monitor.workspaces = ws ~ monitor.workspaces;
+			else if(pos > monitor.workspaces.length-1)
+				monitor.workspaces ~= ws;
+			else
+				monitor.workspaces.insertInPlace(pos, ws);
+			if(monitor.workspaceActive >= pos)
+				monitor.workspaceActive++;
+			if(path.length){
+				ws.updateContext(path);
+			}
+		}
+		monitor.resize(monitor.size);
+		ewmh.updateDesktopCount;
+		ewmh.updateWorkspaces;
 	}
-	monitor.resize(monitor.size);
-	ewmh.updateDesktopCount;
-	ewmh.updateWorkspaces;
 }
 
 

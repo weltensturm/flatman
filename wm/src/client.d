@@ -90,7 +90,7 @@ class Client: Base {
     }
 
     override string toString(){
-        return Log.YELLOW ~ "%s:%s".format(win, name) ~ Log.DEFAULT;
+        return Log.GREY ~ "%s:%s".format(win, name) ~ Log.DEFAULT;
     }
 
     void applyRules(){

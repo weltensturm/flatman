@@ -26,6 +26,7 @@ class Workspace: Container {
 	}
 
 	void updateContext(string path){
+		"%s.context = %s".format(this, path).log;
 		context = path;
 	}
 
@@ -40,7 +41,7 @@ class Workspace: Container {
 	alias add = Base.add;
 
 	override void add(Client client){
-		with(Log("workspace(%s).add %s floating=%s fullscreen=%s".format(cast(void*)this, client, client.isFloating, client.isfullscreen))){
+		with(Log("%s.add %s floating=%s fullscreen=%s".format(this, client, client.isFloating, client.isfullscreen))){
 			ewmh.updateWindowDesktop(client, monitor.workspaces.countUntil(this));
 			if(client.isFloating && !client.isfullscreen){
 				floating.add(client);
@@ -113,7 +114,7 @@ class Workspace: Container {
 	alias remove = Base.remove;
 
 	override void remove(Client client){
-		with(Log("workspace(%s).remove %s".format(cast(void*)this, client))){
+		with(Log("%s.remove %s".format(this, client))){
 			if(floating.clients.canFind(client))
 				floating.remove(client);
 			else if(split.clients.canFind(client))
@@ -129,9 +130,9 @@ class Workspace: Container {
 		super.show;
 		if(split.children.length)
 			split.show;
-		with(Log("workspace.show context='%s'".format(context))){
+		with(Log("%s.show context='%s'".format(this, context))){
 			if(context.exists){
-				"workspace reset context='%s'".format(context.expandTilde.readText);
+				"reset context='%s'".format(context.expandTilde.readText);
 				["flatman-context", context.expandTilde.readText].execute;
 			}
 			floating.show;
@@ -151,6 +152,10 @@ class Workspace: Container {
 	void destroy(){
 		floating.destroy;
 		split.destroy;
+	}
+
+	override string toString(){
+		return Log.YELLOW ~ "workspace(%s)".format(cast(void*)this) ~ Log.DEFAULT;
 	}
 
 }

@@ -198,42 +198,58 @@ void scan(){
 	Window[][AtomType!XA_CARDINAL] workspaces;
 	XWindowAttributes wa;
 
-	foreach(w; queryTree){
-		with(Log(Log.YELLOW ~ "%s %s".format(w, w.getTitle))){
-            if(!XGetWindowAttributes(dpy, w, &wa)){
-                "could not get window attributes".log;
-    		}else if(wa.override_redirect){
-                "unmanaged".log;
-    			unmanaged ~= w;
-    		}else if(find(w)){
-                "already managed?!".log;
-            }else if(wa.map_state != IsViewable && getstate(w) != IconicState){
-				"client is not visible".log;
-			}else{
-    			"scan manages %s".format(w).log;
-    			long workspace;
-    			try {
-    				workspace = w.getprop!XA_CARDINAL(Atoms._NET_WM_DESKTOP);
-    			}catch(Exception e){
-    				Log.error(e.to!string);
-					workspace = 0;
-    			}
-    			workspaces[workspace] ~= w;
-    		}
-    	}
-    }
+	with(Log(Log.YELLOW ~ "scan" ~ Log.DEFAULT)){
+		foreach(w; queryTree){
+			with(Log(Log.YELLOW ~ "%s %s".format(w, w.getTitle))){
+				if(!XGetWindowAttributes(dpy, w, &wa)){
+					"could not get window attributes".log;
+				}else if(wa.override_redirect){
+					"unmanaged".log;
+					unmanaged ~= w;
+				}else if(find(w)){
+					"already managed?!".log;
+				}else if(wa.map_state != IsViewable && getstate(w) != IconicState){
+					"client is not visible".log;
+				}else{
+					"scan manages %s".format(w).log;
+					long workspace;
+					try {
+						workspace = w.getprop!XA_CARDINAL(Atoms._NET_WM_DESKTOP);
+					}catch(Exception e){
+						Log.error(e.to!string);
+						workspace = 0;
+					}
+					workspaces[workspace] ~= w;
+				}
+			}
+		}
 
-	foreach(ws; object.keys(workspaces))
-	    newWorkspace(ws);
+		auto workspaceNames = Atoms._NET_DESKTOP_NAMES
+			.get!string
+			.split('\0')
+			.map!(a => a.replace("~", "~".expandTilde))
+			.array;
 
-   	foreach(ws; workspaces){
-    	foreach(win; ws){
-    		XWindowAttributes wa;
-    		XGetWindowAttributes(dpy, win, &wa);
-    		manage(win, &wa, false);
-    	}
-    }
-	switchWorkspace(0);
+		foreach(i, ws; object.keys(workspaces))
+			if(i < workspaceNames.length){
+				auto context = workspaceNames[i]
+						.expandTilde
+						.absolutePath
+						.buildNormalizedPath
+						.replace("/", "-");
+				newWorkspace(ws, "~/.flatman/".expandTilde ~ context ~ ".context");
+			}else
+				newWorkspace(ws);
+
+		foreach(ws; workspaces){
+			foreach(win; ws){
+				XWindowAttributes wa;
+				XGetWindowAttributes(dpy, win, &wa);
+				manage(win, &wa, false, true);
+			}
+		}
+		switchWorkspace(0);
+	}
 }
 
 

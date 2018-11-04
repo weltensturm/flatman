@@ -97,3 +97,40 @@ void replace(T)(Atom atom, T data){
 void remove(Atom atom){
 	remove(root, atom);
 }
+
+auto get(T)(Window window, Atom atom){
+
+	ulong count;
+	int format;
+	ulong bytes_after;
+	ubyte* p;
+	Atom type;
+
+	if(XGetWindowProperty(dpy, window, atom, 0L, long.max, 0, AnyPropertyType,
+	   &type, &format, &count, &bytes_after, &p) == 0 && p){
+		scope(exit)
+			XFree(p);
+
+		static if(is(T == string)){
+			return (cast(char*)p)[0..count].to!string.idup;
+		}else static if(isIterable!T){
+			alias Type = ElementType!T;
+			Type[] result;
+			result.length = count;
+			auto casted = cast(Type*)p;
+			foreach(i; 0..count){
+				result[i] = casted[i];
+			}
+			return result;
+		}else{
+			return cast(T*)p;
+		}
+
+	}
+
+	return T.init;
+}
+
+auto get(T)(Atom atom){
+	return root.get!T(atom);
+}
