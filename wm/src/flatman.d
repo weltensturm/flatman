@@ -230,16 +230,22 @@ void scan(){
 			.map!(a => a.replace("~", "~".expandTilde))
 			.array;
 
-		foreach(i, ws; object.keys(workspaces))
-			if(i < workspaceNames.length){
-				auto context = workspaceNames[i]
+		auto workspaceMax = object.keys(workspaces).fold!max(0L);
+
+		while(monitor.workspaces.length < workspaceMax+1)
+			newWorkspace(0);
+
+		foreach(i, ws; workspaceNames){
+			if(i < monitor.workspaces.length){
+				auto context = ws
 						.expandTilde
 						.absolutePath
 						.buildNormalizedPath
 						.replace("/", "-");
-				newWorkspace(ws, "~/.flatman/".expandTilde ~ context ~ ".context");
-			}else
-				newWorkspace(ws);
+				auto contextFile = "~/.flatman/".expandTilde ~ context ~ ".context";
+				monitor.workspaces[i].updateContext(contextFile);
+			}
+		}
 
 		foreach(ws; workspaces){
 			foreach(win; ws){
@@ -369,7 +375,6 @@ void cleanup(){
 		foreach(ws; monitor.workspaces){
 			foreach(c; ws.clients){
 				if(restart){
-					XMapWindow(dpy, c.win);
 					XMoveWindow(dpy, c.win, c.pos.x, c.pos.y);
 					"%s resetting".format(c).log;
 				}else
