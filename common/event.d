@@ -2,6 +2,7 @@ module common.event;
 
 
 import
+    std.array,
     std.meta,
     std.functional,
     std.traits,
@@ -27,7 +28,7 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
     void registerCallback(Fn, Callback)(Fn fn, Callback callback){
         callbacks!(Parameters!Callback) ~= callback;
         forgetters!(typeof(fn))[fn] = {
-            callbacks!(Parameters!Callback) = callbacks!(Parameters!Callback).remove!(a => a == callback);
+            callbacks!(Parameters!Callback) = callbacks!(Parameters!Callback).filter!(a => a != callback).array;
         };
     }
 
@@ -55,35 +56,7 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
         }
 
         static auto opIndex(FilterArgs...)(FilterArgs filter){
-
-            struct Filter {
-
-                FilterArgs filter; // TODO: write dmd issue
-
-                static foreach(Overload; Functions){
-
-            		void opOpAssign(string op)(void delegate(Parameters!Overload[FilterArgs.length..$]) fn)
-                    if(op == "~"){
-                        auto wrapper = filteredCallback!(Tuple!(Parameters!Overload))(fn, filter);
-                        registerCallback(fn, wrapper);
-                    }
-
-            		void opOpAssign(string op)(void function(Parameters!Overload[FilterArgs.length..$]) fn)
-                    if(op == "~"){
-                        auto wrapper = filteredCallback!(Tuple!(Parameters!Overload))(fn, filter);
-                        registerCallback(fn, wrapper);
-                    }
-
-                }
-
-        		void opOpAssign(string op, O)(O o) if(op == "~"){
-                    static assert(false, Tuple!(FilterArgs, Parameters!O).Types.stringof ~ " does not match "
-                                         ~ Unique ~ " " ~ FunctionTypeOf!(Functions[0]).stringof);
-                }
-
-            }
-
-            return Filter(filter);
+            return FilteredEvent!(Tuple!Functions, registerCallback, forget, FilterArgs)(filter);
         }
 
         static void forget(Fn)(Fn fn){
@@ -92,6 +65,34 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
         }
 
 	}
+
+}
+
+struct FilteredEvent(alias Functions, alias registerCallback, alias forget_, FilterArgs...) {
+
+    FilterArgs filter; // TODO: write dmd issue
+    alias forget = forget_;
+
+    static foreach(Overload; Functions.expand){
+
+        void opOpAssign(string op)(void delegate(Parameters!Overload[FilterArgs.length..$]) fn)
+        if(op == "~"){
+            auto wrapper = filteredCallback!(Tuple!(Parameters!Overload))(fn, filter);
+            registerCallback(fn, wrapper);
+        }
+
+        void opOpAssign(string op)(void function(Parameters!Overload[FilterArgs.length..$]) fn)
+        if(op == "~"){
+            auto wrapper = filteredCallback!(Tuple!(Parameters!Overload))(fn, filter);
+            registerCallback(fn, wrapper);
+        }
+
+    }
+
+    void opOpAssign(string op, O)(O o) if(op == "~"){
+        static assert(false, Tuple!(FilterArgs, Parameters!O).Types.stringof ~ " does not match "
+                                ~ Unique ~ " " ~ FunctionTypeOf!(Functions[0]).stringof);
+    }
 
 }
 
@@ -104,11 +105,20 @@ struct Events {
                 uda ~= getMemberPointer!(member.name, T, member.signature)(object);
             }
         }
-
+        static foreach(member; getMembersByUDA!(T, FilteredEvent)){
+            static foreach(uda; member.uda){
+                uda ~= getMemberPointer!(member.name, T, member.signature)(object);
+            }
+        }
     }
 
     static void forget(T)(T object){
         static foreach(member; getMembersByUDA!(T, Event)){
+            static foreach(uda; member.uda){
+                uda.forget(getMemberPointer!(member.name, T, member.signature)(object));
+            }
+        }
+        static foreach(member; getMembersByUDA!(T, FilteredEvent)){
             static foreach(uda; member.uda){
                 uda.forget(getMemberPointer!(member.name, T, member.signature)(object));
             }
@@ -119,8 +129,12 @@ struct Events {
         struct Filter {
             FilterArgs args;
             void opOpAssign(string op, T)(T object) if(op == "~") {
-
                 static foreach(member; getMembersByUDA!(T, Event)){
+                    static foreach(uda; member.uda){
+                        uda[args] ~= getMemberPointer!(member.name, T, member.signature)(object);
+                    }
+                }
+                static foreach(member; getMembersByUDA!(T, FilteredEvent)){
                     static foreach(uda; member.uda){
                         uda[args] ~= getMemberPointer!(member.name, T, member.signature)(object);
                     }
@@ -249,6 +263,13 @@ unittest {
     assert(slots2.s == "test");
     import std.math: isNaN;
     assert(slots2.d.isNaN);
+
+    Events.forget(slots1);
+    Event1(1, 1);
+    assert(slots1.d == 0.5);
+
+    Event1(2, 1);
+    assert(slots2.d == 1);
 
 
     alias Event3 = Event!("Event3", void function(), void function(int));
