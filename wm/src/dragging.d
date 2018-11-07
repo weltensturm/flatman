@@ -37,9 +37,9 @@ class DragSystem {
         cursorPos = pos;
     }
 
-    @WindowMouseButton
-    void mouseButton(Window, bool pressed, Mouse.button button){
-        if(!pressed && button == this.button)
+    @(WindowMouseButton[AnyValue])
+    void mouseButton(bool pressed, Mouse.button button){
+        if(!pressed && (!this.button || button == this.button))
             drop;
     }
 
