@@ -37,17 +37,17 @@ class Floating: Container {
 	override void show(){
 		if(!hidden)
 			return;
+		hidden = false;
 		foreach(c; clients)
 			c.configure;
-		hidden = false;
 	}
 
 	override void hide(){
 		if(hidden)
 			return;
-		foreach(c; clients)
-			c.hideSoft;
 		hidden = true;
+		foreach(c; clients)
+			c.configure;
 	}
 
 	void raise(Client client){
