@@ -35,31 +35,31 @@ class Frame: Base {
 		this.size = size;
 		hidden = true;
 
+		/+
 		auto visual = new XVisualInfo;
 		if(!XMatchVisualInfo(dpy, DefaultScreen(dpy), 32, TrueColor, visual))
 			writeln("XMatchVisualInfo failed");
+		+/
 
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
-    	wa.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), visual.visual, AllocNone);
+    	//wa.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), visual.visual, AllocNone);
 
 		window = XCreateWindow(
 				dpy,
 				flatman.root,
 				pos.x, pos.y, size.w, size.h, 0,
-				visual.depth,
+				DefaultDepth(dpy, 0), //visual.depth,
 				InputOutput,
-				visual.visual,
+				DefaultVisual(dpy, 0), //visual.visual,
                 CWBorderPixel | CWOverrideRedirect | CWColormap | CWBackPixmap | CWEventMask,
 				&wa
 		);
 		XSelectInput(dpy, window, ExposureMask | EnterWindowMask | LeaveWindowMask | ButtonPressMask |
 								  ButtonReleaseMask | PointerMotionMask);
 		show;
-        //context = new GlContext(dpy, window);
-		//_draw = new GlDraw(context);
         _draw = new XDraw(dpy, window);
-		//draw.setFont(config.tabs.title.font, config.tabs.title.fontSize.to!int);
+		draw.setFont(config.tabs.title.font, config.tabs.title.fontSize.to!int);
 		window.replace(Atoms._FLATMAN_OVERVIEW_HIDE, 1L);
 		Events[window] ~= this;
 	}
@@ -178,13 +178,13 @@ class Frame: Base {
 		auto height = config.tabs.border.height;
 		draw.rect([0, size.h-height], [size.x, height]);
 
-		auto textOffset = 10;//(size.w/2 - draw.width(client.name)/2).max(size.h);
+		auto textOffset = (size.w/2 - draw.width(client.name)/2).max(size.h);
 		draw.setColor([0.1,0.1,0.1]);
-		/+
+
 		foreach(x; [-1,0,1])
 			foreach(y; [-1,0,1])
 				draw.text([x+textOffset, y], size.h+2, client.name);
-		+/
+
 		auto title = (
 				client.isUrgent ? config.tabs.title.urgent
 				: client.isfullscreen ? config.tabs.title.fullscreen
@@ -194,7 +194,7 @@ class Frame: Base {
 				: config.tabs.title.normal
 		);
 		draw.setColor(title);
-		//draw.text([textOffset, 0], size.h, client.name);
+		draw.text([textOffset, 0], size.h, client.name);
 		if(client.icon.length){
 			if(!client.xicon){
 				client.xicon = draw.to!XDraw.icon(client.icon, client.iconSize.to!(int[2]));
