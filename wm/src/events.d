@@ -118,14 +118,42 @@ void handleEvent(XEvent* e){
 
 
 void handleEvents(){
-	XEvent ev;
-	XSync(dpy, false);
-	while(XPending(dpy)){
-		XNextEvent(dpy, &ev);
-		with(Log(formatEvent(&ev))){
+    XEvent ev;
+    XSync(dpy, false);
+    while(XPending(dpy)){
+        XNextEvent(dpy, &ev);
+        eventSequence.update(ev.xany.serial);
+        if(eventSequence.ignored(ev.type)){
+            log(Log.RED ~ "ignoring " ~ Log.DEFAULT ~ formatEvent(&ev));
+            continue;
+        }
+        with(Log(formatEvent(&ev))){
             handleEvent(&ev);
-		}
-	}
+        }
+    }
+}
+
+
+class EventSequence {
+
+    private ulong serial;
+    private int[] ignoreEvents;
+
+    void update(ulong serial){
+        if(this.serial != serial){
+            this.serial = serial;
+            ignoreEvents = [];
+        }
+    }
+
+    void ignore(int event){
+        ignoreEvents ~= event;
+    }
+
+    bool ignored(int event){
+        return ignoreEvents.canFind(event);
+    }
+
 }
 
 
@@ -193,12 +221,14 @@ void registerAll(){
     WindowMouseButton ~= &onButton;
     WindowMouseMove[AnyValue] ~= &onMotion;
     WindowClientMessage[AnyValue] ~= &onClientMessage;
-	WindowConfigureRequest[AnyValue] ~= &onConfigureRequest;
-	WindowCreate ~= &onCreate;
-	WindowDestroy ~= &onDestroy;
-	WindowEnter ~= &onEnter;
-	WindowMapRequest ~= &onMapRequest;
-	WindowMap[AnyValue] ~= &restack;
+    WindowConfigureRequest[AnyValue] ~= &onConfigureRequest;
+    WindowCreate ~= &onCreate;
+    WindowDestroy ~= &onDestroy;
+    WindowEnter ~= &onEnter;
+    WindowMap ~= &onMap;
+    WindowUnmap ~= &onUnmap;
+    WindowMapRequest ~= &onMapRequest;
+    WindowMap[AnyValue] ~= &restack;
 
 }
 
@@ -340,8 +370,36 @@ void onCreate(bool override_redirect, Window window){
 }
 
 void onDestroy(Window window){
-	if(unmanaged.canFind(window))
-		unmanaged = unmanaged.without(window);
+    if(unmanaged.canFind(window))
+        unmanaged = unmanaged.without(window);
+
+    if(auto client = find(window)){
+        bool wasActive = client == active;
+        client.monitor.remove(client);
+        ewmh.updateClientList;
+        if(wasActive){
+
+            auto newFocus = monitor.active;
+
+            if(!newFocus){
+                auto result =
+                    monitors
+                        .map!(a => a.active)
+                        .filter!(a => a !is null)
+                        .takeOne;
+                if(result.length)
+                    newFocus = result[0];
+            }
+
+            if(newFocus)
+                newFocus.focus;
+
+        }
+    }
+}
+
+void onUnmap(Window window){
+    eventSequence.ignore(EnterNotify);
 }
 
 void onEnter(Window window){
@@ -386,17 +444,20 @@ void onMapRequest(Window parent, Window window){
 
 
 void onMap(Window window){
-	if(!find(window)){
-		XWindowAttributes wa;
-		if(!XGetWindowAttributes(dpy, window, &wa)){
-			return;
-		}
-		if(wa.override_redirect){
-			"%s ignoring unmanaged window".format(window).log;
-			return;
-		}
-		manage(window, &wa, false);
-	}
+    eventSequence.ignore(EnterNotify);
+    /+
+    if(!find(window)){
+        XWindowAttributes wa;
+        if(!XGetWindowAttributes(dpy, window, &wa)){
+            return;
+        }
+        if(wa.override_redirect){
+            "%s ignoring unmanaged window".format(window).log;
+            return;
+        }
+        manage(window, &wa, false);
+    }
+    +/
 }
 
 

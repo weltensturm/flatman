@@ -473,14 +473,8 @@ class Client: Base {
     +/
 
     @WindowDestroy
-    void destroy(){
-        if(previousFocus == this)
-            previousFocus = null;
+    void onDestroy(){
         destroyed = true;
-        this.monitor.remove(this);
-        if(previousFocus && previousFocus != this)
-            previousFocus.focus;
-        ewmh.updateClientList;
         Events.forget(this);
     }
 

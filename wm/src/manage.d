@@ -76,21 +76,24 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 		throw new Exception("No window given");
 	if(find(w))
 		return;
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
-	auto c = new Client(w);
-	auto monitor = findMonitor(c.pos, c.size);
-    if(!monitor || !scan)
-        monitor = .monitor;
-	if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
-		c.pos = monitor.size.a/2 - c.size.a/2;
-	monitor.add(c, c.originWorkspace);
-	XChangeProperty(dpy, root, Atoms._NET_CLIENT_LIST, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
-	c.updateStrut;
-	if(map){
-		c.show;
-		//focus(c);
-	}else if(!scan)
-		c.requestAttention;
+	with(Log(Log.RED ~ "manage" ~ Log.DEFAULT)){
+		XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
+		auto c = new Client(w);
+		auto monitor = findMonitor(c.pos, c.size);
+		if(!monitor || !scan)
+			monitor = .monitor;
+		if(c.isFloating && c.pos.x == 0 && c.pos.y == 0)
+			c.pos = monitor.size.a/2 - c.size.a/2;
+		monitor.add(c, c.originWorkspace);
+		XChangeProperty(dpy, root, Atoms._NET_CLIENT_LIST, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
+		c.updateStrut;
+		if(map){
+			c.show;
+			if(!active || active.parent == c.parent)
+				c.focus;
+		}else if(!scan)
+			c.requestAttention;
+	}
 }
 
 

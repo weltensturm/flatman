@@ -62,6 +62,7 @@ int[2] rootSize = [1,1];
 
 DragSystem drag;
 KeybindSystem keys;
+EventSequence eventSequence;
 
 
 int main(string[] args){
@@ -186,6 +187,7 @@ void setup(bool autostart){
 
 	keys = new KeybindSystem;
 	drag = new DragSystem;
+	eventSequence = new EventSequence;
 	
 	ewmh.updateWorkarea;
 	ewmh.setSupportingWm;
@@ -273,7 +275,7 @@ void loop(){
 	Tick();
 
 	if(requestFocus){
-		"focus %s".format(requestFocus).log;
+		(Log.RED ~ "focus" ~ Log.DEFAULT ~ " %s".format(requestFocus)).log;
 		previousFocus = currentFocus;
 		currentFocus = requestFocus;
 		requestFocus = null;
