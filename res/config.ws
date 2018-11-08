@@ -28,6 +28,8 @@ keys {
     mod+l				workspace - filled
     mod+Up				workspace - filled
     mod+shift+asciitilde		workspace - filled
+    mod+Tab             workspace-history next
+    mod+shift+Tab       workspace-history prev
     mod+ctrl+l			workspace - create
     mod+ctrl+k			workspace + create
     mod+0				workspace last s

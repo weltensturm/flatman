@@ -78,6 +78,7 @@ public import
 	flatman.layout.split,
 	flatman.layout.floating,
 	flatman.layout.tabs,
+	flatman.workspaceHistory,
 	flatman.dragging,
 	flatman.util,
 	flatman.flatman,

@@ -17,7 +17,8 @@ alias WindowResize           = Event!("WindowResize", void function(Window, int[
 alias WindowMove             = Event!("WindowMove", void function(Window, int[2]));
 alias WindowCreate           = Event!("WindowCreate", void function(bool, Window));
 alias WindowDestroy          = Event!("WindowDestroy", void function(Window));
-alias WindowEnter            = Event!("WindowEnter", void function(Window));
+alias WindowEnter            = Event!("WindowEnter", void function(Window),
+                                                     void function(Window, int[2]));
 alias WindowLeave            = Event!("WindowLeave", void function(Window));
 alias WindowExpose           = Event!("WindowExpose", void function(Window));
 alias WindowFocusIn          = Event!("WindowFocusIn", void function(Window));
@@ -28,6 +29,10 @@ alias WindowUnmap            = Event!("WindowUnmap", void function(Window));
 alias KeyboardMapping        = Event!("KeyboardMapping", void function(XMappingEvent*));
 alias Tick                   = Event!("Tick", void function());
 alias ConfigUpdate			 = Event!("ConfigUpdate", void function(NestedConfig));
+alias Command				 = Event!("Command", void function(string, bool, string[]));
+alias Overview				 = Event!("Overview", void function(bool));
+alias WorkspaceCreate		 = Event!("WorkspaceCreate", void function(int));
+alias WorkspaceDestroy		 = Event!("WorkspaceDestroy", void function(int));
 
 
 void handleEvent(XEvent* e){
@@ -68,6 +73,7 @@ void handleEvent(XEvent* e){
 
         case EnterNotify:
             WindowEnter(e.xcrossing.window);
+            WindowEnter(e.xcrossing.window, [e.xcrossing.x_root, e.xcrossing.y_root]);
             break;
         case LeaveNotify:
             WindowLeave(e.xcrossing.window);
@@ -185,6 +191,7 @@ auto formatEvent(XEvent* ev){
         tuple(EnterNotify,       "EnterNotify",       "xcrossing",         () => ev.xcrossing.to!string),
         tuple(Expose,            "Expose",            "xexpose",           () => ev.xexpose.to!string),
         tuple(FocusIn,           "FocusIn",           "xfocus",            () => ev.xfocus.to!string),
+        tuple(FocusOut,          "FocusOut",          "xfocus",            () => ev.xfocus.to!string),
         tuple(KeyPress,          "KeyPress",          "xkey",              () => formatKey()),
         tuple(KeyRelease,        "KeyRelease",        "xkey",              () => formatKey()),
         tuple(MappingNotify,     "MappingNotify",     "",                  () => ""),
@@ -207,7 +214,7 @@ auto formatEvent(XEvent* ev){
                 else
                     msg ~= Log.GREY ~ "%s".format(win) ~ Log.DEFAULT;
             }
-            return msg ~ " " ~ event[1] ~ " " ~ event[3]();
+            return Log.GREY ~ Log.BOLD ~ ev.xany.serial.to!string ~ Log.DEFAULT ~ " " ~ msg ~ " " ~ event[1] ~ " " ~ event[3]();
         }
     }
 

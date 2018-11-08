@@ -15,8 +15,10 @@ string call(Args...)(bool pressed, string fn, Args args){
 
 
 string call()(bool pressed, string fn, string[] args){
-	if(fn in functions)
+	Command(fn, pressed, args);
+	if(fn in functions){
 		return functions[fn](pressed, args);
+	}
 	`ERROR: Function not found "%s"`.format(fn).log;
 	return "";
 }
@@ -69,10 +71,14 @@ void registerFunctions(){
 	register("killclient", {killClient;});
 	register("quit", &quit);
 	register("workspace", &workspace);
+	register("workspace-history", &workspaceHistory);
 	register("reload", &reload);
 	register("insert", &toggleTabs);
 	register("overview", &overview);
 }
+
+
+void workspaceHistory(string){}
 
 
 void focus(string what, string dir){
@@ -175,9 +181,11 @@ void overview(bool activate){
 		if(activate){
 			doOverview = true;
 			root.replace(Atoms._FLATMAN_OVERVIEW, 1L);
+			Overview(true);
 		}else{
 			doOverview = false;
 			root.replace(Atoms._FLATMAN_OVERVIEW, 0L);
+			Overview(false);
 		}
 	}else if(activate && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
 		overviewStart = Clock.currTime-overviewTime.to!long.msecs;

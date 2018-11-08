@@ -62,6 +62,7 @@ int[2] rootSize = [1,1];
 
 DragSystem drag;
 KeybindSystem keys;
+WorkspaceHistory workspaceHistory;
 EventSequence eventSequence;
 
 
@@ -147,8 +148,6 @@ void checkOtherWm(){
 
 void setup(bool autostart){
 
-	XSynchronize(dpy, true);
-
 	registerAll;
 
 	xerrorfatalxlib = XSetIOErrorHandler(&xerrorfatal);
@@ -187,6 +186,7 @@ void setup(bool autostart){
 
 	keys = new KeybindSystem;
 	drag = new DragSystem;
+	workspaceHistory = new WorkspaceHistory;
 	eventSequence = new EventSequence;
 	
 	ewmh.updateWorkarea;

@@ -22,9 +22,8 @@ class Monitor {
         this.pos = pos;
         this.size = size;
         workspaces ~= new Workspace(pos, size);
+        WorkspaceCreate(0);
         workspace.show;
-        //auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
-        //dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
         Inotify.watch("~/.flatman".expandTilde, (path, file, action){
             if(action != Inotify.Modify)
                 return;
@@ -179,6 +178,20 @@ class Monitor {
                 ws.move(pos.a + [reserve[0].to!int, cast(int)reserve[2]]);
                 ws.resize([(size.w-reserve[1]-reserve[0]).to!int, (size.h-reserve[2]-reserve[3]).to!int]);
             }
+        }
+    }
+
+    void resize(Workspace ws){
+        with(Log("%s.resizeWorkspace %s".format(this, size))){
+            this.size = size;
+            int[4] reserve = calculateStrut;
+            foreach(ref r; reserve){
+                if(r > size.w || r > size.h)
+                    r = 0;
+            }
+            "monitor strut %s".format(reserve).log;
+            ws.move(pos.a + [reserve[0].to!int, cast(int)reserve[2]]);
+            ws.resize([(size.w-reserve[1]-reserve[0]).to!int, (size.h-reserve[2]-reserve[3]).to!int]);
         }
     }
 

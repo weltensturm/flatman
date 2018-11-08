@@ -213,13 +213,15 @@ void newWorkspace(long pos, string path=""){
 				monitor.workspaces ~= ws;
 			else
 				monitor.workspaces.insertInPlace(pos, ws);
+			monitor.resize(ws);
 			if(monitor.workspaceActive >= pos)
 				monitor.workspaceActive++;
 			if(path.length){
 				ws.updateContext(path);
 			}
 		}
-		monitor.resize(monitor.size);
+		WorkspaceCreate(pos.max(0).min(monitor.workspaces.length-1).to!int);
+		//monitor.resize(monitor.size);
 		ewmh.updateDesktopCount;
 		ewmh.updateWorkspaces;
 	}
@@ -239,6 +241,9 @@ void switchWorkspace(int pos){
 				destroy = false;
 				break;
 			}
+		}
+		if(destroy){
+			WorkspaceDestroy(monitor.workspaceActive);
 		}
 		foreach(monitor; monitors){
 			monitor.workspace.hide;
