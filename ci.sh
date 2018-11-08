@@ -11,7 +11,7 @@ parts=($(cat build.conf))
 for part in "${parts[@]}"; do
     pushd $part > /dev/null
     echo $part
-    rm dub.selections.json
+    rm dub.selections.json || true
     dub -q test --build=unittest-cov --compiler="$DC"
     find . -name "-home*.lst" -exec rm {} \;
     dub -q run covered -- -a
