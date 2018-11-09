@@ -50,7 +50,7 @@ class TaskListEntry: Base {
             auto scale = (20.0)/client.iconSize.h;
             iconWidth = client.iconSize.w*scale;
             centerOffset = (centerOffset - iconWidth).max(10);
-            
+
             draw.text([pos.x + iconWidth.to!int + centerOffset.max(0).to!int, 5], txt);
 
             if(!client.xicon){
@@ -68,7 +68,6 @@ class TaskListEntry: Base {
     override void onMouseMove(int x, int y){
         if(((start.x - x).abs > 3 || (start.y - y) > 3) && dragging){
             XUngrabPointer(dpy, CurrentTime);
-            writeln("start ", x, " ", y);
             dragging = false;
             XEvent ev;
             ev.type = ClientMessage;
@@ -79,14 +78,15 @@ class TaskListEntry: Base {
             ev.xclient.data.l[1] = bar.pos.y + y;
             ev.xclient.data.l[2] = 8;
             ev.xclient.data.l[3] = Mouse.buttonLeft;
-            ev.xclient.data.l[4] = 2;   
+            ev.xclient.data.l[4] = 2;
             XSendEvent(wm.displayHandle, .root, false, SubstructureNotifyMask|SubstructureRedirectMask, &ev);
+            root.onMouseButton(Mouse.buttonLeft, false, 0, 0); // TODO: find better solution
         }
         super.onMouseMove(x, y);
     }
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-        writeln(button, ' ', pressed);
+        writeln(client.title, ' ', button, ' ', pressed);
         if(button == Mouse.buttonLeft){
             if(!pressed){
                 writeln("false");
