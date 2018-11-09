@@ -175,15 +175,18 @@ class WorkspaceHistoryWindow: Base {
 		XSelectInput(dpy, window, ExposureMask | EnterWindowMask | LeaveWindowMask | ButtonPressMask |
 								  ButtonReleaseMask | PointerMotionMask);
         _draw = new XDraw(dpy, window);
-		draw.setFont("Consolas", 10);
+		draw.setFont(config.tabs.title.font, config.tabs.title.fontSize);
 		Events[window] ~= this;
 	}
 
 	void update(){
 		show;
 
-		auto width = history.workspaceNames.map!(a => draw.width(a)).fold!max(0) + 8;
-		auto height = history.history.length.to!int*16 + 8;
+		auto rowHeight = draw.fontHeight*2;
+		auto padding = rowHeight;
+
+		auto width = history.workspaceNames.map!(a => draw.width(a)).fold!max(0) + padding;
+		auto height = history.history.length.to!int*rowHeight + padding;
 
 		int[2] size = [width, height];
 		move(monitors[0].pos.a + monitors[0].size.a/2 - size.a/2);
@@ -248,15 +251,15 @@ class WorkspaceHistoryWindow: Base {
 		if(hidden)
 			return;
 
+		auto rowHeight = draw.fontHeight*2;
 		auto background = config.tabs.background.normal;
 		draw.setColor(background);
 		draw.rect([0,0], size);
 
-		draw.setFont("Consolas", 10);
 		foreach(i, entry; history.history){
 			if(i == history.historySelector){
 				draw.setColor([0.3, 0.3, 0.3, 1]);
-				draw.rect([0, i.to!int*16 + 4], [size.w, 16]);
+				draw.rect([0, i.to!int*rowHeight + rowHeight/2], [size.w, rowHeight]);
 			}
 			if(entry.workspace < history.workspaceNames.length){
 				auto name = history.workspaceNames[entry.workspace];
@@ -266,13 +269,13 @@ class WorkspaceHistoryWindow: Base {
 				if(prefix.length)
 					prefix ~= "/";
 				auto cwd = name.split("/")[$-1];
-				int x = 4;
+				int x = rowHeight/2;
 				draw.setColor([0.5, 0.5, 0.5, 1]);
-				x += draw.text([x, i.to!int*16 + 4], 16, prefix, 0);
+				x += draw.text([x, i.to!int*rowHeight + rowHeight/2], rowHeight, prefix, 0);
 				draw.setColor([1, 1, 1, 1]);
-				x += draw.text([x, i.to!int*16 + 4], 16, cwd, 0);
+				x += draw.text([x, i.to!int*rowHeight + rowHeight/2], rowHeight, cwd, 0);
 			}else{
-				draw.text([0, i.to!int*16], "Workspace " ~ entry.workspace.to!string);
+				draw.text([0, i.to!int*rowHeight], "Workspace " ~ entry.workspace.to!string);
 			}
 		}
 
