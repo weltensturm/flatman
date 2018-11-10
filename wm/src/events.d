@@ -229,6 +229,7 @@ void registerAll(){
     WindowMouseMove[AnyValue] ~= &onMotion;
     WindowClientMessage[AnyValue] ~= &onClientMessage;
     WindowConfigureRequest[AnyValue] ~= &onConfigureRequest;
+	WindowConfigure ~= &onConfigure;
     WindowCreate ~= &onCreate;
     WindowDestroy ~= &onDestroy;
     WindowEnter ~= &onEnter;
@@ -334,11 +335,11 @@ void onClientMessage(XClientMessageEvent* cme){
         "unknown message type %s %s".format(cme.message_type, cme.message_type.name).log;
 }
 
-void onConfigure(Window window, int x, int y, int width, int height){
-    "%s onConfigure %s %s".format(find(window), [x,y], [width,height]);
+void onConfigure(Window window, XConfigureEvent* ev){
+    eventSequence.ignore(EnterNotify);
     if(window == root){
-        bool dirty = rootSize != [width, height];
-        rootSize = [width, height];
+        bool dirty = rootSize != [ev.width, ev.height];
+        rootSize = [ev.width, ev.height];
         if(moveResizeMonitors() || dirty){
             ewmh.updateWorkarea;
             restack;
