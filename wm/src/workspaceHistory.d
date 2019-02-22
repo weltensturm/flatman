@@ -21,7 +21,7 @@ class WorkspaceHistory {
 
 	this(){
 		Events ~= this;
-		window = new WorkspaceHistoryWindow(this);
+		//window = new WorkspaceHistoryWindow(this);
 		foreach(i, ws; monitor.workspaces)
 			push(0, i.to!int);
 		updateNames;
@@ -43,24 +43,40 @@ class WorkspaceHistory {
 				auto entry = history[historySelector];
 				monitors[entry.monitor].focus;
 				switchWorkspace(entry.workspace);
-				window.update;
+				//window.update;
 			}
 		}
+	}
+
+	private void update(){
+		size_t[] wsEmpty;
+		ws_iter:foreach(i; 0..monitor.workspaces.length){
+			foreach(monitor; monitors)
+				if(monitor.workspaces[i].clients.length || i == monitor.workspaceActive)
+					continue ws_iter;
+			wsEmpty ~= i;
+		}
+		history.sort!((a, b) => int(wsEmpty.canFind(a.workspace)) < int(wsEmpty.canFind(b.workspace)));
+		Atoms._FLATMAN_WORKSPACE_HISTORY.replace(history.map!(a => a.workspace.to!long).array);
 	}
 
 	private void push(int monitor, int workspace){
 		auto entry = HistoryEntry(monitor, workspace);
 		history = entry ~ history.filter!(a => a.workspace != workspace).array;
+		update;
 	}
 
 	@WorkspaceCreate
 	void workspaceCreate(int ws){
 		log(Log.RED ~ "WS CREATE " ~ ws.to!string ~ Log.DEFAULT ~ " " ~ history.to!string);
 		foreach(ref entry; history){
-			if(ws >= entry.workspace)
+			if(entry.workspace > ws)
 				entry.workspace++;
 		}
-		history ~= HistoryEntry(0, ws);
+		if(ws == monitor.workspaceActive)
+			push(0, ws);
+		else
+			history ~= HistoryEntry(0, ws);
 		log(Log.RED ~ "WS CREATED " ~ ws.to!string ~ Log.DEFAULT ~ " " ~ history.to!string);
 	}
 
@@ -69,14 +85,13 @@ class WorkspaceHistory {
 		log(Log.RED ~ "WS DESTROY " ~ ws.to!string ~ Log.DEFAULT ~ " " ~ history.to!string);
 		history = history.filter!(a => a.workspace != ws).array;
 		foreach(ref entry; history){
-			if(ws >= entry.workspace)
+			if(entry.workspace > ws)
 				entry.workspace--;
 		}
 		log(Log.RED ~ "WS DESTROYED " ~ ws.to!string ~ Log.DEFAULT ~ " " ~ history.to!string);
-
+		update;
 	}
 
-    /+
 	@WorkspaceSwitch
 	void workspaceSwitch(int ws){
 		if(historySelector == -1){
@@ -86,7 +101,6 @@ class WorkspaceHistory {
 			}
 		}
 	}
-    +/
 
 	@Overview
 	void overview(bool activate){
@@ -97,7 +111,7 @@ class WorkspaceHistory {
 				}
 			}
 			historySelector = -1;
-			window.hide;
+			//window.hide;
 		}else{
 			historySelector = 0;
 		}
@@ -197,6 +211,7 @@ class WorkspaceHistoryWindow: Base {
 	override void show(){
 		"workspaceHistoryWindow.show".log;
 		XMapWindow(dpy, window);
+		XRaiseWindow(dpy, window);
 	}
 
 	override void hide(){

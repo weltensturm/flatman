@@ -33,6 +33,7 @@ alias Command				 = Event!("Command", void function(string, bool, string[]));
 alias Overview				 = Event!("Overview", void function(bool));
 alias WorkspaceCreate		 = Event!("WorkspaceCreate", void function(int));
 alias WorkspaceDestroy		 = Event!("WorkspaceDestroy", void function(int));
+alias WorkspaceSwitch        = Event!("WorkspaceSwitch", void function(int));
 
 
 void handleEvent(XEvent* e){

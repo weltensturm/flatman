@@ -93,6 +93,7 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 				c.focus;
 		}else if(!scan)
 			c.requestAttention;
+		ensureEmptyWorkspace;
 	}
 }
 
@@ -235,7 +236,7 @@ void switchWorkspace(int pos){
 	if(pos == monitor.workspaceActive)
 		return;
 	with(Log("workspace = %s".format(pos))){
-		bool destroy = true;
+		bool destroy = emptyWorkspaceCount > 1;
 		foreach(monitor; monitors){
 			if(monitor.workspace.clients.length != 0 || monitor.workspaces.length <= 1){
 				destroy = false;
@@ -253,11 +254,11 @@ void switchWorkspace(int pos){
 				if(pos > monitor.workspaceActive)
 					pos--;
 			}
+			if(pos < 0)
+				pos = cast(int)monitor.workspaces.length-1;
+			if(pos >= monitor.workspaces.length)
+				pos = 0;
 			monitor.workspaceActive = pos;
-			if(monitor.workspaceActive < 0)
-				monitor.workspaceActive = cast(int)monitor.workspaces.length-1;
-			if(monitor.workspaceActive >= monitor.workspaces.length)
-				monitor.workspaceActive = 0;
 			monitor.workspace.show;
 		}
 		assert(monitors.map!(a => a.workspaces.length).uniq.array.length == 1);
@@ -266,6 +267,27 @@ void switchWorkspace(int pos){
 		ewmh.updateDesktopCount;
 		ewmh.updateWorkspaces;
 		ewmh.updateCurrentDesktop;
+		WorkspaceSwitch(pos);
+		ensureEmptyWorkspace;
+	}
+}
+
+
+size_t emptyWorkspaceCount(){
+	size_t count;
+	ws_iter:foreach(i; 0..monitor.workspaces.length){
+		foreach(monitor; monitors)
+			if(monitor.workspaces[i].clients.length)
+				continue ws_iter;
+		count++;
+	}
+	return count;
+}
+
+
+void ensureEmptyWorkspace(){
+	if(emptyWorkspaceCount == 0){
+		newWorkspace(monitor.workspaces.length, "~");
 	}
 }
 
