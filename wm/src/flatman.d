@@ -7,7 +7,6 @@ import flatman;
 __gshared:
 
 
-// TODO: fuck x11-master
 enum Success = 0;
 enum XC_fleur = 52;
 enum XC_left_ptr = 68;
@@ -105,6 +104,7 @@ int main(string[] args){
 			});
 		}
 
+		XInitThreads();
 		dpy = XOpenDisplay(null);
 		if(!dpy)
 			throw new Exception("cannot open display");
