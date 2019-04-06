@@ -18,7 +18,7 @@ addons:
     packages:
       - libclang-3.9-dev
       - g++-7
-      - xserver-xorg
+      - libx11-dev
 
 
 script:
