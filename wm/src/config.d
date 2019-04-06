@@ -55,6 +55,12 @@ struct NestedConfig {
 
 	struct Tabs {
 
+		enum SortBy {
+			history,
+			manual
+		}
+
+		SortBy sortBy;
 		int width;
 		ConfigInt4 padding;
 

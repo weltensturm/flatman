@@ -1,4 +1,4 @@
-module composite.overviewWindow;
+module composite.overview.window;
 
 import composite;
 

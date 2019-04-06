@@ -16,6 +16,7 @@ class Tabs: Container {
     this(){
         size = [10,10];
         hidden = true;
+        Events ~= this;
     }
 
     WindowHandle[] stack(){
@@ -42,6 +43,7 @@ class Tabs: Container {
     }
 
     void destroy(){
+        Events.forget(this);
     }
 
     alias add = Base.add;
@@ -124,16 +126,6 @@ class Tabs: Container {
 
     @property
     override void active(Client client){
-        bool activePassed;
-        bool newPassed;
-        foreach(i, c; children.to!(Client[])){
-            if(c == active)
-                activePassed = true;
-            if(c == client)
-                newPassed = true;
-            else
-                c.win.replace(Atoms._FLATMAN_TAB_DIR, newPassed && activePassed ? 1L : -1L);
-        }
         if(active && active != client)
             active.hide;
         if(!hidden && client.hidden){
@@ -161,8 +153,17 @@ class Tabs: Container {
                     );
                 }
             }
-            foreach(client; children.to!(Client[])){
-                client.win.replace(Atoms._FLATMAN_WIDTH, (size.w-padding[0]-padding[1]).to!long);
+        }
+    }
+
+    @Overview
+    void onOverview(bool enter){
+        if(config.tabs.sortBy == config.tabs.SortBy.history && !enter){
+            if(clientActive != 0){
+                Log("%s %s %s %s".format(config.tabs.sortBy, enter, clientActive, children.length));
+                children = children[clientActive] ~ children[0..clientActive] ~ children[clientActive+1..$];
+                clientActive = 0;
+                updateHints;
             }
         }
     }

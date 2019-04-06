@@ -23,9 +23,9 @@ void focus(Monitor monitor){
 }
 
 
-void focusDir(short direction){
-	auto client = monitor.workspace.clientDir(direction);
-	if(!client){
+void focusTab(string direction){
+	auto client = monitor.workspace.clientDir(direction == "next" ? 1 : -1);
+	if(!client && !monitor.workspace.active){
 		auto sorted = monitors
 			.enumerate
 			.array
@@ -35,7 +35,7 @@ void focusDir(short direction){
 				(a, b) => a.index < b.index
 			);
 		
-		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + direction;
+		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + (direction == "next" ? 1 : -1);
 
 		if(index >= 0 && index < sorted.length){
 			client = monitors[sorted[index][0]].active;
@@ -47,7 +47,7 @@ void focusDir(short direction){
 }
 
 
-void focusTabs(short direction){
+void focusDir(string direction){
 	auto client = monitor.workspace.clientContainerDir(direction);
 	if(!client){
 		auto sorted = monitors
@@ -59,7 +59,7 @@ void focusTabs(short direction){
 				(a, b) => a.index < b.index
 			);
 		
-		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + direction;
+		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + (direction == "right" ? 1 : -1);
 
 		if(index >= 0 && index < sorted.length){
 			client = monitors[sorted[index][0]].active;

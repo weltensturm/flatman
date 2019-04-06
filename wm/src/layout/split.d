@@ -388,8 +388,8 @@ class Split: Container {
         return null;
     }
 
-    Client clientContainerDir(short direction){
-        auto target = clientActive+direction;
+    Client clientContainerDir(string direction){
+        auto target = clientActive + (direction == "right" ? 1 : -1);
         if(target < 0 || target >= children.length)
             return null;
         return children[target].to!Tabs.active;

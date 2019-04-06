@@ -4,21 +4,6 @@ module composite.client;
 import composite;
 
 
-class OverviewAnimation {
-    double[2] size;
-    double[2] pos;
-    this(int[2] pos, int[2] size){
-        this.pos = pos.to!(double[]);
-        this.size = size.to!(double[]);
-    }
-    void approach(int[2] pos, int[2] size){
-        auto frt = manager.frameTimer.dur/60.0*config.animationSpeed;
-        this.pos.rip(pos.to!(double[2]), 1, 100, frt);
-        this.size.rip(size.to!(double[2]), 1, 100, frt);
-    }
-}
-
-
 class ClientFramebuffer {
 
     Picture picture;
@@ -138,7 +123,7 @@ class CompositeClient: ws.wm.Window {
         isActive = true;
         properties.window(window);
         XSync(wm.displayHandle, false);
-        XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask);
+        XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask | StructureNotifyMask);
         properties.workspace ~= (long workspace){
             workspaceAnimation(workspace, workspace);
         };
@@ -170,7 +155,10 @@ class CompositeClient: ws.wm.Window {
         }
         if(!(a.map_state & IsViewable))
             return;
-        ghost = picture;
+        if(animation.size == size){
+            // don't swap ghost mid-animation
+            ghost = picture;
+        }
         picture = new ClientFramebuffer(windowHandle, a);
     }
 
@@ -183,12 +171,12 @@ class CompositeClient: ws.wm.Window {
         if(animation.fade.completion < 0.1 || a.override_redirect)
             animation.size = [size.x, size.y];
         "resize %s %s old %s".format(title, size, this.size).writeln;
-        this.size = size;
         createPicture;
+        this.size = size;
     }
 
     override void moved(int[2] pos){
-        if(pos.y >= manager.height)
+        if(pos.y >= manager.height && !a.override_redirect)
             pos.y -= manager.height;
         if(pos == this.pos)
             return;

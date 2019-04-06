@@ -82,10 +82,10 @@ void workspaceHistory(string){}
 
 
 void focus(string what, string dir){
-	if(what == "dir")
-		focusDir(dir == "+" ? 1 : -1);
-	else if(what == "stack")
-		focusTabs(dir == "+" ? 1 : -1);
+	if(what == "tab")
+		focusTab(dir);
+	else if(what == "dir")
+		focusDir(dir);
 }
 
 void resize(string what){
@@ -99,10 +99,10 @@ void resize(string what){
 
 void move(string what){
 	final switch(what){
-		case "+":
+		case "right":
 			moveRight;
 			break;
-		case "-":
+		case "left":
 			moveLeft;
 			break;
 		case "up":

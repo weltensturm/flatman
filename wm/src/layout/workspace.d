@@ -96,20 +96,9 @@ class Workspace: Container {
 		return result;
     }
 
-    Client clientContainerDir(short direction){
+    Client clientContainerDir(string direction){
 		return split.clientContainerDir(direction);
     }
-
-	void focusDir(int dir){
-		if(focusFloating)
-			floating.focusDir(dir);
-		else
-			split.focusDir(dir);
-	}
-
-	void focusTabs(int dir){
-		split.focusTabs(dir);
-	}
 
 	alias remove = Base.remove;
 

@@ -9,6 +9,7 @@ public import
 	std.process,
 	std.algorithm,
 	std.array,
+	std.range,
 	std.datetime,
 	std.string,
 	std.math,
@@ -48,6 +49,7 @@ public import
 	ws.gl.context,
 	ws.gl.draw,
 	ws.draw,
+	ws.gui.base,
 
 	common.window,
 	common.screens,
@@ -61,15 +63,8 @@ public import
 	composite.backend.backend,
 	composite.backend.xrender,
 	composite.backend.xrenderWindow,
-	composite.overview,
-	composite.overviewWindow,
+	composite.overview.overview,
 	composite.damage,
 	composite.client,
 	composite.animation;
 
-
-x11.Xlib.Screen screen;
-ulong root;
-
-enum CompositeRedirectAutomatic = 0;
-enum CompositeRedirectManual = 1;

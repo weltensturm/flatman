@@ -1,6 +1,9 @@
 module composite.main;
 
+import composite.events;
 import composite;
+
+
 
 __gshared:
 
@@ -21,6 +24,13 @@ auto batterySave = false;
 RotatingArray!(30, double) frameTimes;
 
 
+x11.Xlib.Screen screen;
+ulong root;
+
+enum CompositeRedirectAutomatic = 0;
+enum CompositeRedirectManual = 1;
+
+
 void main(){
 
 	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
@@ -33,18 +43,21 @@ void main(){
         new CompositeManager;
         double lastFrame = now;
         while(running){
+            Profile.reset;
             manager.clear;
-            with(Profile("Events")){
+            with(Profile("events")){
                 wm.processEvents;
             }
             if(manager.restack){
-                with(Profile("Restack", true)){
+                with(Profile("restack")){
                     manager.updateStack;
                     manager.restack = false;
                 }
             }
+            Tick();
+            Profile.damagee(manager.damage);
             manager.draw;
-            with(Profile("Sleep")){
+            with(Profile("sleep")){
                 auto frame = now;
                 frameTimes ~= frame - lastFrame;
                 if(frame-lastFrame < 1/120.0)
@@ -179,6 +192,8 @@ class CompositeManager {
             ReparentNotify: (XEvent* e) => evReparent(&e.xreparent)
         ]);
 
+        composite.events.listen;
+
         "looking for windows".writeln;
         foreach(w; queryTree)
             evCreate(w);
@@ -207,7 +222,7 @@ class CompositeManager {
     }
 
     void clear(){
-        if(!config.redirect && overview.state < 0.00001)
+        if(!config.redirect && !overview.visible)
             return;
         damage.reset(clients.map!(a => a.damage));
     }
@@ -341,8 +356,10 @@ class CompositeManager {
             if(c.destroyed){
                 if(c.animation.fade.calculate > 0)
                     destroyed ~= c;
-                else
+                else{
+					applyDamage(c);
                     c.destroy;
+				}
             }
         }
         clients = clients.filter!"!a.destroyed".array;
@@ -475,10 +492,8 @@ class CompositeManager {
         if(!c.damage.damaged)
             return;
 
-        with(Profile("Draw(" ~ c.title ~ ":" ~ c.windowHandle.to!string ~ ")")){
+        with(Profile(c.title)){
 
-            overview.drawPre(backend, c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
-    
             if(c.picture){
                 auto w1 = c.animSize.w/c.size.w.to!double;
                 auto h1 = c.animSize.h/c.size.h.to!double;
@@ -488,20 +503,28 @@ class CompositeManager {
             double transition = 1;
 
             if(c.ghost && c.animation.size != c.size){
-                transition = ((c.animSize.w - c.ghost.size.w.to!double)/(c.size.x - c.ghost.size.w.to!double)
-                              .min((c.animSize.h - c.ghost.size.h.to!double)/(c.size.h - c.ghost.size.h.to!double))
-                              ).min(1).max(0);
+                auto distanceVector = c.size.a - c.ghost.size;
+                auto transitionVec = c.animSize.a - c.ghost.size;
+
+                double length(Point vec){
+                    return asqrt(vec[].map!"a^^2.0".sum);
+                }
+
+                if(length(distanceVector) > 0){
+                    transition = length(transitionVec) / length(distanceVector);
+                }else{
+                    transition = 0;
+                }
                 auto w = c.animSize.w.to!double/c.ghost.size.w;
                 auto h = c.animSize.h.to!double/c.ghost.size.h;
                 c.ghost.scale([w, h]);
-                backend.render(c.ghost, c.ghost.hasAlpha, (1-transition)*c.animAlpha, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+                backend.render(c.ghost, c.ghost.hasAlpha, c.ghost.hasAlpha ? (1-transition)*c.animAlpha : 1, c.animOffset.to!(int[2]), c.animPos, c.animSize);
             }
 
             if(c.picture){
                 backend.render(c.picture, c.picture.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
             }
             //drawShadow(c.animPos, c.animSize);
-            overview.drawPost(backend, c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
         }
     }
 
@@ -513,50 +536,64 @@ class CompositeManager {
             overview.state = (overview.state-frameTimer.dur*0.06*config.animationSpeed).max(0);
 
         Animation.update;
-        overview.tick([0, 1.0/7.5, 1.0/40, 0]);
+        overview.tick;
         
         if(!config.redirect && !overview.visible)
             return;
     
         CompositeClient[] windowsDraw;
 
-        with(Profile("Calc Draw")){
+        with(Profile("calc draw")){
 
-            foreach(c; clients){
-                with(Profile("Calc Draw %s".format(c))){
-                    auto targetP = c.pos.to!(double[2]);
-                    auto targetS = c.size.to!(double[2]);
-                    auto monitor = manager.screens[manager.screens.findScreen(c.pos, c.size)];
-                    if(c.properties.workspace.exists && c.properties.workspace.value >= 0 && properties.workspace.value != c.properties.workspace.value){
-                        targetP.y += properties.workspace.value > c.properties.workspace.value ? -monitor.h : monitor.h;
-                    }
-                    c.animation.pos.rip(targetP, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
-                    c.animation.size.rip(targetS, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
-                    if(c.destroyed)
+            with(Profile("animate")){
+                foreach(c; clients){
+                    if(c.destroyed){
                         restack = true;
-                }
-            }
-
-            foreach(c; clients ~ destroyed){
-                with(Profile("Calc Draw %s".format(c))){
+                        continue;
+                    }
                     if(c.a.override_redirect && !c.picture || (c.animation.fade.calculate <= 0.0001 && c.floating))
                         continue;
-                    animate(c);
-                    if((!overview.visible && c.animation.fade.calculate <= 0.0001
-                                || c.animPos.x+c.animSize.w <= 0
-                                || c.animPos.y+c.animSize.h <= 0
-                                || c.animPos.x >= width
-                                || c.animPos.y >= height))
-                        continue;
-                    applyDamage(c);
-                    windowsDraw ~= c;
+                    double[2] targetP;
+                    double[2] targetS;
+                    targetP = [c.pos.x.to!double, c.pos.y.to!double];
+                    targetS = [c.size.w.to!double, c.size.h.to!double];
+                    c.animation.pos.rip(targetP, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
+                    c.animation.size.rip(targetS, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
                 }
             }
 
-            with(Profile("Calc Draw Overview Damage")){
-                overview.damage(damage);
+            with(Profile("calc windows")){
+                foreach(c; clients.chain(destroyed)){
+                    if(c.a.override_redirect && !c.picture || (c.animation.fade.calculate <= 0.0001 && c.floating))
+                        continue;
+                    with(Profile(c.title)){
+                        with(Profile("animate")){
+                            animate(c);
+                        }
+                        if((!overview.visible && c.animation.fade.calculate <= 0.0001
+    								|| !overview.visible
+    									&& ![manager.properties.workspace.value, -1].canFind(c.properties.workspace.value)
+    									&& !c.a.override_redirect
+                                    || c.animPos.x+c.animSize.w <= 0
+                                    || c.animPos.y+c.animSize.h <= 0
+                                    || c.animPos.x >= width
+                                    || c.animPos.y >= height))
+                            continue;
+                        with(Profile("damage")){
+                            applyDamage(c);
+                            windowsDraw ~= c;
+                        }
+                    }
+                }
             }
-            with(Profile("Calc Draw Damage")){
+
+            if(overview.visible){
+                with(Profile("calc draw overview damage")){
+                    overview.damage(damage);
+                }
+            }
+
+            with(Profile("calc draw damage")){
                 backend.damage(damage);
             }
 
@@ -569,25 +606,21 @@ class CompositeManager {
         }
 
         if(overview.visible){
-            with(Profile("Overview Predraw")){
-                overview.predraw(backend);
+            with(Profile("overview draw")){
+                overview.draw(backend, windowsDraw);
             }
-        }
-        with(Profile("Draw " ~ windowsDraw.length.to!string)){
-            foreach(c; windowsDraw){
-                draw(c);
-            }
+        }else{
+            with(Profile("draw")){
+                foreach(c; windowsDraw){
+                    draw(c);
+                }
+            }    
         }
         
-        if(overview.visible){
-            with(Profile("Overview Dock")){
-                overview.drawDock(backend);
-            }
-            with(Profile("Overview Draw")){
-                overview.draw(backend);
-            }
+        with(Profile("profile draw")){
+            Profile.display(backend);
         }
-    
+
         with(Profile("XSync")){
             XSync(wm.displayHandle, false);
         }

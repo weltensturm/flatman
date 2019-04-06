@@ -80,28 +80,134 @@ double sinApproach(double a){
 
 
 struct Profile {
-    __gshared size_t level;
-    string name;
-    double start;
-    bool force;
-    this(string name, bool force=false){
-        level++;
-        this.force = force;
+
+    private struct Perf {
+        double time;
+        string name;
+        int level;
+    }
+
+    private struct PerfSection {
+        string fullName;
+        string name;
+        size_t level;
+        RotatingArray!(240, double) times;
+    }
+
+    private static Stack!string levels;
+    private static PerfSection[string] sections;
+    private static bool[string] ticked;
+
+    static reset(){
         debug(Profile){
-            this.force = true;
+            foreach(ref b; ticked)
+                b = false;
         }
-        this.name = name;
-        start = now;
+    }
+
+    private PerfSection* perf;
+
+    double start;
+
+    this(string name){
+        debug(Profile){
+            start = now;
+            levels.push(name);
+            auto fullName = levels.slice.join(".");
+            if(fullName !in sections){
+                sections[fullName] = PerfSection(fullName, name, levels.length);
+            }
+            perf = &sections[fullName];
+        }
     }
 
     ~this(){
-        level--;
-        auto diff = now - start;
-        if(force || diff > 1/60.0/2 && name != "Sleep"){
-            writeln(" ".replicate(level*4) ~ "%3.5f".format(diff) ~ ": " ~ name);
+        debug(Profile){
+            levels.pop;
+            ticked[perf.fullName] = true;
+            auto diff = now - start;
+            perf.times ~= diff;
         }
     }
+
+    static damagee(RootDamage damage){
+        debug(Profile){
+            damage.damage([0, 0], [400, manager.height]);
+        }
+    }
+
+    static display(Backend backend){
+        debug(Profile){
+            foreach(name, ref section; sections){
+                if(section.fullName !in ticked || !ticked[section.fullName]){
+                    section.times ~= 0;
+                }
+            }
+            //writeln(" ".replicate(level*4) ~ "%3.5f".format(diff) ~ ": " ~ name());
+            int y = 50;
+            backend.setFont("ProggyTinyTT", 12);
+            backend.clip([0, 0], [400, manager.height]);
+            backend.setColor([0, 0, 0, 0.4]);
+            backend.rect([0, 0], [400, manager.height]);
+            foreach(section; sections.keys.sort){
+                auto perf = sections[section];
+                double time;
+                if(section == "sleep")
+                    time = perf.times.first;
+                else
+                    time = perf.times.fold!max;
+                bool zero = true;
+                foreach(v; perf.times){
+                    if(v > 0)
+                        zero = false;
+                }
+                if(zero)
+                    continue;
+                /+
+                if(time < 0.00005)
+                    continue;
+                +/
+                if(section == "sleep"){
+                    backend.setColor([1 - time*60, 1, 1 - time*60, time*60]);
+                }else{
+                    backend.setColor([1, 1 - time*60, 1 - time*60, time*60]);
+                }
+                backend.text([100, manager.height-y], "%s".format((time * 1000000).to!long), 1);
+                backend.setColor([1, 1, 1]);
+                backend.text([100 + 10, manager.height-y], "- ".repeat(perf.level-1).join ~ perf.name);
+                y += backend.fontHeight;
+            }
+            backend.noclip;
+        }
+    }
+
 }
+
+
+
+struct Stack(T, size_t retain=50) {
+
+    private T[] array;
+    size_t length;
+
+    void push(ref T value){
+        if(length == array.length)
+            array.length += retain;
+        array[length] = value;
+        length++;
+    }
+
+    ref T pop(){
+        scope(exit) length--;
+        return array[length];
+    }
+
+    auto slice(){
+        return array[0..length];
+    }
+
+}
+
 
 
 struct RotatingArray(size_t Size, T) {
@@ -116,7 +222,13 @@ struct RotatingArray(size_t Size, T) {
         return elements[counter];
     }
     int opApply(int delegate(T value) dg){
-        return opApply((size_t, T value){ return dg(value); });
+        int res = 0;
+        foreach(i; counter..Size+counter){
+            res = dg(elements[i >= Size ? i-Size : i]);
+            if(res)
+                break;
+        }
+        return res;
     }
     int opApply(int delegate(size_t idx, T value) dg){
         int res = 0;

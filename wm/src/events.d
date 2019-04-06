@@ -22,6 +22,7 @@ alias WindowEnter            = Event!("WindowEnter", void function(Window),
 alias WindowLeave            = Event!("WindowLeave", void function(Window));
 alias WindowExpose           = Event!("WindowExpose", void function(Window));
 alias WindowFocusIn          = Event!("WindowFocusIn", void function(Window));
+alias WindowFocusOut         = Event!("WindowFocusOut", void function(Window));
 alias WindowMapRequest       = Event!("WindowMapRequest", void function(Window, Window));
 alias WindowProperty         = Event!("WindowProperty", void function(Window, XPropertyEvent*));
 alias WindowMap              = Event!("WindowMap", void function(Window));
@@ -86,6 +87,10 @@ void handleEvent(XEvent* e){
 
         case FocusIn:
             WindowFocusIn(e.xfocus.window);
+            break;
+
+        case FocusOut:
+            WindowFocusOut(e.xfocus.window);
             break;
 
         case KeyPress:

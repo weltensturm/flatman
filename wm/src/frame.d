@@ -35,23 +35,25 @@ class Frame: Base {
 		this.size = size;
 		hidden = true;
 
-		/+
 		auto visual = new XVisualInfo;
-		if(!XMatchVisualInfo(dpy, DefaultScreen(dpy), 32, TrueColor, visual))
+		if(!XMatchVisualInfo(dpy, DefaultScreen(dpy), 24, TrueColor, visual))
 			writeln("XMatchVisualInfo failed");
-		+/
 
 		XSetWindowAttributes wa;
 		wa.override_redirect = true;
-    	//wa.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), visual.visual, AllocNone);
+    	wa.colormap = XCreateColormap(dpy, DefaultRootWindow(dpy), visual.visual, AllocNone);
+		wa.background_pixmap = None;
+		wa.border_pixmap = None;
+		wa.border_pixel = 0;
+		wa.bit_gravity = NorthWestGravity;
 
 		window = XCreateWindow(
 				dpy,
 				flatman.root,
 				pos.x, pos.y, size.w, size.h, 0,
-				DefaultDepth(dpy, 0), //visual.depth,
+				visual.depth,
 				InputOutput,
-				DefaultVisual(dpy, 0), //visual.visual,
+				visual.visual,
                 CWBorderPixel | CWOverrideRedirect | CWColormap | CWBackPixmap | CWEventMask,
 				&wa
 		);
