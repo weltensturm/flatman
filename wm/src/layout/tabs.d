@@ -16,6 +16,7 @@ class Tabs: Container {
     this(){
         size = [10,10];
         hidden = true;
+        Events ~= this;
     }
 
     WindowHandle[] stack(){
@@ -29,7 +30,7 @@ class Tabs: Container {
         hidden = false;
         resize(size);
         if(active)
-            active.showSoft;
+            active.configure;
     }
 
     override void hide(){
@@ -42,6 +43,7 @@ class Tabs: Container {
     }
 
     void destroy(){
+        Events.forget(this);
     }
 
     alias add = Base.add;
@@ -74,7 +76,6 @@ class Tabs: Container {
             c.win.replace(Atoms._FLATMAN_TAB, cast(long)i);
             c.win.replace(Atoms._FLATMAN_TABS, parent.children.countUntil(this)+1);
         }
-        XSync(dpy, false);
     }
 
     Client next(){
@@ -87,6 +88,13 @@ class Tabs: Container {
         if(!children.length || clientActive == 0)
             return null;
         return children[clientActive-1].to!Client;
+    }
+
+    Client clientDir(short direction){
+        auto target = clientActive+direction;
+        if(target < 0 || target >= children.length)
+            return null;
+        return children[target].to!Client;
     }
 
     void moveLeft(){
@@ -118,16 +126,6 @@ class Tabs: Container {
 
     @property
     override void active(Client client){
-        bool activePassed;
-        bool newPassed;
-        foreach(i, c; children.to!(Client[])){
-            if(c == active)
-                activePassed = true;
-            if(c == client)
-                newPassed = true;
-            else
-                c.win.replace(Atoms._FLATMAN_TAB_DIR, newPassed && activePassed ? 1L : -1L);
-        }
         if(active && active != client)
             active.hide;
         if(!hidden && client.hidden){
@@ -138,7 +136,6 @@ class Tabs: Container {
         super.active = client;
         if(!hidden)
             resize(size);
-        XSync(dpy, false);
     }
 
     override void resize(int[2] size){
@@ -148,7 +145,7 @@ class Tabs: Container {
             if(active){
                 auto monitor = findMonitor(active);
                 if(active.isfullscreen){
-                    active.moveResize(monitor.pos.a + [0, hidden ? -rootSize.h : 0], monitor.size);
+                    active.moveResize(monitor.pos.a + [0, hidden ? rootSize.h : 0], monitor.size);
                 }else{
                     active.moveResize(
                         pos.a + [padding[0], showTabs ? 0 : padding[2] - (hidden ? monitor.size.h : 0)],
@@ -156,8 +153,17 @@ class Tabs: Container {
                     );
                 }
             }
-            foreach(client; children.to!(Client[])){
-                client.win.replace(Atoms._FLATMAN_WIDTH, (size.w-padding[0]-padding[1]).to!long);
+        }
+    }
+
+    @Overview
+    void onOverview(bool enter){
+        if(config.tabs.sortBy == config.tabs.SortBy.history && !enter){
+            if(clientActive != 0){
+                Log("%s %s %s %s".format(config.tabs.sortBy, enter, clientActive, children.length));
+                children = children[clientActive] ~ children[0..clientActive] ~ children[clientActive+1..$];
+                clientActive = 0;
+                updateHints;
             }
         }
     }

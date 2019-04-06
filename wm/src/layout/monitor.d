@@ -5,24 +5,6 @@ import flatman;
 __gshared:
 
 
-Monitor dirtomon(int dir){
-    return monitors[0];
-}
-
-
-void focusmon(int arg){
-    Monitor m = dirtomon(arg);
-    if(!m)
-        return;
-    if(m == monitor)
-        return;
-    monitor.active.unfocus(false); /* s/true/false/ fixes input focus issues
-                    in gedit and anjuta */
-    monitor = m;
-    //focus(null);
-}
-
-
 class Monitor {
 
     int id;
@@ -40,9 +22,8 @@ class Monitor {
         this.pos = pos;
         this.size = size;
         workspaces ~= new Workspace(pos, size);
+        WorkspaceCreate(0);
         workspace.show;
-        //auto dockWidth = cast(int)(size[0]/cast(double)tags.length).lround;
-        //dock = new WorkspaceDock(pos.a+[size.w-dockWidth,0], [dockWidth, size.h], this);
         Inotify.watch("~/.flatman".expandTilde, (path, file, action){
             if(action != Inotify.Modify)
                 return;
@@ -50,7 +31,7 @@ class Monitor {
                 workspace.updateContext("~/.flatman/current".expandTilde.readText);
             }
             if(file.endsWith("current") || file.endsWith(".context"))
-                updateDesktopNames;
+                ewmh.updateDesktopNames;
         });
     }
 
@@ -110,10 +91,10 @@ class Monitor {
             auto l = workspaces.length;
             auto pos = workspaces.countUntil!(a => a.clients.canFind(client));
             this.workspace.remove(client);
-            if(l < workspaces.length-1){
+            if(l+1 < workspaces.length){
                 if(workspace < pos)
                     workspace--;
-                updateWorkspaces();
+                ewmh.updateWorkspaces();
             }
             workspaces[workspace].add(client);
         }
@@ -135,7 +116,6 @@ class Monitor {
             }
             if(!found)
                 throw new Exception("Monitor does not have %s".format(client));
-            XSync(dpy, false);
             if(client.strut)
                 resize(size);
         }
@@ -146,10 +126,6 @@ class Monitor {
             if(ws.clients.canFind(client))
                 workspace.update(client);
         }
-    }
-
-    void onDraw(){
-        workspace.onDraw;
     }
 
     void destroy(){
@@ -205,8 +181,22 @@ class Monitor {
         }
     }
 
+    void resize(Workspace ws){
+        with(Log("%s.resizeWorkspace %s".format(this, size))){
+            this.size = size;
+            int[4] reserve = calculateStrut;
+            foreach(ref r; reserve){
+                if(r > size.w || r > size.h)
+                    r = 0;
+            }
+            "monitor strut %s".format(reserve).log;
+            ws.move(pos.a + [reserve[0].to!int, cast(int)reserve[2]]);
+            ws.resize([(size.w-reserve[1]-reserve[0]).to!int, (size.h-reserve[2]-reserve[3]).to!int]);
+        }
+    }
+
     override string toString(){
-        return "Monitor %s".format(id);
+        return Log.YELLOW ~ "monitor(%s)".format(id) ~ Log.DEFAULT;
     }
 
 }

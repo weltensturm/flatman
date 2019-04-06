@@ -47,7 +47,7 @@ class XRenderWindowBackend: Backend {
     override void swap(){
         debug(Damage){
             draw.setColor([uniform(0,256)/256.0f, uniform(0,256)/256.0f, uniform(0,256)/256.0f, 0.2]);
-            draw.rect([0,0], draw.size);
+            draw.rect([0,0], xdraw.size);
         }
         draw.finishFrame;
         draw.noclip;

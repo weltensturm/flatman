@@ -23,6 +23,8 @@ public import
 	x11.extensions.Xinerama,
 	x11.extensions.render,
 	x11.extensions.Xrender,
+	x11.extensions.Xcomposite,
+	x11.extensions.Xdamage,
 	x11.Xatom,
 
 	ws.time,
@@ -36,12 +38,13 @@ public import
 	common.configLoader,
 	common.screens,
 	common.atoms,
+	common.xerror,
+	common.xembed,
 
     bar.bar,
 	bar.config,
     bar.main,
     bar.plugins,
-	bar.powerButton,
 	bar.widget.widget,
 	bar.widget.battery,
 	bar.widget.taskList,
@@ -50,5 +53,7 @@ public import
 	bar.widget.clock,
 	bar.alpha,
     bar.client,
-	bar.widget.tray,
-	bar.xembed;
+	bar.widget.tray;
+
+enum CompositeRedirectAutomatic = 0;
+enum CompositeRedirectManual = 1;

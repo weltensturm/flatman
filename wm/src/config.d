@@ -40,9 +40,10 @@ __gshared const Rule[] rules = [
 
 struct NestedConfig {
 
+	bool logging = true;
+
 	string mod;
 	string[string] keys;
-	string[] autostart;
 
 	bool workspaceWrap;
 
@@ -54,6 +55,12 @@ struct NestedConfig {
 
 	struct Tabs {
 
+		enum SortBy {
+			history,
+			manual
+		}
+
+		SortBy sortBy;
 		int width;
 		ConfigInt4 padding;
 

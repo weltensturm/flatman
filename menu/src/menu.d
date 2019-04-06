@@ -35,6 +35,9 @@ enum categories = [
 
 
 void main(string[] args){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
 	options.fill(args);
 	Context.init;
 	new Menu(600, 500, "flatman-menu");

@@ -4,6 +4,27 @@ module composite.animation;
 import composite;
 
 
+
+
+class OverviewAnimation {
+    double[2] size;
+    double[2] pos;
+    this(int[2] pos, int[2] size){
+        this.pos = pos.to!(double[]);
+        this.size = size.to!(double[]);
+    }
+    void approach(int[2] pos, int[2] size){
+        auto frt = manager.frameTimer.dur/60.0*config.animationSpeed;
+		double distancePos = sqrt((pos.x-this.pos.x)^^2 + (pos.y-this.pos.y)^^2);
+		double distanceSize = sqrt((size.w - this.size.w)^^2 + (size.h - this.size.h)^^2);
+		double ratio = distanceSize.max(1)/distancePos.max(1);
+        this.pos.rip(pos.to!(double[2]), 1, 100, frt);
+        this.size.rip(size.to!(double[2]), 1, 100, frt*ratio);
+    }
+}
+
+
+
 class Animation {
 
 	static double time;

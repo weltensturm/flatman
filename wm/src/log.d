@@ -8,7 +8,8 @@ import
 	std.file,
 	std.range,
 	std.datetime,
-	std.concurrency;
+	std.concurrency,
+	flatman.config;
 
 
 private {
@@ -19,10 +20,17 @@ private {
 	shared static this(){
 		mutex = new shared Mutex;
 		logger = spawn({
-			while(true){
-				receive((string s){
-					"/tmp/flatman.log".append(s);
-				});
+            bool run = true;
+			while(run){
+				receive(
+                    (string s){
+					    "/tmp/flatman.log".append(s);
+						s.write;
+    				},
+                    (bool){
+                        run = false;
+                    }
+                );
 			}
 		});
 	}
@@ -38,7 +46,7 @@ struct Log {
 	enum GREY = "\033[90m";
 	enum BOLD = "\033[1m";
 
-	this(string s){
+	this(lazy string s){
 		info(s);
 		synchronized(mutex)
 			indent++;
@@ -57,7 +65,7 @@ struct Log {
 				GREY,
 				Clock.currTime.toISOExtString[0..19],
 				Clock.currTime.fracSecs.total!"msecs"/10,
-				" ".replicate(indent*8),
+				" ".replicate(indent*2),
 				DEFAULT ~ s ~ DEFAULT
 		);
 	}
@@ -65,18 +73,25 @@ struct Log {
 	static void error(string s){
 		string text = format(RED ~ s);
 		logger.send(s);
-		text.write;
 	}
 
-	static void info(string s){
-		string text = format(s);
-		logger.send(text);
-		text.write;
+	static void info(lazy string s){
+		if(config.logging){
+			string text = format(s());
+			logger.send(text);
+		}
 	}
+
+    static void shutdown(){
+        logger.send(false);
+    }
 
 }
 
 
-void log(string s){
+void log(lazy string s){
 	Log.info(s);
 }
+
+
+

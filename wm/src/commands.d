@@ -15,8 +15,10 @@ string call(Args...)(bool pressed, string fn, Args args){
 
 
 string call()(bool pressed, string fn, string[] args){
-	if(fn in functions)
+	Command(fn, pressed, args);
+	if(fn in functions){
 		return functions[fn](pressed, args);
+	}
 	`ERROR: Function not found "%s"`.format(fn).log;
 	return "";
 }
@@ -53,8 +55,15 @@ void register(T, Args...)(string name, T function(Args) fn){
 }
 
 
+void spawnCommand(string command){
+	auto t = new Thread({ spawnShell(command).wait; });
+	t.isDaemon = true;
+	t.start;
+}
+
+
 void registerFunctions(){
-	register("exec", function(string command) => task({ spawnShell(command).wait; }).executeInNewThread);
+	register("exec", &spawnCommand);
 	register("focus", &focus);
 	register("resize", &resize);
 	register("move", &move);
@@ -62,17 +71,21 @@ void registerFunctions(){
 	register("killclient", {killClient;});
 	register("quit", &quit);
 	register("workspace", &workspace);
+	register("workspace-history", &workspaceHistory);
 	register("reload", &reload);
 	register("insert", &toggleTabs);
 	register("overview", &overview);
 }
 
 
+void workspaceHistory(string){}
+
+
 void focus(string what, string dir){
-	if(what == "dir")
-		monitor.workspace.focusDir(dir == "+" ? 1 : -1);
-	else if(what == "stack")
-		monitor.workspace.focusTabs(dir == "+" ? 1 : -1);
+	if(what == "tab")
+		focusTab(dir);
+	else if(what == "dir")
+		focusDir(dir);
 }
 
 void resize(string what){
@@ -86,10 +99,10 @@ void resize(string what){
 
 void move(string what){
 	final switch(what){
-		case "+":
+		case "right":
 			moveRight;
 			break;
-		case "-":
+		case "left":
 			moveLeft;
 			break;
 		case "up":
@@ -154,7 +167,6 @@ void toggleTabs(){
 		auto tabs = s.children[s.clientActive].to!Tabs;
 		tabs.showTabs = !tabs.showTabs;
 		tabs.resize(tabs.size);
-		tabs.onDraw;
 	}
 }
 
@@ -169,9 +181,11 @@ void overview(bool activate){
 		if(activate){
 			doOverview = true;
 			root.replace(Atoms._FLATMAN_OVERVIEW, 1L);
+			Overview(true);
 		}else{
 			doOverview = false;
 			root.replace(Atoms._FLATMAN_OVERVIEW, 0L);
+			Overview(false);
 		}
 	}else if(activate && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
 		overviewStart = Clock.currTime-overviewTime.to!long.msecs;

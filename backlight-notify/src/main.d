@@ -62,6 +62,9 @@ class NotifyWindow: Window {
 
 
 void main(){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
     auto path = backlightPath;
     auto window = new NotifyWindow;
     wm.add(window);

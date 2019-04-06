@@ -4,8 +4,13 @@
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
 	"dependencies" : {
-		"ws": "1.0.11",
-		"backtrace-d": "~>0.1.2"
+		"ws": "19.1.0"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage"]
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage"],
+
+	"configurations": [
+		{ "name": "default" },
+		{ "name": "unittest" }
+	]
+	
 }

@@ -28,7 +28,7 @@ class XRenderBackend: Backend {
         auto alphaMask = alpha < 1 ? this.alpha[(alpha*ALPHA_STEPS).to!int] : None;
         X.RenderComposite(
             wm.displayHandle,
-            transparent || alpha < 1 ? PictOpOver : PictOpSrc,
+            (transparent || alpha < 1) ? PictOpOver : PictOpSrc,
             picture,
             alphaMask,
             xdraw.picture,

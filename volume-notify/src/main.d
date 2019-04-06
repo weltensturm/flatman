@@ -50,6 +50,9 @@ class NotifyWindow: Window {
 
 
 void main(){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
     auto pulseaudio = new Pulseaudio("flatman volume notify");
     auto window = new NotifyWindow;
     wm.add(window);

@@ -17,13 +17,16 @@ BatteryInfo readBattery(){
     BatteryInfo result;
     try {
         result.enabled = true;
-        auto match = ["acpi", "-b"].execute.output.matchFirst("([0-9]+)%, ((?:[0-9]+:?)+) (remaining|until charged)");
+        auto text = ["acpi", "-b"].execute.output;
+        auto match = text.matchFirst("([0-9]+)%, ((?:[0-9]+:?)+) (remaining|until charged)");
         if(!match.empty){
             auto split = match[2].split(":");
             result.hours = split[0].to!int;
             result.minutes = split[1].to!int;
             result.percent = match[1].to!int;
             result.charging = match[3] == "until charged";
+        }else if(text.canFind("Full")){
+            result.charging = true;
         }
     }catch(Exception e){
         result.enabled = false;
@@ -49,7 +52,7 @@ class Battery: Widget {
 
     override int width(){
         if(batteryInfo.enabled)
-            return draw.width("0:0000");
+            return draw.width("000:0");
         return 0;
     }
 

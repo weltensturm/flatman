@@ -6,9 +6,9 @@ import bar;
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	try {
-		char[128] buffer;
-		XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
-		"XError: %s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
+		lastXerror = "X11 error: %s %s"
+				.format(cast(XRequestCode)e.request_code, cast(XErrorCode)e.error_code);
+		lastXerror.writeln;
 	}
 	catch(Throwable){}
 	return 0;
@@ -24,6 +24,9 @@ extern(C) nothrow @nogc @system void stop(int){
 
 
 void main(){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
 	XSetErrorHandler(&xerror);
 	signal(SIGINT, &stop);
 	auto app = new App;
@@ -36,9 +39,11 @@ void main(){
 			}
 			Thread.sleep(10.msecs);
 		}
-	}catch(Throwable t){}
+	}catch(Throwable t){
+		writeln(t);
+	}
 	foreach(bar; app.bars){
-		bar.onDestroy;
+		bar.close;
 	}
 	writeln("quit");
 }
@@ -58,7 +63,11 @@ class App {
 
 		dpy = wm.displayHandle;
 		.root = XDefaultRootWindow(dpy);
-		
+
+		debug(XError){
+			XSynchronize(dpy, true);
+		}
+
         config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"], &configChanged);
 
 		wm.on([
@@ -79,14 +88,20 @@ class App {
 		scan;
 
 	}
-	
+
 	void configChanged(){
 		foreach(bar; bars){
-			bar.onDestroy;
+			bar.close;
+			bar.destroy;
 		}
+		bars = [];
 		void delegate()[] delay;
+		auto screens = .screens(wm.displayHandle);
 		foreach(barConf; config.bars){
+			if(barConf.screen !in screens)
+				continue;
 			auto bar = new Bar(this);
+			wm.add(bar);
 			bar.show;
 			bar.screen = barConf.screen;
 			if(!barConf.systray){
@@ -94,9 +109,10 @@ class App {
 			}else{
 				delay ~= { bar.systray(true); };
 			}
-			wm.add(bar);
 			bars ~= bar;
 		}
+		if(!bars.length)
+			writeln("WARNING: no bars created");
 		foreach(d;delay){d();}
 		updateScreens;
 	}
@@ -224,4 +240,3 @@ class App {
 	}
 
 }
-

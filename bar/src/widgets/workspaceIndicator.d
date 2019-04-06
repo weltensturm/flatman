@@ -28,6 +28,8 @@ class WorkspaceIndicator: Widget {
     override void onDraw(){
         draw.setColor(config.theme.foreground);
         auto parts = workspace.split("/");
+        if(!parts.length)
+            return;
         auto x = draw.text([5,5], parts[0..$-1].join("/"));
         if(parts.length > 1)
             x += draw.text([5+x, 5], "/");

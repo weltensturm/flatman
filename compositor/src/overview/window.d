@@ -1,4 +1,4 @@
-module composite.overviewWindow;
+module composite.overview.window;
 
 import composite;
 
@@ -8,6 +8,7 @@ class OverviewWindow: ws.wm.Window {
     bool canSwitchWorkspace = true;
     Overview overview;
     CompositeClient target;
+    bool active;
 
     struct Dragging {
         bool pressed;

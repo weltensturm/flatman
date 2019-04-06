@@ -8,7 +8,7 @@ __gshared:
 class Container: Base {
 
 	long clientActive;
-	
+
 	@property
 	Client active(){
 		if(clientActive < children.length && clientActive >= 0)
@@ -21,7 +21,6 @@ class Container: Base {
 		foreach(i, c; children)
 			if(c == client){
 				clientActive = i;
-				onDraw;
 			}
 	}
 
@@ -58,4 +57,3 @@ class Container: Base {
 	}
 
 }
-

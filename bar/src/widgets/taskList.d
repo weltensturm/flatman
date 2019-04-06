@@ -3,7 +3,7 @@ module bar.widget.taskList;
 import bar;
 
 
-class TaskList: Base {
+class TaskList: Widget {
 
     Bar bar;
     int[] separators;
@@ -14,6 +14,10 @@ class TaskList: Base {
         "currentWorkspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false
     ) properties;
 
+    override int width(){
+        return size.w;
+    }
+
     this(Bar bar){
         this.bar = bar;
         properties.window(.root);
@@ -23,38 +27,28 @@ class TaskList: Base {
     void update(Client[] clients){
         separators = [];
         children = [];
-		Client[][] tabs;
-		foreach(client; clients){
-			if(client.workspace.value == properties.currentWorkspace.value && client.title.length && client.icon.length){
-				if(client.screen != bar.screen)
-					continue;
-                if(client.flatmanTabs.value == 0)
-                    continue;
-				while(tabs.length < client.flatmanTabs.value){
-					tabs ~= cast(Client[])[];
-				}
-				auto tab = tabs[client.flatmanTabs.value-1];
-				bool found;
-				foreach(i, compare; tab){
-					if(compare.flatmanTab.value > client.flatmanTab.value){
-						tabs[client.flatmanTabs.value-1] = tab[0..i] ~ client ~ tab[i..$];
-						found = true;
-						break;
-					}
-				}
-				if(!found)
-					tabs[client.flatmanTabs.value-1] ~= client;
-			}
-		}
+
+        auto tabs = clients
+            .filter!(a => !a.state.value.canFind(Atoms._NET_WM_STATE_SKIP_TASKBAR)
+                          && a.workspace.value == properties.currentWorkspace.value
+                          && a.screen == bar.screen
+                          && a.flatmanTabs.value != 0)
+            .chunkBy!(a => a.flatmanTabs.value)
+            .array
+            .sort!((a, b) => a[0] < b[0])
+            .map!(a => a[1]
+                       .array
+                       .sort!((w1, w2) => w1.flatmanTab.value < w2.flatmanTab.value));
+
         if(!tabs.length)
         	return;
-		int width = ((size.w - config.theme.separatorWidth - tabs.length*config.theme.separatorWidth - (200*2)).to!double/(tabs.map!(a => a.length).sum))
+		int width = ((size.w - tabs.length*config.theme.separatorWidth).to!double/(tabs.map!(a => a.length).sum))
 					.min(250)
 					.to!int;
         extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.theme.separatorWidth).to!int;
-        start = size.w/2 - extents/2;
+        start = pos.x + size.w/2 - extents/2;
         int offset = start;
-		foreach(i, tab; tabs){
+		foreach(i, tab; tabs.enumerate){
             if(i != 0)
                 separators ~= offset;
 			foreach(client; tab){

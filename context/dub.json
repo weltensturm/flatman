@@ -4,6 +4,12 @@
 	"targetType": "executable",
 	"sourcePaths": ["src"],
 	"dependencies": {
-		"ws": "1.0.11"
-	}
+		"ws": "18.10.1"
+	},
+
+	"configurations": [
+		{ "name": "default" },
+		{ "name": "unittest" }
+	]
+	
 }

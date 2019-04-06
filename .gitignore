@@ -3,6 +3,7 @@
 **/.project
 **/.settings
 **/.buildpath
+.idea
 sh.exe.stackdump
 PKGBUILD.local
 flatman
@@ -17,6 +18,7 @@ battery-icon/flatman-battery-icon
 wm/flatman-wm
 context/flatman-context
 bar/flatman-bar
+launcher/flatman-launcher
 *.sync-conflict*
 *.swp
 1

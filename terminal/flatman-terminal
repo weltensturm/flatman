@@ -1,0 +1,43 @@
+#!/bin/bash
+
+cd $(flatman-context)
+
+
+TERMINALS=(
+    "$TERMINAL"
+    x-terminal-emulator
+    urxvt
+    rxvt
+    termit
+    terminator
+    Eterm
+    aterm
+    uxterm
+    xterm
+    gnome-terminal
+    roxterm
+    xfce4-terminal
+    termite
+    lxterminal
+    mate-terminal
+    terminology
+    st
+    qterminal
+    lilyterm
+    tilix
+    terminix
+    konsole
+    kitty
+    guake
+    tilda
+    alacritty
+    hyper
+)
+
+for terminal in "${TERMINALS[@]}"; do
+    if command -v "$terminal" > /dev/null 2>&1; then
+        echo "$terminal"
+        exec "$terminal" "$@"
+    fi
+done
+

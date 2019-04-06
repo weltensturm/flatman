@@ -57,7 +57,7 @@ class ListPopup: ws.wm.Window {
 	}
 
 	override void drawInit(){
-		context = new GlContext(windowHandle);
+		context = new GlContext(wm.displayHandle, windowHandle);
 		context.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		context.enable(GL_BLEND);
 		draw = new GlDraw(context);

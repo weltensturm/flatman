@@ -45,7 +45,6 @@ class Bar: ws.wm.Window {
 	Picture glow;
 
 	TaskList taskList;
-	PowerButton powerButton;
 	Tray tray;
 	Battery battery;
 	WorkspaceIndicator workspaceIndicator;
@@ -65,17 +64,24 @@ class Bar: ws.wm.Window {
 		properties = new PropertyList;
 		auto screens = screens(wm.displayHandle);
 
-		taskList = addNew!TaskList(this);
-		powerButton = addNew!PowerButton(this);
-		powerButton.hide;
-
-		battery = addNew!Battery;
-		widgets ~= battery;
-
 		workspaceIndicator = addNew!WorkspaceIndicator;
+		workspaceIndicator.alignment = Widget.Alignment.left;
 		widgets ~= workspaceIndicator;
 
+		taskList = addNew!TaskList(this);
+		taskList.alignment = Widget.Alignment.center;
+		widgets ~= taskList;
+
+		tray = addNew!Tray(this);
+		tray.alignment = Widget.Alignment.right;
+		widgets ~= tray;
+
+		battery = addNew!Battery;
+		battery.alignment = Widget.Alignment.right;
+		widgets ~= battery;
+
 		clock = addNew!ClockWidget;
+		clock.alignment = Widget.Alignment.right;
 		widgets ~= clock;
 
 		super(screens[0].w, 24, "flatman bar");
@@ -85,18 +91,23 @@ class Bar: ws.wm.Window {
 			hidden = true;
 		}else
 			resize(size);
+
+        auto state = new Property!(XA_ATOM, true)(windowHandle, "_NET_WM_STATE");
+        state = [Atoms._NET_WM_STATE_SKIP_PAGER, Atoms._NET_WM_STATE_SKIP_TASKBAR, Atoms._NET_WM_STATE_STICKY];
+
+        auto motifHints = new Property!(XA_CARDINAL, true)(windowHandle, "_MOTIF_WM_HINTS");
+        motifHints = [2, 0, 0, 0, 0];
+
+        auto windowType = new Property!(XA_ATOM, false)(windowHandle, "_NET_WM_WINDOW_TYPE");
+        windowType = Atoms._NET_WM_WINDOW_TYPE_DOCK;
+
 	}
 
 	void systray(bool enable){
-		if(enable && !tray){
-			tray = addNew!Tray(this);
-			tray.resize(size);
-			tray.change ~= (int clients){
-				tray.move([size.w-clients*size.h - draw.width("000:0 00:00:00") - 20, 0]);
-			};
-		}else if(!enable && tray){
-			tray.destroy;
-			tray = null;
+		if(enable){
+			tray.enable;
+		}else if(!enable){
+			tray.disable;
 		}
 	}
 
@@ -127,41 +138,39 @@ class Bar: ws.wm.Window {
 		initAlpha;
 	}
 
-	override void onDestroy(){
-		if(tray)
-			tray.destroy;
-		super.onDestroy;
+	override void close(){
+		widgets.each!(a => a.destroy);
+		super.close;
 	}
 
 	void tick(){
 		foreach(w; widgets)
 			w.tick;
+		bool resize;
 		foreach(w; widgets){
 			if(w.savedWidth != w.width){
 				w.savedWidth = w.width;
-				resized(size);
+				resize = true;
 			}
 		}
+		if(resize)
+			resized(size);
 	}
 
 	override void onDraw(){
+		draw.clear;
 		tick;
 		auto time = Clock.currTime;
 		if(update || time.second != second){
 			if(update)
 				taskList.update(app.clients);
 
-			//if(tray)
-			//	tray.update;
 			draw.setColor(config.theme.background);
 			draw.rect([0,0], size);
 			draw.setColor(config.theme.border);
 			draw.rect([0,0], [size.w,1]);
 
 			super.onDraw;
-    		version(CompilePlugins){
-				app.plugins.event("draw");
-			}
 
 			second = time.second;
 			update = false;
@@ -171,24 +180,29 @@ class Bar: ws.wm.Window {
 	override void moved(int[2] pos){
 		super.moved(pos);
 		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
-		writeln("moved ", pos);
 	}
 
 	override void resized(int[2] size){
 		super.resized(size);
 		writeln("resized ", size);
-		powerButton.move([size.w-size.h, 0]);
-		powerButton.resize([size.h, size.h]);
-		taskList.resize(size.a - [size.h*2, 0]);
-		taskList.move([size.h, 0]);
-		if(tray){
-			tray.resize(size);
-			tray.move([size.w-tray.clients.length.to!int*size.h - battery.width - 40 - draw.width("00:00:00") - 20 - 40, 0]);
+		int left = config.theme.padding;
+		foreach(w; widgets.filter!(a => a.alignment == Widget.Alignment.left)){
+			w.move([left, 0]);
+			w.resize([w.savedWidth, size.h]);
+			left += w.savedWidth + config.theme.padding;
 		}
-		battery.resize([battery.width, size.h]);
-		battery.move([size.w-battery.width-clock.width-20, 0]);
-		clock.resize([clock.width, size.h]);
-		clock.move([size.w-clock.width, 0]);
+		int right = config.theme.padding;
+		foreach_reverse(w; widgets.filter!(a => a.alignment == Widget.Alignment.right).array){
+			w.move([size.w - w.savedWidth - right, 0]);
+			w.resize([w.savedWidth, size.h]);
+			right += w.savedWidth + config.theme.padding;
+		}
+		foreach(w; widgets){
+			if(w.alignment == Widget.Alignment.center){
+				w.move([left.max(right), 0]);
+				w.resize([size.w - left.max(right)*2, size.h]);
+			}
+		}
 		onDraw;
 	}
 

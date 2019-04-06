@@ -37,23 +37,17 @@ class Floating: Container {
 	override void show(){
 		if(!hidden)
 			return;
-		foreach(c; clients)
-			c.showSoft;
 		hidden = false;
+		foreach(c; clients)
+			c.configure;
 	}
 
 	override void hide(){
 		if(hidden)
 			return;
-		foreach(c; clients)
-			c.hideSoft;
 		hidden = true;
-	}
-
-	override void onDraw(){
 		foreach(c; clients)
-			if(c.frame)
-				c.frame.onDraw;
+			c.configure;
 	}
 
 	void raise(Client client){
@@ -97,7 +91,6 @@ class Floating: Container {
 		"floating(%s).active %s".format(cast(void*)this, client).log;
 		raise(client);
 		super.active = client;
-		onDraw;
 	}
 
 	override Client[] clients(){
@@ -112,6 +105,25 @@ class Floating: Container {
 		}
 	}
 
+	Client clientDir(short direction){
+
+		auto sorted = children
+			.enumerate
+			.array
+			.multiSort!(
+				(a, b) => a.value.pos.x < b.value.pos.x,
+				(a, b) => a.value.pos.y < b.value.pos.y,
+				(a, b) => a.index < b.index
+			);
+		
+		auto index = sorted.countUntil!(a => a.index == clientActive) + direction;
+
+		if(index >= 0 && index < sorted.length)
+			return children[sorted[index][0]].to!Client;
+
+		return null;
+	}
+
 	void focusDir(int dir){
 		if(!children.length)
 			return;
@@ -120,7 +132,7 @@ class Floating: Container {
 			newActive = 0;
 		else if(newActive < 0)
 			newActive = children.length-1;
-		children[newActive].to!Client.focus;
+		focus(children[newActive].to!Client);
 	}
 
 }

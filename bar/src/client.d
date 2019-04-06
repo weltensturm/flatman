@@ -34,6 +34,7 @@ class Client {
 	Property!(XA_CARDINAL, false) flatmanTabs;
 	Property!(XA_CARDINAL, true) iconProperty;
 	Property!(XA_STRING, false) titleProperty;
+	Property!(XA_ATOM, true) state;
 
 	string title;
 
@@ -49,14 +50,17 @@ class Client {
 		flatmanTab = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TAB", properties);
 		flatmanTabs = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TABS", properties);
 		iconProperty = new Property!(XA_CARDINAL, true)(window, "_NET_WM_ICON", properties);
+		state = new Property!(XA_ATOM, true)(window, "_NET_WM_STATE", properties);
+		/+
 		titleProperty = new Property!(XA_STRING, false)(window, "_NET_WM_NAME", properties);
-		titleProperty ~= (string t){
-			title = t;
+		titleProperty ~= (string){
+		
+			title = getTitle;
 		};
+		+/
+		//window.props._NET_WM_ICON.get(&updateIcon);
 		iconProperty ~= &updateIcon;
 		iconProperty.update;
-
-		//updateIcon;
 
 		XSelectInput(wm.displayHandle, window, StructureNotifyMask | PropertyChangeMask);
 	}
@@ -91,8 +95,6 @@ class Client {
 	}
 	
 	void updateIcon(long[] data){
-		if(xicon)
-			xicon.destroy(dpy);
 		xicon = null;
 		if(!data.length)
 			return;
@@ -108,14 +110,13 @@ class Client {
 			i += data[i]*data[i+1]+2;
 		}
 		icon = [];
-		foreach(argb; data[start+2..start+width*height+2]){
+		icon.length = (start+width*height+2 - (start+2))*4;
+		foreach(i, argb; data[start+2..start+width*height+2]){
 			auto alpha = (argb >> 24 & 0xff)/255.0;
-			icon ~= [
-				cast(ubyte)((argb & 0xff)*alpha),
-				cast(ubyte)((argb >> 8 & 0xff)*alpha),
-				cast(ubyte)((argb >> 16 & 0xff)*alpha),
-				cast(ubyte)((argb >> 24 & 0xff))
-			];
+			icon[i*4+0] = cast(ubyte)((argb & 0xff)*alpha);
+			icon[i*4+1] = cast(ubyte)((argb >> 8 & 0xff)*alpha);
+			icon[i*4+2] = cast(ubyte)((argb >> 16 & 0xff)*alpha);
+			icon[i*4+3] = cast(ubyte)((argb >> 24 & 0xff));
 		}
 		iconSize = [width,height];
 

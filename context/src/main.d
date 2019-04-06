@@ -17,6 +17,9 @@ enum PATH = "~/.flatman/";
 
 
 void main(string[] args){
+
+	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
+
 	if(args.length < 2)
 		getContext.writeln;
 	else if(args[1] == "-p")

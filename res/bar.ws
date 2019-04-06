@@ -12,6 +12,7 @@ theme {
 
     separator-color cccccc
     separator-width 200
+    padding 10
 }
 
 bars {
