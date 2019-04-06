@@ -27,29 +27,19 @@ class TaskList: Widget {
     void update(Client[] clients){
         separators = [];
         children = [];
-		Client[][] tabs;
-		foreach(client; clients){
-			if(client.workspace.value == properties.currentWorkspace.value && client.title.length && client.icon.length){
-				if(client.screen != bar.screen)
-					continue;
-                if(client.flatmanTabs.value == 0)
-                    continue;
-				while(tabs.length < client.flatmanTabs.value){
-					tabs ~= cast(Client[])[];
-				}
-				auto tab = tabs[client.flatmanTabs.value-1];
-				bool found;
-				foreach(i, compare; tab){
-					if(compare.flatmanTab.value > client.flatmanTab.value){
-						tabs[client.flatmanTabs.value-1] = tab[0..i] ~ client ~ tab[i..$];
-						found = true;
-						break;
-					}
-				}
-				if(!found)
-					tabs[client.flatmanTabs.value-1] ~= client;
-			}
-		}
+
+        auto tabs = clients
+            .filter!(a => !a.state.value.canFind(Atoms._NET_WM_STATE_SKIP_TASKBAR)
+                          && a.workspace.value == properties.currentWorkspace.value
+                          && a.screen == bar.screen
+                          && a.flatmanTabs.value != 0)
+            .chunkBy!(a => a.flatmanTabs.value)
+            .array
+            .sort!((a, b) => a[0] < b[0])
+            .map!(a => a[1]
+                       .array
+                       .sort!((w1, w2) => w1.flatmanTab.value < w2.flatmanTab.value));
+
         if(!tabs.length)
         	return;
 		int width = ((size.w - tabs.length*config.theme.separatorWidth).to!double/(tabs.map!(a => a.length).sum))
@@ -58,7 +48,7 @@ class TaskList: Widget {
         extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.theme.separatorWidth).to!int;
         start = pos.x + size.w/2 - extents/2;
         int offset = start;
-		foreach(i, tab; tabs){
+		foreach(i, tab; tabs.enumerate){
             if(i != 0)
                 separators ~= offset;
 			foreach(client; tab){
