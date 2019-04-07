@@ -19,6 +19,8 @@ addons:
       - libclang-3.9-dev
       - g++-7
       - libx11-dev
+      - libxcomposite-dev
+      - libxinerama-dev
 
 
 script:
