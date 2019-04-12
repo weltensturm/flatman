@@ -33,6 +33,8 @@ class TaskList: Widget {
                           && a.workspace.value == properties.currentWorkspace.value
                           && a.screen == bar.screen
                           && a.flatmanTabs.value != 0)
+            .array
+            .sort!((a, b) => a.flatmanTabs.value < b.flatmanTabs.value)
             .chunkBy!(a => a.flatmanTabs.value)
             .array
             .sort!((a, b) => a[0] < b[0])
