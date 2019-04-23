@@ -75,6 +75,11 @@ class Overview {
     }
 
     void start(bool now=false){
+
+        enum GRAB_MASK =
+            ButtonPressMask | ButtonReleaseMask | PointerMotionMask
+            | FocusChangeMask | EnterWindowMask | LeaveWindowMask;
+
         if(now){
             resetPos = true;
 			prefill;
@@ -83,13 +88,14 @@ class Overview {
             window.active = true;
             window.move([0, 0]);
             window.resize([manager.width, manager.height]);
-            XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
+            //XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
+            // TODO: reenable and fix input not returning to active window
 
             XGrabPointer(
                     wm.displayHandle,
                     window.windowHandle,
-                    False,
-                    ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                    True,
+                    GRAB_MASK,
                     GrabModeAsync,
                     GrabModeAsync,
                     None,
@@ -98,6 +104,7 @@ class Overview {
             );
             XGrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle, False,
                         ButtonPressMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None);
+
             cleanup = true;
             zoomList = [];
             foreach(c; manager.clients ~ manager.destroyed){
@@ -115,6 +122,7 @@ class Overview {
             //window.hide;
             XUngrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle);
             XUngrabPointer(wm.displayHandle, CurrentTime);
+            //XSetInputFocus(wm.displayHandle, .root, RevertToPointerRoot, CurrentTime);
             zoomList = [];
             foreach(c; manager.clients ~ manager.destroyed){
                 if(!c.hidden)
