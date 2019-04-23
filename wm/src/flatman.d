@@ -245,7 +245,8 @@ void scan(){
 						.buildNormalizedPath
 						.replace("/", "-");
 				auto contextFile = "~/.flatman/".expandTilde ~ context ~ ".context";
-				monitor.workspaces[i].updateContext(contextFile);
+                foreach(monitor; monitors)
+				    monitor.workspaces[i].updateContext(contextFile);
 			}
 		}
 
