@@ -104,9 +104,11 @@ class Workspace: Container {
 
 	override void remove(Client client){
 		with(Log("%s.remove %s".format(this, client))){
-			if(floating.clients.canFind(client))
+			if(floating.clients.canFind(client)){
 				floating.remove(client);
-			else if(split.clients.canFind(client))
+				if(!floating.active)
+					focusFloating = false;
+			}else if(split.clients.canFind(client))
 				split.remove(client);
 			else
 				assert(0);
