@@ -55,6 +55,7 @@ class Client: Base {
     bool strut;
     bool destroyed;
     bool iconified;
+    bool isDock;
 
     ubyte[] icon;
     Icon xicon;
@@ -131,26 +132,6 @@ class Client: Base {
         XSetWMHints(dpy, orig, wmh);
         XFree(wmh);
     }
-
-    /+
-    void focus(){
-        if(!clients.canFind(this))
-            return;
-        .monitor = monitor;
-        if(currentFocus && currentFocus != this)
-            currentFocus.unfocus(false);
-        if(isUrgent)
-            clearUrgent;
-        grabButtons(true);
-        currentFocus = this;
-        previousFocus = this;
-        restack;
-        configure;
-        .monitor.setActive(this);
-        setFocus;
-        "%s focus".format(this).log;
-    }
-    +/
 
     void onConfigureRequest(XConfigureRequestEvent* e){
         if(global || isFloating){
@@ -289,22 +270,38 @@ class Client: Base {
         return orig.getTitle;
     }
 
-    void grabButtons(bool focused){
-        /+
-        updatenumlockmask();
-        uint i, j;
-        uint[] modifiers = [ 0, LockMask, numlockmask, numlockmask|LockMask ];
-        XUngrabButton(dpy, AnyButton, AnyModifier, orig);
-        if(focused){
-            foreach(button; .buttons){
-                foreach(modifier; modifiers){
-                    XGrabButton(dpy, button.button, button.mask | modifier, orig, false, BUTTONMASK,
-                                GrabModeAsync, GrabModeSync, None, None);
-                }
-            }
-        }else
-            XGrabButton(dpy, AnyButton, AnyModifier, orig, false, BUTTONMASK, GrabModeAsync, GrabModeSync, None, None);
-        +/
+    @WindowFocusOut
+    void buttonsGrab(){
+        if(isDock)
+            return;
+        foreach(button; [1, 2, 3]){
+            XGrabButton(
+                dpy,
+                button,
+                AnyModifier,
+                orig,
+                true,
+                ButtonPressMask,
+                GrabModeAsync,
+                GrabModeAsync,
+                .root,
+                None
+            );
+        }
+    }
+
+    @WindowFocusIn
+    void buttonsUngrab(){
+        if(isDock)
+            return;
+        foreach(button; [1, 2, 3]){
+            XUngrabButton(
+                dpy,
+                button,
+                AnyModifier,
+                orig
+            );
+        }
     }
 
     void raise(){
@@ -457,21 +454,6 @@ class Client: Base {
         }
     }
 
-    /+
-    void unfocus(bool setfocus){
-        "%s unfocus".format(this).log;
-        grabButtons(false);
-        if(setfocus){
-            XSetInputFocus(dpy, .root, RevertToPointerRoot, CurrentTime);
-            XDeleteProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW);
-        }
-        if(isfullscreen && !isFloating){
-            //hide;
-            restack;
-        }
-    }
-    +/
-
     @WindowDestroy
     void onDestroy(){
         destroyed = true;
@@ -495,8 +477,12 @@ class Client: Base {
         Atom[] type = getPropList(Atoms._NET_WM_WINDOW_TYPE);
         if(type.canFind(Atoms._NET_WM_WINDOW_TYPE_DIALOG) || type.canFind(Atoms._NET_WM_WINDOW_TYPE_SPLASH))
             isFloating = true;
-        if(type.canFind(Atoms._NET_WM_WINDOW_TYPE_DOCK) || type.canFind(Atoms._NET_WM_WINDOW_TYPE_NOTIFICATION))
+        if(type.canFind(Atoms._NET_WM_WINDOW_TYPE_DOCK) || type.canFind(Atoms._NET_WM_WINDOW_TYPE_NOTIFICATION)){
             global = true;
+            if(type.canFind(Atoms._NET_WM_WINDOW_TYPE_DOCK)){
+                isDock = true;
+            }
+        }
     }
 
     void updateSizeHints(){

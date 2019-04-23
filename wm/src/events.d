@@ -232,7 +232,7 @@ auto formatEvent(XEvent* ev){
 void registerAll(){
 
     WindowMouseButton ~= &onButton;
-    WindowMouseMove[AnyValue] ~= &onMotion;
+    MouseMove ~= &onMotion;
     WindowClientMessage[AnyValue] ~= &onClientMessage;
     WindowConfigureRequest[AnyValue] ~= &onConfigureRequest;
 	WindowConfigure ~= &onConfigure;
@@ -243,12 +243,17 @@ void registerAll(){
     WindowUnmap ~= &onUnmap;
     WindowMapRequest ~= &onMapRequest;
     WindowMap[AnyValue] ~= &restack;
+    WindowFocusIn ~= &onFocus;
+    WindowFocusOut ~= &onFocusOut;
 
 }
 
 
 void onButton(Window window, bool pressed, int mask, Mouse.button button){
     Client c = find(window);
+    if(c){
+        focus(c);
+    }
     Monitor m = findMonitor(window);
     if(m && m != monitor){
         /+
@@ -393,7 +398,10 @@ void onDestroy(Window window){
         ewmh.updateClientList;
         if(wasActive){
 
-            auto newFocus = monitor.active;
+            auto newFocus = previousFocus;
+
+            if(!newFocus)
+                newFocus = monitor.active;
 
             if(!newFocus){
                 auto result =
@@ -421,20 +429,29 @@ void onEnter(Window window){
     if(drag.dragging)
         return;
     Client c = find(window);
-    if(c){
+    if(c && !c.isDock){
         focus(c);
     }
 }
 
 
-void onFocus(XEvent* e){ /* there are some broken focus acquiring clients */
-    XFocusChangeEvent *ev = &e.xfocus;
+void onFocus(x11.X.Window window){
     //if(currentFocus && ev.window == currentFocus.orig)
     //	focus(currentFocus);
     //auto c = find(ev.window);
     //if(c && c != active)
     //	c.requestAttention;
 }
+
+
+void onFocusOut(x11.X.Window window){
+    if(!find(window) && monitor.active){
+        // TODO: this does nothing
+        currentFocus = null;
+        focus(monitor.active);
+    }
+}
+
 
 void onMapRequest(Window parent, Window window){
     XWindowAttributes wa;

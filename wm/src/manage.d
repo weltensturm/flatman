@@ -18,8 +18,10 @@ void focus(Client client){
 
 
 void focus(Monitor monitor){
-	if(monitor != .monitor)
+	if(monitor != .monitor){
+		Log("focus monitor " ~ monitor.to!string);
 		.monitor = monitor;
+	}
 }
 
 
@@ -87,6 +89,7 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 		monitor.add(c, c.originWorkspace);
 		XChangeProperty(dpy, root, Atoms._NET_CLIENT_LIST, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
 		c.updateStrut;
+
 		if(map){
 			c.show;
 			if(!active || active.parent == c.parent)

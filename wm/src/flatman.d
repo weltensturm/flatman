@@ -275,18 +275,19 @@ void loop(){
 	Tick();
 
 	if(requestFocus){
-		(Log.RED ~ "focus" ~ Log.DEFAULT ~ " %s".format(requestFocus)).log;
-		previousFocus = currentFocus;
-		currentFocus = requestFocus;
-		requestFocus = null;
-		focus(currentFocus.monitor);
-		monitor.setActive(currentFocus);
-		XSetInputFocus(dpy, currentFocus.orig, RevertToPointerRoot, CurrentTime);
-		XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
-	                    XA_WINDOW, 32, PropModeReplace,
-	                    cast(ubyte*) &(currentFocus.orig), 1);
-        currentFocus.sendEvent(wm.takeFocus);
-		restack;
+		with(Log(Log.RED ~ "focus" ~ Log.DEFAULT ~ " %s".format(requestFocus))){
+			previousFocus = currentFocus;
+			currentFocus = requestFocus;
+			requestFocus = null;
+			focus(currentFocus.monitor);
+			monitor.setActive(currentFocus);
+			XSetInputFocus(dpy, currentFocus.orig, RevertToPointerRoot, CurrentTime);
+			XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
+		                    XA_WINDOW, 32, PropModeReplace,
+		                    cast(ubyte*) &(currentFocus.orig), 1);
+	        currentFocus.sendEvent(wm.takeFocus);
+			restack;
+		}
 	}
 	
 	if(queueRestack){
