@@ -398,10 +398,7 @@ void onDestroy(Window window){
         ewmh.updateClientList;
         if(wasActive){
 
-            auto newFocus = previousFocus;
-
-            if(!newFocus)
-                newFocus = monitor.active;
+            auto newFocus = monitor.active;
 
             if(!newFocus){
                 auto result =
