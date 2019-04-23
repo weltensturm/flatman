@@ -303,6 +303,8 @@ class OverviewWorkspace: Widget {
         foreach(winInfo; workspace.windows){
             if(winInfo.window == window.window){
                 if(window.window.properties.workspace.value != manager.properties.workspace.value){
+                    window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y;
+                    // TODO: same coordinate system everywhere
                     window.targetSize = [
                         (window.targetSize.w*scale).to!int,
                         (window.targetSize.h*scale).to!int
@@ -311,7 +313,7 @@ class OverviewWorkspace: Widget {
                         (window.targetPos.x*scale+pos.x - dock.monitor.pos.x*scale).to!int,
                         (window.targetPos.y*scale+pos.y - dock.monitor.pos.y*scale).to!int
                     ];
-                    window.targetPos.y = manager.height - size.h + window.targetPos.y;
+                    window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y;
                 }
             }
         }
