@@ -227,13 +227,6 @@ class App {
 
 	void evProperty(XPropertyEvent* e){
 		properties.update(e);
-		if(e.atom == XA_WM_NAME){
-			foreach(client; clients){
-				if(client.window == e.window){
-					client.title = client.getTitle;
-				}
-			}
-		}
 		foreach(bar; bars){
 			bar.update = true;
 		}

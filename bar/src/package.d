@@ -40,6 +40,7 @@ public import
 	common.atoms,
 	common.xerror,
 	common.xembed,
+	common.window,
 
     bar.bar,
 	bar.config,

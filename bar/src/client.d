@@ -45,19 +45,16 @@ class Client {
 
 	this(x11.X.Window window){
 		this.window = window;
-		title = getTitle;
+		title = window.getTitle;
 		workspace = new Property!(XA_CARDINAL, false)(window, "_NET_WM_DESKTOP", properties);
 		flatmanTab = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TAB", properties);
 		flatmanTabs = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TABS", properties);
 		iconProperty = new Property!(XA_CARDINAL, true)(window, "_NET_WM_ICON", properties);
 		state = new Property!(XA_ATOM, true)(window, "_NET_WM_STATE", properties);
-		/+
 		titleProperty = new Property!(XA_STRING, false)(window, "_NET_WM_NAME", properties);
 		titleProperty ~= (string){
-		
-			title = getTitle;
+			title = window.getTitle;
 		};
-		+/
 		//window.props._NET_WM_ICON.get(&updateIcon);
 		iconProperty ~= &updateIcon;
 		iconProperty.update;
@@ -76,24 +73,6 @@ class Client {
 		XSendEvent(wm.displayHandle, window, false, NoEventMask, &ev);
 	}
     
-	string getTitle(){
-		Atom actType;
-		size_t nItems, bytes;
-		int actFormat;
-		ubyte* data;
-		XGetWindowProperty(
-				dpy, window, Atoms._NET_WM_NAME, 0, 0x77777777, False, Atoms.UTF8_STRING,
-				&actType, &actFormat, &nItems, &bytes, &data
-		);
-		auto text = to!string(cast(char*)data);
-		XFree(data);
-		if(!text.length){
-			if(!gettextprop(window, Atoms.NET_NAME, text))
-				gettextprop(window, XA_WM_NAME, text);
-		}
-		return text;
-	}
-	
 	void updateIcon(long[] data){
 		xicon = null;
 		if(!data.length)

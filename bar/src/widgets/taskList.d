@@ -36,11 +36,10 @@ class TaskList: Widget {
             .array
             .sort!((a, b) => a.flatmanTabs.value < b.flatmanTabs.value)
             .chunkBy!(a => a.flatmanTabs.value)
-            .array
-            .sort!((a, b) => a[0] < b[0])
             .map!(a => a[1]
                        .array
-                       .sort!((w1, w2) => w1.flatmanTab.value < w2.flatmanTab.value));
+                       .sort!((w1, w2) => w1.flatmanTab.value < w2.flatmanTab.value))
+            .array;
 
         if(!tabs.length)
         	return;
@@ -50,7 +49,7 @@ class TaskList: Widget {
         extents = ((tabs.map!(a => a.length).sum)*width + (tabs.length-1)*config.theme.separatorWidth).to!int;
         start = pos.x + size.w/2 - extents/2;
         int offset = start;
-		foreach(i, tab; tabs.enumerate){
+		foreach(i, tab; tabs){
             if(i != 0)
                 separators ~= offset;
 			foreach(client; tab){
