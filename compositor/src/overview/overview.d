@@ -464,13 +464,13 @@ class Overview {
         if(find(client, w)){
             double zoom;
             if(!client.destroyed){
-				auto active = properties.windowActive.value == client.windowHandle ? 1 : 1-state.sinApproach*0.25;
+				auto active = properties.windowActive.value == client.windowHandle ? 1 : 1-state.sigmoid*0.25;
                 if(state < 0.99999 && zoomList.canFind(client) && client.properties.workspace.value == manager.properties.workspace.value){
-                    zoom = state.sinApproach;
+                    zoom = state.sigmoid;
                     alpha = 0.75 + alpha*0.25;
                 }else{
                     zoom = 1;
-                    alpha = state.sinApproach * (client.hidden ? 0.9 : 1);
+                    alpha = state.sigmoid * (client.hidden ? 0.9 : 1);
                 }
                 if(client.properties.workspace.value < 0 || client.properties.overviewHide.value == 1){
                     alpha = (1-zoom*2).max(0)^^2;
@@ -491,7 +491,7 @@ class Overview {
                 animate(size.h, client.overviewAnimation.size.h, zoom).lround.to!int
             ];
         }else{
-            //alpha = animate(alpha, 0, state.sinApproach);
+            //alpha = animate(alpha, 0, state.sigmoid);
         }
 	}
 
@@ -679,3 +679,9 @@ class Overview {
     }
 
 }
+
+
+double sigmoid(double time){
+    return 1/(1 + E^^(6 - time*12));
+}
+
