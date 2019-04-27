@@ -72,14 +72,18 @@ class OverviewDock {
 
     @Tick
     void tick(){
-        indicator.setState(1);
         indicator.animation.approach(indicator.targetPos, indicator.targetSize);
         indicator.move(indicator.animation.pos);
         indicator.resize(indicator.animation.size);
-        indicatorEmpty.setState(1);
         indicatorEmpty.animation.approach(indicatorEmpty.targetPos, indicatorEmpty.targetSize);
         indicatorEmpty.move(indicatorEmpty.animation.pos);
         indicatorEmpty.resize(indicatorEmpty.animation.size);
+    }
+
+    @OverviewState
+    void overviewState(double state){
+        indicator.setState(state.sigmoid);
+        indicatorEmpty.setState(state.sigmoid);
     }
 
     void calcWindow(Overview.WinInfo window){

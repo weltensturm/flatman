@@ -486,6 +486,7 @@ class CompositeManager {
             overview.state = (overview.state+frameTimer.dur*0.06*config.animationSpeed).min(1);
         else
             overview.state = (overview.state-frameTimer.dur*0.06*config.animationSpeed).max(0);
+        OverviewState(overview.state);
 
         Animation.update;
         overview.tick;
