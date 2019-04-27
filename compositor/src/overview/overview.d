@@ -119,10 +119,6 @@ class Overview {
     void stop(bool now=false){
         if(now){
             doOverview = false;
-            //window.hide;
-            XUngrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle);
-            XUngrabPointer(wm.displayHandle, CurrentTime);
-            //XSetInputFocus(wm.displayHandle, .root, RevertToPointerRoot, CurrentTime);
             zoomList = [];
             foreach(c; manager.clients ~ manager.destroyed){
                 if(!c.hidden)
@@ -414,6 +410,9 @@ class Overview {
     void tick(){
         if(!doOverview && !visible && window.active){
             window.hide;
+            XUngrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle);
+            XUngrabPointer(wm.displayHandle, CurrentTime);
+            //XSetInputFocus(wm.displayHandle, .root, RevertToPointerRoot, CurrentTime);
             window.active = false;
         }
         if(!visible){
