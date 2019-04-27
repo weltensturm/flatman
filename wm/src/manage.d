@@ -79,7 +79,7 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 	if(find(w))
 		return;
 	with(Log(Log.RED ~ "manage" ~ Log.DEFAULT)){
-		XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|KeyReleaseMask|KeyPressMask);
+		XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|KeyReleaseMask|KeyPressMask);
 		auto c = new Client(w);
 		auto monitor = findMonitor(c.pos, c.size);
 		if(!monitor || !scan)
