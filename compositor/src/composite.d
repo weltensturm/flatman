@@ -517,12 +517,14 @@ class CompositeManager {
 
             with(Profile("calc windows")){
                 foreach(c; clients.chain(destroyed)){
-                    if(c.a.override_redirect && !c.picture || (c.animation.fade.calculate <= 0.0001 && c.floating))
-                        continue;
                     with(Profile(c.title)){
+                        if(c.a.override_redirect && !c.picture)
+                            continue;
                         with(Profile("animate")){
                             animate(c);
                         }
+                        if(c.animation.fade.calculate <= 0.0001 && c.floating)
+                            continue;
                         if((!overview.visible && c.animation.fade.calculate <= 0.0001
     								|| !overview.visible
     									&& ![manager.properties.workspace.value, -1].canFind(c.properties.workspace.value)
