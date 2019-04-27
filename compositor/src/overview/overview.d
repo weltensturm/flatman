@@ -531,7 +531,7 @@ class Overview {
             );
 
 
-            auto state = state.sinApproach;
+            auto state = state.sigmoid;
             auto y = manager.height - m.pos.y - m.size.h;
             auto maxDockHeight = m.size.h - 50.0 - 20*m.workspaces.length;
             auto scale = (1/7.5).min(maxDockHeight/m.workspaces.length/m.size.h);
@@ -554,19 +554,19 @@ class Overview {
         with(Profile("overview draw pre")){
             /+ TODO: proper gui damage system
             if(client.windowHandle == manager.properties.activeWin.value){
-                backend.setColor([0, 0.2, 0.7, state.sinApproach*alpha]);
+                backend.setColor([0, 0.2, 0.7, state.sigmoid*alpha]);
                 backend.rect([pos.x-10, manager.height-pos.y+10-size.h-20], [size.w+20, size.h+20]);
             }
             +/
 			if(client.properties.workspace.value != manager.properties.workspace.value)
 				return;
-            double flop = client.hidden ? 1*alpha : state.sinApproach*alpha;
+            double flop = client.hidden ? 1*alpha : state.sigmoid*alpha;
             int textHider;
             if(!client.hidden){
                 textHider = -((1-state) * 30).lround.to!int;
             }
             backend.clip([pos.x, manager.height-pos.y], [size.w, 20]);
-            backend.setColor([0, 0, 0, 0.5*state.sinApproach*(client.hidden ? 0.5 : 1)]);
+            backend.setColor([0, 0, 0, 0.5*state.sigmoid*(client.hidden ? 0.5 : 1)]);
             backend.rect([pos.x, manager.height-pos.y], [size.w, 20]);
             backend.setColor([flop,flop,flop,flop]);
             backend.text([pos.x+size.w/2, manager.height-pos.y+textHider+2], 20, client.title, 0.5);
@@ -578,7 +578,7 @@ class Overview {
         if(!visible || client.a.override_redirect || nodraw(client))
             return;
         with(Profile("overview")){
-            double flop = state.sinApproach*alpha;
+            double flop = state.sigmoid*alpha;
             WinInfo w;
             if(find(client, w)){
                 flop *= w.alpha;
