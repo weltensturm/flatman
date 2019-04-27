@@ -237,7 +237,7 @@ class Split: Container {
             Tabs tabsNext;
             if(clientActive+dir >= 0 && clientActive+dir < children.length)
                 tabsNext = children[clientActive+dir].to!Tabs;
-            if(dir < 0 && tabs.prev || dir > 0 && tabs.next){
+            if(config.tabs.sortBy != config.tabs.sortBy.history && (dir < 0 && tabs.prev || dir > 0 && tabs.next)){
                 if(dir < 0)
                     tabs.moveLeft;
                 else
