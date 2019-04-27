@@ -301,21 +301,25 @@ class OverviewWorkspace: Widget {
 
     void calcWindow(Overview.WinInfo window){
         auto scale = size.w.to!double / dock.monitor.size.w / 1.1;
+        auto offset = [
+            (size.w - size.w/1.1)/2,
+            (size.h - size.h/1.1)/2
+        ];
         auto workspace = index < dock.monitor.workspaces.length ? dock.monitor.workspaces[index] : null;
         if(!workspace)
             return;
         foreach(winInfo; workspace.windows){
             if(winInfo.window == window.window){
                 if(window.window.properties.workspace.value != manager.properties.workspace.value){
-                    window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y;
+                    window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y - dock.pos.y;
                     // TODO: same coordinate system everywhere
                     window.targetSize = [
                         (window.targetSize.w*scale).to!int,
                         (window.targetSize.h*scale).to!int
                     ];
                     window.targetPos = [
-                        (window.targetPos.x*scale+pos.x - dock.monitor.pos.x*scale).to!int,
-                        (window.targetPos.y*scale+pos.y - dock.monitor.pos.y*scale).to!int
+                        (offset.x + window.targetPos.x*scale+pos.x - dock.monitor.pos.x*scale).to!int,
+                        (offset.y + window.targetPos.y*scale+pos.y - dock.monitor.pos.y*scale + 6).to!int
                     ];
                     window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y;
                 }
