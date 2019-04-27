@@ -49,7 +49,7 @@ class WorkspaceHistory {
 	}
 
 	private void update(){
-		size_t[] wsEmpty;
+		long[] wsEmpty;
 		ws_iter:foreach(i; 0..monitor.workspaces.length){
 			foreach(monitor; monitors)
 				if(monitor.workspaces[i].clients.length || i == monitor.workspaceActive)
@@ -58,6 +58,7 @@ class WorkspaceHistory {
 		}
 		history.sort!((a, b) => int(wsEmpty.canFind(a.workspace)) < int(wsEmpty.canFind(b.workspace)));
 		Atoms._FLATMAN_WORKSPACE_HISTORY.replace(history.map!(a => a.workspace.to!long).array);
+		Atoms._FLATMAN_WORKSPACE_EMPTY.replace(wsEmpty);
 	}
 
 	private void push(int monitor, int workspace){

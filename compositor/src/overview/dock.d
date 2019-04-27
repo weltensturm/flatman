@@ -108,6 +108,8 @@ class OverviewDock {
             updateWorkspaceCount;
         if(atom == Atoms._FLATMAN_WORKSPACE_HISTORY)
             updateWorkspaceSort;
+        if(atom == Atoms._FLATMAN_WORKSPACE_EMPTY)
+            updateWorkspaceSort;
         if(atom == Atoms._NET_CURRENT_DESKTOP)
             updateCurrentWorkspace;
     }
@@ -125,7 +127,15 @@ class OverviewDock {
 
     void updateWorkspaceSort(){
         workspaces = workspaces.sorted(manager.overview.properties.workspaceSort.get);
-        workspaces = workspaces[$-1] ~ workspaces[0..$-1];
+        auto empty = manager.overview.properties.workspaceEmpty.get;
+        workspaces =
+            workspaces
+            .filter!(a => empty.canFind(a.index))
+            .array
+            ~
+            workspaces
+            .filter!(a => !empty.canFind(a.index))
+            .array;
         updateWorkspacePositions;
     }
 
@@ -453,6 +463,5 @@ auto sorted(T)(T[] workspaces, long[] sorting){
         .array;
 
     return sortedWorkspaces;
-    //return sortedWorkspaces[$-1..$] ~ sortedWorkspaces[0..$-1];
 
 }

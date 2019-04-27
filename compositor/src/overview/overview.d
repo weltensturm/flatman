@@ -35,7 +35,8 @@ class Overview {
         "workspaceCount", "_NET_NUMBER_OF_DESKTOPS", XA_CARDINAL, false,
         "overview", "_FLATMAN_OVERVIEW", XA_CARDINAL, false,
 		"windowActive", "_NET_ACTIVE_WINDOW", XA_WINDOW, false,
-        "workspaceSort", "_FLATMAN_WORKSPACE_HISTORY", XA_CARDINAL, true
+        "workspaceSort", "_FLATMAN_WORKSPACE_HISTORY", XA_CARDINAL, true,
+        "workspaceEmpty", "_FLATMAN_WORKSPACE_EMPTY", XA_CARDINAL, true
     ) properties;
 
     string[] workspaceNames;
@@ -467,7 +468,7 @@ class Overview {
                     alpha = 0.75 + alpha*0.25;
                 }else{
                     zoom = 1;
-                    alpha = state.sigmoid * (client.hidden ? 0.9 : 1);
+                    alpha = state.sigmoid * (client.hidden ? 0.99 : 1);
                 }
                 if(client.properties.workspace.value < 0 || client.properties.overviewHide.value == 1){
                     alpha = (1-zoom*2).max(0)^^2;
