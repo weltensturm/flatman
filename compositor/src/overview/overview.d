@@ -591,47 +591,24 @@ class Overview {
         }
 	}
 
-    void draw(Backend backend, CompositeClient c){
-
-        drawPre(backend, c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
-    
-        if(c.picture){
-            auto w1 = c.animSize.w/c.size.w.to!double;
-            auto h1 = c.animSize.h/c.size.h.to!double;
-            c.picture.scale([w1, h1]);
-        }
-
-        double transition = 1;
-
-        if(c.ghost && c.animation.size != c.size){
-            transition = ((c.animSize.w - c.ghost.size.w.to!double)/(c.size.x - c.ghost.size.w.to!double)
-                          .min((c.animSize.h - c.ghost.size.h.to!double)/(c.size.h - c.ghost.size.h.to!double))
-                          ).min(1).max(0);
-            auto w = c.animSize.w.to!double/c.ghost.size.w;
-            auto h = c.animSize.h.to!double/c.ghost.size.h;
-            c.ghost.scale([w, h]);
-            backend.render(c.ghost, c.ghost.hasAlpha, (1-transition)*c.animAlpha, c.animOffset.to!(int[2]), c.animPos, c.animSize);
-        }
-
-        if(c.picture){
-            backend.render(c.picture, c.picture.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
-        }
-
-        drawPost(backend, c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha);
-    }
-
     void draw(Backend backend, CompositeClient[] windows){
 
         foreach(w; windows){
-            if(w.properties.workspace.value == properties.workspace.value)
-                draw(backend, w);
+            if(w.properties.workspace.value == properties.workspace.value){
+                drawPre(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
+                .draw(backend, w);
+                drawPost(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
+            }
         }
 
 		dock.draw(backend, state, monitors, workspaceNames);
 
         foreach(w; windows)
-            if(w.properties.workspace.value != properties.workspace.value)
-                draw(backend, w);
+            if(w.properties.workspace.value != properties.workspace.value){
+                drawPre(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
+                .draw(backend, w);
+                drawPost(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
+            }
 
 		/+
 

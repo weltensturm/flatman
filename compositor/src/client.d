@@ -140,6 +140,11 @@ class CompositeClient: ws.wm.Window {
         this.size = size;
     }
 
+    void damaged(){
+        damage.damaged = true;
+        stale = false;
+    }
+
     bool floating(){
         return properties.tabs.value.max(0) == 0;
     }
@@ -147,7 +152,6 @@ class CompositeClient: ws.wm.Window {
     void createPicture(bool force=false){
         if(hidden)
             return;
-        stale = false;
         "create picture".writeln;
         if(!XGetWindowAttributes(wm.displayHandle, windowHandle, &a)){
             "could not get attributes".writeln;
@@ -155,11 +159,12 @@ class CompositeClient: ws.wm.Window {
         }
         if(!(a.map_state & IsViewable))
             return;
-        if(animation.size == size){
+        if(animation.size == size && !stale){
             // don't swap ghost mid-animation
             ghost = picture;
         }
         picture = new ClientFramebuffer(windowHandle, a);
+        stale = true;
     }
 
     void destroy(){
@@ -204,7 +209,6 @@ class CompositeClient: ws.wm.Window {
     override void onShow(){
         hidden = false;
         "onShow %s".format(title).writeln;
-        stale = true;
         createPicture;
         animation.fade.change(1);
         animation.pos = [pos.x, pos.y];

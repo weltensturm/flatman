@@ -462,13 +462,6 @@ class CompositeManager {
     }
 
     void applyDamage(CompositeClient c){
-        /+
-        if(c.stale && !c.hidden){
-            writeln("refresh stale picture ", c.title);
-            c.createPicture;
-            damage.damage(c);
-        }
-        +/
         if(c.destroyed){
             damage.damage(c.animPos, c.animSize);
             return;
@@ -484,47 +477,6 @@ class CompositeManager {
                     (a.height.to!double/c.size.h*c.animSize.h).lround.to!int
                 ]
             );
-        }
-    }
-
-    void draw(CompositeClient c){
-
-        if(!c.damage.damaged)
-            return;
-
-        with(Profile(c.title)){
-
-            if(c.picture){
-                auto w1 = c.animSize.w/c.size.w.to!double;
-                auto h1 = c.animSize.h/c.size.h.to!double;
-                c.picture.scale([w1, h1]);
-            }
-
-            double transition = 1;
-
-            if(c.ghost && c.animation.size != c.size){
-                auto distanceVector = c.size.a - c.ghost.size;
-                auto transitionVec = c.animSize.a - c.ghost.size;
-
-                double length(Point vec){
-                    return asqrt(vec[].map!"a^^2.0".sum);
-                }
-
-                if(length(distanceVector) > 0){
-                    transition = length(transitionVec) / length(distanceVector);
-                }else{
-                    transition = 0;
-                }
-                auto w = c.animSize.w.to!double/c.ghost.size.w;
-                auto h = c.animSize.h.to!double/c.ghost.size.h;
-                c.ghost.scale([w, h]);
-                backend.render(c.ghost, c.ghost.hasAlpha, c.ghost.hasAlpha ? (1-transition)*c.animAlpha : 1, c.animOffset.to!(int[2]), c.animPos, c.animSize);
-            }
-
-            if(c.picture){
-                backend.render(c.picture, c.picture.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
-            }
-            //drawShadow(c.animPos, c.animSize);
         }
     }
 
@@ -612,7 +564,7 @@ class CompositeManager {
         }else{
             with(Profile("draw")){
                 foreach(c; windowsDraw){
-                    draw(c);
+                    .draw(backend, c);
                 }
             }    
         }
@@ -627,4 +579,56 @@ class CompositeManager {
         backend.swap;
     }
 
+}
+
+
+void draw(Backend backend, CompositeClient c){
+
+    if(!c.damage.damaged)
+        return;
+
+    with(Profile(c.title)){
+
+        double transition = 1;
+
+        if(c.ghost && c.animation.size != c.size){
+            auto distanceVector = c.size.a - c.ghost.size;
+            auto transitionVec = c.animSize.a - c.ghost.size;
+
+            double length(Point vec){
+                return asqrt(vec[].map!"a^^2.0".sum);
+            }
+
+            if(length(distanceVector) > 0){
+                transition = length(transitionVec) / length(distanceVector);
+                transition = transition.sigmoid;
+            }else{
+                transition = 0;
+            }
+            auto w = c.animSize.w.to!double/c.ghost.size.w;
+            auto h = c.animSize.h.to!double/c.ghost.size.h;
+            c.ghost.scale([w, h]);
+            backend.render(c.ghost, c.ghost.hasAlpha, c.ghost.hasAlpha ? (1-transition)*c.animAlpha : 1, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+        }
+
+        if(c.picture){
+            if(!c.stale){
+                auto w = c.animSize.w/c.size.w.to!double;
+                auto h = c.animSize.h/c.size.h.to!double;
+                c.picture.scale([w, h]);
+                backend.render(c.picture, c.picture.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+            }else{
+                if(c.ghost){
+                    auto w = c.animSize.w.to!double/c.ghost.size.w;
+                    auto h = c.animSize.h.to!double/c.ghost.size.h;
+                    c.ghost.scale([w, h]);
+                    backend.render(c.ghost, c.ghost.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+                }else{
+                    backend.setColor([0,0,0,c.animAlpha*transition]);
+                    backend.rect([c.animPos.x, manager.height - c.animSize.h - c.animPos.y], c.animSize);
+                }
+            }
+        }
+        //drawShadow(c.animPos, c.animSize);
+    }
 }

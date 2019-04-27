@@ -33,7 +33,7 @@ class RootDamage {
             damageEvent + XDamageNotify: (XEvent* e){
                 auto ev = cast(XDamageNotifyEvent*)e;
                 if(auto w = manager.find(e.xany.window)){
-                    w.damage.damaged = true;
+                    w.damaged;
                     areas(ev, (r){
                         w.damage.areas ~= *r;
                     });
