@@ -161,8 +161,7 @@ class Overview {
         }
     }
 
-    /+
-    private void prefill(){
+    private void prefill2(){
         auto allMonitors = manager.screens
             .byPair
             .map!(a => new Monitor([a.value.x, a.value.y], [a.value.w, a.value.h], a.key));
@@ -220,11 +219,11 @@ class Overview {
             foreach(i, w; sorted[split..$]){
                 if(w.window is null || w.window.animation.size.w == 0)
                     continue;
-                auto targetWidth = w.window.size.w/(i/2.0+1.5);
+                auto targetWidth = w.window.size.w/(i/4.0+1.5);
                 auto aspect = w.window.animation.size.h/w.window.animation.size.w;
                 int[2] size = [targetWidth.to!int, (targetWidth*aspect).to!int];
                 int[2] pos = [(group.pos.x + group.size.w/2 - size.w/2).to!int,
-                              ((group.pos.y + group.size.h/2)/sqrt(i+1.0) - group.size.h/6).to!int];
+                              (group.pos.y - group.size.h/6*(sqrt(i.to!double*1.5) - sqrt(sorted.length.to!double))).to!int];
                 w.targetPos = pos;
                 w.targetSize = size;
                 w.targetAlpha = 1;
@@ -290,7 +289,6 @@ class Overview {
         }
         resetPos = false;
     }
-    +/
 
     private void prefill(){
 
