@@ -293,23 +293,22 @@ void loop(){
 	
 	if(queueRestack){
 		with(Log("restack")){
-			auto stack = unmanaged;
+			Window[] stack;
 			foreach(monitor; monitors){
-				if(monitor.active && monitor.active.isfullscreen)
-					stack ~= monitor.active.win;
+				stack ~= monitor.globals.filter!(a => !a.isDock).map!(a => a.win).array;
 				if(monitor.workspace){
 					stack ~= monitor.workspace.floating.stack;
 				}
+				if(monitor.active && monitor.active.isfullscreen)
+					stack ~= monitor.active.win;
+				stack ~= monitor.globals.filter!(a => a.isDock).map!(a => a.win).array;
 			}
 			foreach(monitor; monitors){
-				stack ~= monitor.globals.map!(a => a.win).array;
-			}
-			foreach(monitor; monitors){
-               stack ~= monitor.workspace.split.stack;
+               stack ~= monitor.workspace.split.stack.filter!(a => !stack.canFind(a)).array;
 			}
 			XRestackWindows(dpy, stack.ptr, stack.length.to!int);
 			queueRestack = false;
-			//while(XCheckMaskEvent(dpy, EnterWindowMask|LeaveWindowMask, &ev)){}
+			Log(stack.to!string);
 		}
 
 	}
