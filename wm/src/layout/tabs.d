@@ -50,7 +50,11 @@ class Tabs: Container {
 
     override void add(Client client){
         //add(client.to!Base);
-        if(clientActive+1 < children.length){
+        if(config.tabs.sortBy == config.tabs.sortBy.history){
+            children = client ~ children;
+            client.parent = this;
+            clientActive += 1;
+        }else if(clientActive+1 < children.length){
             children = children[0..clientActive+1] ~ client ~ children[clientActive+1..$];
             client.parent = this;
         }else
