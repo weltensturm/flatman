@@ -141,7 +141,8 @@ class CompositeManager {
     ws.event.Event!(CompositeClient, double) alphaChanged;
 
     this(){
-        config.loadAndWatch(["/etc/flatman/composite.ws", "~/.config/flatman/composite.ws"], {});
+        config.loadAndWatch(["/etc/flatman/composite.ws", "~/.config/flatman/composite.ws"],
+            (string msg, bool){ writeln("CONFIG ERROR\n", msg); });
         manager = this;
         moved = new ws.event.Event!(CompositeClient, int[2], int[2]);
         alphaChanged = new ws.event.Event!(CompositeClient, double);

@@ -69,43 +69,19 @@ int main(string[] args){
 	
 	version(unittest){ exit(0); }
 
+	Log.setLevel(Log.Level.info);
+	Log.addHandler(s => "/tmp/flatman.log".append(s));
+
 	(Log.BOLD ~ Log.GREEN ~ "===== FLATMAN =====").log;
 	"args %s".format(args[1..$]).log;
 	try{
-		auto configs = ["/etc/flatman/config.ws", "~/.config/flatman/config.ws"];
 		environment["_JAVA_AWT_WM_NONREPARENTING"] = "1";
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			"warning: no locale support".log;
 
-		["mkdir", "-p", "~/.config/flatman".expandTilde].spawnProcess;
-		["touch", "~/.config/flatman/config.ws".expandTilde].spawnProcess;
-
-		auto cfgReload = {
-			notify("Loading config");
-			try{
-				auto newConfig = NestedConfig();
-				newConfig.fillConfigNested(configs);
-				ConfigUpdate(newConfig);
-				config = newConfig;
-			}catch(ConfigException e){
-				Log.error(e.msg);
-				notify(e.msg);
-			}catch(Exception e){
-				notify(e.toString);
-			}
-		};
-		cfgReload();
-		foreach(file; configs){
-			file = file.expandTilde;
-			if(!file.exists)
-				continue;
-			Inotify.watch(file, (d,f,m){
-				cfgReload();
-			});
-		}
-
 		XInitThreads();
 		dpy = XOpenDisplay(null);
+
 		if(!dpy)
 			throw new Exception("cannot open display");
 		getDisplay = () => dpy;
@@ -192,7 +168,14 @@ void setup(bool autostart){
 	ewmh.updateWorkarea;
 	ewmh.setSupportingWm;
 
-	ConfigUpdate(config);
+	auto configs = ["/etc/flatman/config.ws", "~/.config/flatman/config.ws"];
+	config.loadAndWatch(configs, (string msg, bool fatal){
+		Log.error(msg);
+		notify(msg);
+	});
+
+	if(!config.logging)
+		Log.setLevel(Log.Level.error);
 
 }
 

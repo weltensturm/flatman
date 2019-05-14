@@ -1,7 +1,19 @@
 module flatman.dragging;
 
-
-import flatman;
+import
+    std.math,
+    std.string,
+    std.algorithm,
+    x11.X,
+    x11.Xlib,
+    ws.gui.base,
+    common.event,
+    common.log,
+    common.xevents,
+    flatman.util,
+    flatman.flatman,
+    flatman.client,
+    flatman.events;
 
 
 class DragSystem {

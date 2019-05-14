@@ -2,6 +2,9 @@ module flatman.frame;
 
 import flatman;
 
+import common.xevents;
+
+
 __gshared:
 
 

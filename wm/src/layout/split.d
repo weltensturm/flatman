@@ -2,6 +2,9 @@ module flatman.layout.split;
 
 import flatman;
 
+import common.xevents;
+
+
 __gshared:
 
 

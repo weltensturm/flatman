@@ -2,6 +2,9 @@ module flatman.keybinds;
 
 import flatman;
 
+import common.xevents;
+
+
 __gshared:
 
 
@@ -66,8 +69,8 @@ class KeybindSystem {
 		}
 	}
 
-	@ConfigUpdate
-	void onConfig(NestedConfig config){
+	@(ConfigUpdate!NestedConfig)
+	void onConfig(ref NestedConfig config){
 		Key[] binds;
 		if(!config.mod.length)
 			throw new ConfigException("Modifier key is not set");

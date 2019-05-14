@@ -3,24 +3,7 @@ module bar.client;
 import bar;
 
 
-bool gettextprop(x11.X.Window w, Atom atom, ref string text){
-	char** list;
-	int n;
-	XTextProperty name;
-	XGetTextProperty(dpy, w, &name, atom);
-	if(!name.nitems)
-		return false;
-	if(name.encoding == XA_STRING){
-		text = to!string(*name.value);
-	}else{
-		if(XmbTextPropertyToTextList(dpy, &name, &list, &n) >= XErrorCode.Success && n > 0 && *list){
-			text = (*list).to!string;
-			XFreeStringList(list);
-		}
-	}
-	XFree(name.value);
-	return true;
-}
+import common.xevents;
 
 
 class Client {
@@ -34,6 +17,7 @@ class Client {
 	Property!(XA_CARDINAL, false) flatmanTabs;
 	Property!(XA_CARDINAL, true) iconProperty;
 	Property!(XA_STRING, false) titleProperty;
+	Property!(XA_STRING, false) titleProperty2;
 	Property!(XA_ATOM, true) state;
 
 	string title;
@@ -43,23 +27,33 @@ class Client {
 	ubyte[] icon;
 	bool hidden;
 
+	PropertyList properties;
+
 	this(x11.X.Window window){
 		this.window = window;
 		title = window.getTitle;
+		properties = new PropertyList;
 		workspace = new Property!(XA_CARDINAL, false)(window, "_NET_WM_DESKTOP", properties);
 		flatmanTab = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TAB", properties);
 		flatmanTabs = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TABS", properties);
 		iconProperty = new Property!(XA_CARDINAL, true)(window, "_NET_WM_ICON", properties);
 		state = new Property!(XA_ATOM, true)(window, "_NET_WM_STATE", properties);
 		titleProperty = new Property!(XA_STRING, false)(window, "_NET_WM_NAME", properties);
-		titleProperty ~= (string){
-			title = window.getTitle;
-		};
+		titleProperty ~= (string){ title = window.getTitle; };
+		titleProperty2 = new Property!(XA_STRING, false)(window, "WM_NAME", properties);
+		titleProperty2 ~= (string){ title = window.getTitle; };
 		//window.props._NET_WM_ICON.get(&updateIcon);
 		iconProperty ~= &updateIcon;
 		iconProperty.update;
 
+		Events[window] ~= this;
+
 		XSelectInput(wm.displayHandle, window, StructureNotifyMask | PropertyChangeMask);
+	}
+
+	@WindowDestroy
+	void destroy(){
+		Events.forget(this);
 	}
 
 	void requestClose(){
@@ -99,6 +93,21 @@ class Client {
 		}
 		iconSize = [width,height];
 
+	}
+
+	@WindowMap
+	void onMap(){
+		hidden = false;
+	}
+
+	@WindowUnmap
+	void onUnmap(){
+		hidden = true;
+	}
+
+	@WindowProperty
+	void onProperty(XPropertyEvent* e){
+		properties.update(e);
 	}
 
 }

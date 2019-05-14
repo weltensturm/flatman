@@ -12,7 +12,6 @@ public import
 	std.traits,
 	std.conv,
 	std.math,
-	std.process,
 	std.regex,
 	std.random,
 
@@ -41,6 +40,7 @@ public import
 	common.xerror,
 	common.xembed,
 	common.window,
+	common.event,
 
     bar.bar,
 	bar.config,

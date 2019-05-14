@@ -3,6 +3,8 @@ module bar.widget.battery;
 import bar;
 
 
+import std.process: execute;
+
 
 struct BatteryInfo {
     bool enabled;

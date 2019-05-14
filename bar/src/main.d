@@ -1,7 +1,8 @@
 module bar.main;
 
-
 import bar;
+
+import common.xevents;
 
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
@@ -13,6 +14,10 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	catch(Throwable){}
 	return 0;
 }
+
+
+Display* dpy;
+x11.X.Window root;
 
 
 bool running = true;
@@ -33,7 +38,7 @@ void main(){
 	try {
 		while(wm.hasActiveWindows && running){
 			Inotify.update;
-			wm.processEvents;
+			wm.processEvents((e) => handleEvent(e));
 			foreach(bar; app.bars){
 				bar.onDraw;
 			}
@@ -68,16 +73,10 @@ class App {
 			XSynchronize(dpy, true);
 		}
 
-        config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"], &configChanged);
+		Events ~= this;
 
-		wm.on([
-			CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
-			DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
-			ConfigureNotify: (XEvent* e) => evConfigure(e),
-			MapNotify: (XEvent* e) => evMap(&e.xmap),
-			UnmapNotify: (XEvent* e) => evUnmap(&e.xunmap),
-			PropertyNotify: (XEvent* e) => evProperty(&e.xproperty)
-		]);
+        config.loadAndWatch(["/etc/flatman/bar.ws", "~/.config/flatman/bar.ws"],
+        	(string msg, bool){ writeln("CONFIG ERROR\n", msg); });
 
 		XSelectInput(wm.displayHandle, .root,
 			StructureNotifyMask
@@ -89,7 +88,9 @@ class App {
 
 	}
 
+	@(ConfigLoaded!Config)
 	void configChanged(){
+		writeln("reloading config");
 		foreach(bar; bars){
 			bar.close;
 			bar.destroy;
@@ -127,7 +128,7 @@ class App {
 		if(children){
 			foreach(window; children[0..nchildren]){
 				if(.root == root_return)
-					evCreate(window);
+					evCreate(false, window);
 			}
 			XFree(children);
 		}
@@ -150,14 +151,15 @@ class App {
 		}
 	}
 
-	void evCreate(x11.X.Window window){
-		XWindowAttributes wa;
+	@WindowCreate
+	void evCreate(bool override_redirect, x11.X.Window window){
 		foreach(bar; bars){
 			if(bar.windowHandle == window){
 				return;
 			}
 		}
-		if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly){
+		XWindowAttributes wa;
+		if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly || wa.override_redirect){
 			return;
 		}
 		auto client = new Client(window);
@@ -170,66 +172,40 @@ class App {
 		}
 	}
 
+	@WindowDestroy
 	void evDestroy(x11.X.Window window){
-		properties.remove(window);
-		foreach(i, c; clients){
-			if(c.window == window){
-				clients = clients.without(c);
-				return;
+		if(auto client = find(window)){
+			clients = clients.without(client);
+			foreach(bar; bars){
+				bar.update = true;
 			}
-		}
-		foreach(bar; bars){
-			bar.update = true;
 		}
 	}
 
-	void evConfigure(XEvent* e){
-		if(e.xconfigure.window == .root){
-			//resize([e.xconfigure.width, size.h]);
+	@WindowConfigure
+	void evConfigure(WindowHandle window, XConfigureEvent* e){
+		if(window == .root){
 			updateScreens;
 		}
 		foreach(bar; bars){
-			if(e.xconfigure.window == bar.windowHandle)
+			if(e.window == bar.windowHandle)
 				return;
 		}
 		foreach(i, c; clients){
-			if(c.window == e.xconfigure.window){
-				c.screen = screens.findScreen([e.xconfigure.x, e.xconfigure.y], [e.xconfigure.width, e.xconfigure.height]);
+			if(c.window == window){
+				c.screen = screens.findScreen([e.x, e.y], [e.width, e.height]);
 				return;
 			}
 		}
 	}
 
-	void evMap(XMapEvent* e){
-		foreach(i, c; clients){
-			if(c.window == e.window){
-				c.hidden = false;
-				return;
-			}
-		}
-		evCreate(e.window);
-		foreach(bar; bars){
-			bar.update = true;
-		}
-	}
-
-	void evUnmap(XUnmapEvent* e){
+	Client find(WindowHandle handle){
 		foreach(c; clients){
-			if(c.window == e.window){
-				c.hidden = true;
-				return;
-			}
+			if(c.window == handle)
+				return c;
 		}
-		foreach(bar; bars){
-			bar.update = true;
-		}
-	}
-
-	void evProperty(XPropertyEvent* e){
-		properties.update(e);
-		foreach(bar; bars){
-			bar.update = true;
-		}
+		return null;
 	}
 
 }
+

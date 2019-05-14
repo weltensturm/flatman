@@ -1,7 +1,8 @@
 module flatman.workspaceHistory;
 
-
 import flatman;
+
+import common.xevents;
 
 
 class WorkspaceHistory {

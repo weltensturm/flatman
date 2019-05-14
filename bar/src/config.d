@@ -10,6 +10,8 @@ struct ConfigColor {
 	alias color this;
 
 	this(string text){
+		if(text.length != 6 && text.length != 8)
+			throw new Exception("Invalid color \"" ~ text ~ "\"");
 		color[0..3] = [
 			text[0..2].to!int(16)/255.0,
 			text[2..4].to!int(16)/255.0,

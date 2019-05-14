@@ -86,10 +86,8 @@ class TaskListEntry: Base {
     }
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
-        writeln(client.title, ' ', button, ' ', pressed);
         if(button == Mouse.buttonLeft){
             if(!pressed){
-                writeln("false");
                 dragging = false;
                 XClientMessageEvent xev;
                 xev.type = ClientMessage;

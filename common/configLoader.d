@@ -12,14 +12,95 @@ import
     std.algorithm,
     std.array,
     std.range,
+    std.functional,
     ws.decode,
-    ws.inotify;
+    ws.inotify,
+    common.event;
+
+
+/// Called after config has successfully loaded and been replaced
+template ConfigLoaded(T){
+    alias ConfigLoaded = Event!("ConfigLoaded!" ~ T.stringof, void function());
+}
+
+
+/// Called during config loading, catches exceptions and forwards them to error handler
+template ConfigUpdate(T){
+    alias ConfigUpdate = Event!("ConfigUpdate", void function(ref T));
+}
 
 
 class ConfigException: Exception {
     this(string msg){
         super(msg);
     }
+}
+
+
+void loadAndWatch(T)(auto ref T config, string[] configs, void function(string message, bool fromConfig) errorHandler){
+    loadAndWatch(config, configs, errorHandler.toDelegate);
+}
+
+
+void loadAndWatch(T)(auto ref T config, string[] configs, void delegate(string message, bool fromConfig) errorHandler){
+
+    foreach(file; configs){
+        file = file.expandTilde;
+        if(file.exists)
+            continue;
+        ["mkdir", "-p", file.dirName].execute;
+        ["touch", file].execute;
+    }
+
+    auto reload = {
+        try{
+            auto newConfig = T();
+            newConfig.fillConfigNested(configs);
+            ConfigUpdate!T(newConfig);
+            config = newConfig;
+        }catch(ConfigException e){
+            errorHandler(e.msg, true);
+            return;
+        }catch(Exception e){
+            errorHandler(e.toString, false);
+            return;
+        }
+        ConfigLoaded!T();
+    };
+
+    reload();
+
+    foreach(file; configs){
+        file = file.expandTilde;
+        if(!file.exists)
+            continue;
+        Inotify.watch(file.dirName, (path, f, m){
+            if(file == buildPath(path, f) && m == Inotify.Modify){
+                reload();
+            }
+        });
+    }
+
+}
+
+
+void fillConfigNested(T)(ref T config, string[] paths){
+
+    Entry[] values;
+
+    foreach(path; paths){
+        path = path.expandTilde;
+        if(!path.exists){
+            try {
+                std.file.write(path, "");
+            }catch(FileException e){}
+        }else{
+            loadBlock!T(path.expandTilde.readText, "", values);
+        }
+    }
+
+    config.fillStruct("", values);
+
 }
 
 
@@ -167,54 +248,3 @@ void fillStruct(T)(ref T value, string prefix, Entry[] values){
         }
     }
 }
-
-void fillConfigNested(T)(ref T config, string[] paths){
-
-    Entry[] values;
-
-    foreach(path; paths){
-        path = path.expandTilde;
-        if(!path.exists){
-            try {
-                std.file.write(path, "");
-            }catch(FileException e){}
-        }else{
-            loadBlock!T(path.expandTilde.readText, "", values);
-        }
-    }
-
-    config.fillStruct("", values);
-
-}
-
-
-void loadAndWatch(T)(auto ref T config, string[] configs, void delegate() cb){
-    foreach(file; configs){
-        if(file.exists)
-            continue;
-		["mkdir", "-p", file.expandTilde.dirName].execute;
-		["touch", file.expandTilde].execute;
-    }
-    auto cfgReload = {
-        try{
-            config.fillConfigNested(configs);
-        }catch(ConfigException e){
-            ["notify-send", "-a", configs.join(", "), e.msg].execute;
-        }catch(Exception e){
-            //Log.fallback(Log.RED ~ e.to!string);
-            ["notify-send", "-a", configs.join(", "), e.toString].execute;
-        }
-        cb();
-    };
-    cfgReload();
-    foreach(file; configs){
-        file = file.expandTilde;
-        if(!file.exists)
-            continue;
-        Inotify.watch(file, (d,f,m){
-            cfgReload();
-        });
-    }
-
-}
-

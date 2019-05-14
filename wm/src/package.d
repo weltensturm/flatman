@@ -63,8 +63,8 @@ public import
 	common.atoms,
 	common.xerror,
 	common.queryTree,
+	common.log,
 
-	flatman.log,
 	flatman.x.atoms,
 	flatman.x.ewmh,
 	flatman.x.icccm,

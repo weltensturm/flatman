@@ -2,6 +2,9 @@ module flatman.client;
 
 import flatman;
 
+import common.xevents;
+
+
 __gshared:
 
 

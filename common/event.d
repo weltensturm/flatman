@@ -17,8 +17,8 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
 
     alias Overloads = Functions;
 
-    template callbacks(Args...){
-    	static void delegate(Args)[] callbacks;
+    template callbacks(Fn){
+    	static void delegate(Parameters!Fn)[] callbacks;
     }
 
     template forgetters(T){
@@ -26,9 +26,9 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
     }
 
     void registerCallback(Fn, Callback)(Fn fn, Callback callback){
-        callbacks!(Parameters!Callback) ~= callback;
+        callbacks!Callback ~= callback;
         forgetters!(typeof(fn))[fn] = {
-            callbacks!(Parameters!Callback) = callbacks!(Parameters!Callback).filter!(a => a != callback).array;
+            callbacks!Callback = callbacks!Callback.filter!(a => a != callback).array;
         };
     }
 
@@ -37,7 +37,7 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
         static foreach(Overload; Overloads){
 
     		static void opCall(Parameters!Overload args){
-                callbacks!(Parameters!Overload).each!(a => a(args));
+                callbacks!(void delegate(Parameters!Overload)).each!(a => a(args));
     		}
 
     		static void opOpAssign(string op)(void delegate(Parameters!Overload) fn) if(op == "~") {

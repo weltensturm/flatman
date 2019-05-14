@@ -3,9 +3,8 @@ module bar.bar;
 import bar;
 
 
-Display* dpy;
-x11.X.Window root;
-PropertyList properties;
+import common.xevents;
+
 
 Picture generateGlow(float[3] color){
 	auto pixmap = XCreatePixmap(dpy, root, 200, 40, 32);
@@ -50,6 +49,8 @@ class Bar: ws.wm.Window {
 	WorkspaceIndicator workspaceIndicator;
 	ClockWidget clock;
 
+	PropertyList properties;
+
 	bool update = true;
 	int second = 0;
 
@@ -61,7 +62,6 @@ class Bar: ws.wm.Window {
 
 	this(App app){
 		this.app = app;
-		properties = new PropertyList;
 		auto screens = screens(wm.displayHandle);
 
 		workspaceIndicator = addNew!WorkspaceIndicator;
@@ -92,6 +92,8 @@ class Bar: ws.wm.Window {
 		}else
 			resize(size);
 
+		properties = new PropertyList;
+
         auto state = new Property!(XA_ATOM, true)(windowHandle, "_NET_WM_STATE");
         state = [Atoms._NET_WM_STATE_SKIP_PAGER, Atoms._NET_WM_STATE_SKIP_TASKBAR, Atoms._NET_WM_STATE_STICKY];
 
@@ -100,6 +102,25 @@ class Bar: ws.wm.Window {
 
         auto windowType = new Property!(XA_ATOM, false)(windowHandle, "_NET_WM_WINDOW_TYPE");
         windowType = Atoms._NET_WM_WINDOW_TYPE_DOCK;
+
+		workspace = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
+		workspace = -1;
+
+		currentWindow = new Property!(XA_WINDOW, false)(.root, "_NET_ACTIVE_WINDOW", properties);
+		currentWindow ~= (x11.X.Window window){
+			foreach(client; app.clients){
+				if(client.window == window){
+					writeln("client updated");
+					currentClient = client;
+					break;
+				}
+			}
+		};
+
+		strut = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
+		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+
+		Events ~= this;
 
 	}
 
@@ -111,26 +132,6 @@ class Bar: ws.wm.Window {
 		}
 	}
 
-	override void show(){
-		workspace = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
-		workspace = -1;
-
-		currentWindow = new Property!(XA_WINDOW, false)(.root, "_NET_ACTIVE_WINDOW", properties);
-		currentWindow ~= (x11.X.Window window){
-			foreach(client; app.clients){
-				if(client.window == window){
-					currentClient = client;
-					break;
-				}
-			}
-		};
-
-		strut = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
-		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
-
-		super.show;
-	}
-
 	override void drawInit(){
 		_draw = new XDraw(this);
 		draw.setFont("Segoe UI", 10);
@@ -139,6 +140,7 @@ class Bar: ws.wm.Window {
 	}
 
 	override void close(){
+		Events.forget(this);
 		widgets.each!(a => a.destroy);
 		super.close;
 	}
@@ -204,6 +206,22 @@ class Bar: ws.wm.Window {
 			}
 		}
 		onDraw;
+	}
+
+    @WindowMap
+	void evMap(WindowHandle){
+		update = true;
+	}
+
+    @WindowUnmap
+	void evUnmap(WindowHandle){
+		update = true;
+	}
+
+    @WindowProperty
+	void evProperty(WindowHandle, XPropertyEvent* e){
+		properties.update(e);
+		update = true;
 	}
 
 }
