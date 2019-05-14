@@ -125,6 +125,13 @@ class WorkspaceHistory {
 			workspaceNames ~= "Workspace";
 	}
 
+	@WindowFocusIn
+	void onWindowFocus(Window){
+		if(historySelector == -1){
+			history[0].monitor = monitors.countUntil(monitor).to!int;
+		}
+	}
+
 	@WindowProperty
 	void onProperty(Window window, XPropertyEvent* ev){
 		if(window == .root){
