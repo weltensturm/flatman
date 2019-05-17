@@ -72,6 +72,16 @@ class Monitor {
             if(workspace < 0)
                 client.global = true;
             if(!client.global){
+                if(client.isFloating && !drag.dragging){
+                    if(!client.isfullscreen && client.size >= size.a-[2,2] && size != this.workspace.size){
+                        Log("%s.isfullscreen = true".format(client));
+                        client.isfullscreen = true;
+                        client.updateFullscreen;
+                    }else if(client.size >= size.a*0.8){
+                        Log("%s.isFloating = false".format(client));
+                        client.isFloating = false;
+                    }
+                }
                 if(workspace == -1)
                     this.workspace.add(client);
                 else{
