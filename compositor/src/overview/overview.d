@@ -314,7 +314,7 @@ class Overview {
         }
 
         foreach(client; manager.clients ~ manager.destroyed){
-            if(client.a.override_redirect && client.properties.overviewHide.value != 1)
+            if(client.a.override_redirect)
                 continue;
             if(client.hidden && client.floating)
                 continue;
@@ -489,6 +489,9 @@ class Overview {
                 animate(size.h, client.overviewAnimation.size.h, zoom).lround.to!int
             ];
         }else{
+            if(client.properties.overviewHide.value == 1){
+                alpha = 1-state.sigmoid;
+            }
             //alpha = animate(alpha, 0, state.sigmoid);
         }
 	}
