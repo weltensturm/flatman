@@ -53,18 +53,19 @@ class Separator: Base {
                 CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
         );
         _draw = new XDraw(dpy, window);
+        XSelectInput(dpy, window, ExposureMask | EnterWindowMask | LeaveWindowMask | ButtonPressMask);
         window.replace(Atoms._FLATMAN_OVERVIEW_HIDE, 1L);
         hide;
         Events[window] ~= this;
     }
 
-    void mouse(Mouse.button button, bool pressed){
+    @WindowMouseButton
+    void mouse(bool pressed, Mouse.button button){
         if(button == Mouse.buttonLeft && pressed){
             .drag.drag(button, (int[2] cursor){
-                auto diff = pos.x - cursor.x;
+                auto diff = pos.x - cursor.x + size.w/2;
                 if(!diff)
                     return;
-                diff.to!string.log;
                 split.sizes[index] -= diff;
                 split.sizes[index+1] += diff;
                 split.rebuild;
