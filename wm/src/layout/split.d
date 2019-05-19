@@ -148,8 +148,18 @@ class Split: Container {
     }
 
     WindowHandle[] stack(){
-        return children.to!(Tabs[]).map!(a => a.stack).join
-               ~ separators.map!(a => a.window).array;
+        if(clientActive < 0 || clientActive >= children.length)
+            return [];
+        WindowHandle[] stack;
+        stack ~= children[clientActive].to!Tabs.stack;
+        foreach(offset; 1..clientActive.max(children.length-clientActive)){
+            Log("ASDF %s %s %s %s".format(clientActive, children.length, offset, clientActive-offset.to!long));
+            if(clientActive-offset.to!long > 0)
+                stack ~= children[clientActive-offset].to!Tabs.stack;
+            if(clientActive+offset < children.length)
+                stack ~= children[clientActive+offset].to!Tabs.stack;
+        }
+        return stack ~ separators.map!(a => a.window).array;
     }
 
     void destroy(){
