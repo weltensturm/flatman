@@ -173,8 +173,11 @@ class CompositeClient: ws.wm.Window {
     }
 
     override void resized(int[2] size){
-        if(animation.fade.completion < 0.1 || a.override_redirect)
+        if(animation.fade.completion < 0.1 || a.override_redirect){
             animation.size = [size.x, size.y];
+            overviewAnimation.size.w.change(size.w);
+            overviewAnimation.size.h.change(size.h);
+        }
         "resize %s %s old %s".format(title, size, this.size).writeln;
         createPicture;
         this.size = size;
@@ -183,11 +186,13 @@ class CompositeClient: ws.wm.Window {
     override void moved(int[2] pos){
         if(pos.y >= manager.height && !a.override_redirect)
             pos.y -= manager.height;
-        if(pos == this.pos)
-            return;
         if(properties.workspace.value < 0 || animation.fade.completion < 0.1 || a.override_redirect){
             animation.pos = [pos.x, pos.y];
+            overviewAnimation.pos.x.replace(pos.x);
+            overviewAnimation.pos.y.replace(pos.y);
         }
+        if(pos == this.pos)
+            return;
         this.pos = pos;
     }
 
@@ -244,7 +249,7 @@ class ClientAnimation {
             new Animation(0, 0, duration/config.animationSpeed, &sinApproach),
             new Animation(0, 0, duration/config.animationSpeed, &sinApproach)
         ];
-        fade = new Animation(0, 0, duration/2/config.animationSpeed, &sinApproach);
+        fade = new Animation(0, 0, duration/config.animationSpeed, &sigmoid);
     }
 
 }

@@ -327,6 +327,8 @@ void onFocus(x11.X.Window window){
 
 
 void onFocusOut(x11.X.Window window){
+    if(currentFocus && currentFocus.win == window)
+        currentFocus = null;
     if(!find(window) && monitor.active){
         // TODO: this does nothing
         currentFocus = null;

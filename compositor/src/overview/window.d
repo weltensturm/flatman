@@ -59,7 +59,7 @@ class OverviewWindow: ws.wm.Window {
             if(properties.active.value != windowHit.windowHandle)
                 properties.active.request(windowHit.windowHandle, [2, CurrentTime, properties.active.value]);
         }else if(!pressed && button == Mouse.buttonLeft){
-            if(!dragging.dragging)
+            if(!dragging.dragging && windowHit)
                 overview.stop;
             dragging.dragging = false;
             dragging.window = null;
@@ -73,6 +73,7 @@ class OverviewWindow: ws.wm.Window {
             ev.xclient.data.l[1] = CurrentTime;
             XSendEvent(wm.displayHandle, windowHit.windowHandle, false, NoEventMask, &ev);
         }
+        overview.onMouseButton(button, pressed, x, y);
         super.onMouseButton(button, pressed, x, y);
     }
 
@@ -86,8 +87,8 @@ class OverviewWindow: ws.wm.Window {
                     auto tabs = w.window.properties.tabs.value.max(0);
                     if(tabs == 0 && (w.window.hidden || !w.window.picture))
                         continue;
-                    with(w.window.overviewAnimation){
-                        if(![x,y].inside(pos.to!(int[2]), size.to!(int[2]), manager.height))
+                    with(w.animation){
+                        if(![x,y].inside(pos.calculate.to!(int[2]), size.calculate.to!(int[2]), manager.height))
                             continue;
                     }
                     windowHit = w.window;
@@ -119,6 +120,7 @@ class OverviewWindow: ws.wm.Window {
         if(windowHit)
             properties.active.request(windowHit.windowHandle, [2, CurrentTime, properties.active.value]);
         +/
+        overview.onMouseMove(x, y);
         super.onMouseMove(x, y);
     }
 

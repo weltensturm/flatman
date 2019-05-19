@@ -27,7 +27,7 @@ import
 
 
 
-class OverviewDock {
+class OverviewDock: Widget {
 
     Overview.Monitor monitor;
     WorkspaceIndicator indicator;
@@ -40,8 +40,8 @@ class OverviewDock {
     this(Overview.Monitor monitor){
         writeln("new dock ", monitor);
         this.monitor = monitor;
-        indicator = new WorkspaceIndicator(IndicatorType.current);
-        indicatorEmpty = new WorkspaceIndicator(IndicatorType.empty);
+        indicator = addNew!WorkspaceIndicator(IndicatorType.current);
+        indicatorEmpty = addNew!WorkspaceIndicator(IndicatorType.empty);
         Events ~= this;
         updateWorkspaceCount;
     }
@@ -51,21 +51,21 @@ class OverviewDock {
         Events.forget(this);
     }
 
-    void move(int[2] pos){
+    override void move(int[2] pos){
         if(pos == this.pos)
             return;
         this.pos = pos;
         updateWorkspaceCount;
     }
 
-    void resize(int[2] size){
+    override void resize(int[2] size){
         if(size == this.size)
             return;
         this.size = size;
         updateWorkspaceCount;
     }
 
-    void damage(RootDamage damage){
+    override void damage(RootDamage damage){
         indicator.damage(damage);
         indicatorEmpty.damage(damage);
     }
@@ -73,11 +73,11 @@ class OverviewDock {
     @Tick
     void tick(){
         indicator.animation.approach(indicator.targetPos, indicator.targetSize);
-        indicator.move(indicator.animation.pos);
-        indicator.resize(indicator.animation.size);
+        indicator.move(indicator.animation.pos.calculate);
+        indicator.resize(indicator.animation.size.calculate);
         indicatorEmpty.animation.approach(indicatorEmpty.targetPos, indicatorEmpty.targetSize);
-        indicatorEmpty.move(indicatorEmpty.animation.pos);
-        indicatorEmpty.resize(indicatorEmpty.animation.size);
+        indicatorEmpty.move(indicatorEmpty.animation.pos.calculate);
+        indicatorEmpty.resize(indicatorEmpty.animation.size.calculate);
     }
 
     @OverviewState
@@ -102,7 +102,7 @@ class OverviewDock {
 
     @WindowProperty
     void onProperty(x11.X.Window window, Atom atom){
-        if(window != root)
+        if(window != .root)
             return;
         if(atom == Atoms._NET_NUMBER_OF_DESKTOPS)
             updateWorkspaceCount;
@@ -115,12 +115,14 @@ class OverviewDock {
     }
 
     void updateWorkspaceCount(){
-        auto count = root.props._NET_NUMBER_OF_DESKTOPS.get!long;
-        foreach(workspace; workspaces)
+        auto count = .root.props._NET_NUMBER_OF_DESKTOPS.get!long;
+        foreach(workspace; workspaces){
+            remove(workspace);
             workspace.destroy;
+        }
         workspaces = [];
         foreach(i; 0..count){
-            workspaces ~= new OverviewWorkspace(this, i.to!int);
+            workspaces ~= addNew!OverviewWorkspace(this, i.to!int);
         }
         updateWorkspaceSort;
     }
@@ -166,11 +168,16 @@ class OverviewDock {
     void updateWorkspaceIndicatorPosition(){
         foreach(ws; workspaces){
             if(ws.index == manager.properties.workspace.get){
+                /+
                 indicator.targetSize = [ws.size.h.to!int/2, ws.size.h.to!int/2];
                 indicator.targetPos = [
                         ws.pos.x + (ws.size.w/2 - indicator.targetSize.w/2).to!int,
                         ws.pos.y + (ws.size.h/2 - indicator.targetSize.h/2).to!int
                 ];
+                +/
+                indicator.index = ws.index;
+                indicator.targetSize = ws.size;
+                indicator.targetPos = ws.pos;
             }
         }
     }
@@ -179,6 +186,7 @@ class OverviewDock {
         foreach(i, ws; workspaces){
             if(i == 0){
                 // TODO: better empty workspace detection
+                indicatorEmpty.index = ws.index;
                 indicatorEmpty.targetSize = [ws.size.h.to!int/2, ws.size.h.to!int/2];
                 indicatorEmpty.targetPos = [
                         ws.pos.x + (ws.size.w/2 - indicatorEmpty.targetSize.w/2).to!int,
@@ -337,6 +345,12 @@ class OverviewWorkspace: Widget {
         }
     }
 
+    override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        if(!pressed){
+            manager.overview.window.properties.workspace.request([index, CurrentTime]);
+        }
+    }
+
 }
 
 
@@ -351,6 +365,8 @@ class WorkspaceIndicator: Widget {
     int[2] targetPos;
     int[2] targetSize;
     const IndicatorType type;
+
+    int index;
 
     OverviewAnimation animation;
 
@@ -372,13 +388,23 @@ class WorkspaceIndicator: Widget {
         enum border = 4;
         backend.setColor([1, 1, 1, state]);
         if(type == IndicatorType.current){
+            /+
             backend.rect([pos.x, pos.y], [border, size.h]);
             backend.rect([pos.x+size.w-border, pos.y], [border, size.h]);
             backend.rect([pos.x+border, pos.y], [size.w-border*2, border]);
             backend.rect([pos.x+border, pos.y+size.h-border], [size.w-border*2, border]);
+            +/
+            backend.setColor([1, 1, 1, 0.1*state]);
+            backend.rect(pos, size);
         }else{
             backend.rect([pos.x + border*2, pos.y + size.h/2 - border/2], [size.w-border*4, border]);
             backend.rect([pos.x + size.w/2 - border/2, pos.y + border*2], [border, size.h-border*4]);
+        }
+    }
+
+    override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        if(!pressed){
+            manager.overview.window.properties.workspace.request([index, CurrentTime]);
         }
     }
 
@@ -435,6 +461,24 @@ class Dock {
         this.state = state;
         foreach(dock; docks)
             dock.draw(backend, state);
+    }
+
+    void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        foreach(dock; docks){
+            if(dock.pos.x <= x && dock.pos.x+dock.size.w >= x
+                && dock.pos.y <= y && dock.pos.y+dock.size.h >= y){
+                dock.onMouseButton(button, pressed, x, y);
+            }
+        }
+    }
+
+    void onMouseMove(int x, int y){
+        foreach(dock; docks){
+            if(dock.pos.x <= x && dock.pos.x+dock.size.w >= x
+                && dock.pos.y <= y && dock.pos.y+dock.size.h >= y){
+                dock.onMouseMove(x, y);
+            }
+        }
     }
 
 }

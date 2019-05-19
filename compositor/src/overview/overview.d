@@ -89,8 +89,7 @@ class Overview {
             window.active = true;
             window.move([0, 0]);
             window.resize([manager.width, manager.height]);
-            //XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
-            // TODO: reenable and fix input not returning to active window
+            XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
 
             XGrabPointer(
                     wm.displayHandle,
@@ -195,7 +194,7 @@ class Overview {
                     if(i != client.properties.workspace.value)
                         continue;
                     auto w = new WinInfo(client);
-                    w.animation = new OverviewAnimation(client.pos, client.size);
+                    w.animation = client.overviewAnimation; //new OverviewAnimation(client.pos, client.size); // TODO: keep windows around so we don't have to use a "global" window attribute
                     ws.windows ~= w;
                 }
             }
@@ -230,8 +229,8 @@ class Overview {
                 w.targetAlpha = 1;
                 dock.calc(w);
                 if(resetPos){
-                    w.window.overviewAnimation.pos = w.targetPos.to!(double[]);
-                    w.window.overviewAnimation.size = w.targetSize.to!(double[]);
+                    w.animation.pos.replace(w.targetPos);
+                    w.animation.size.replace(w.targetSize);
                 }
             }
             foreach(i, w; sorted[0..split]){
@@ -325,7 +324,7 @@ class Overview {
                     if(i != client.properties.workspace.value)
                         continue;
                     auto w = new WinInfo(client);
-                    w.animation = new OverviewAnimation(client.pos, client.size);
+                    w.animation = client.overviewAnimation; //new OverviewAnimation(client.pos, client.size); // TODO: keep windows around so we don't have to use a "global" window attribute
                     ws.windows ~= w;
                 }
             }
@@ -393,8 +392,8 @@ class Overview {
                         w.targetSize = size;
                         dock.calc(w);
                         if(resetPos){
-                            w.window.overviewAnimation.pos = w.targetPos.to!(double[]);
-                            w.window.overviewAnimation.size = w.targetSize.to!(double[]);
+                            w.animation.pos.replace(w.targetPos);
+                            w.animation.size.replace(w.targetSize);
                         }
                     }
                     offsetX += width.to!int;
@@ -411,7 +410,6 @@ class Overview {
             window.hide;
             XUngrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle);
             XUngrabPointer(wm.displayHandle, CurrentTime);
-            //XSetInputFocus(wm.displayHandle, .root, RevertToPointerRoot, CurrentTime);
             window.active = false;
         }
         if(!visible){
@@ -424,7 +422,7 @@ class Overview {
         foreach(m; monitors){
 			foreach(ws; m.workspaces){
 				foreach(w; ws.windows){
-					w.window.overviewAnimation.approach(w.targetPos, w.targetSize);
+					w.animation.approach(w.targetPos, w.targetSize);
                     w.alpha = w.alpha.rip(w.targetAlpha, 1, 5, manager.frameTimer.dur/60.0*config.animationSpeed);
 				}
 			}
@@ -479,14 +477,15 @@ class Overview {
                 zoom = 1;
             }
             //alpha = alpha * (1 - (w.window.properties.workspace.value.to!int-manager.properties.workspace.value).abs.min(1).max(0));
-            scale = animate(scale, (client.overviewAnimation.size.w/size.w.to!double).min(client.overviewAnimation.size.h.to!double/size.h), zoom);
+            scale = animate(scale, (w.animation.size.w.calculate/size.w)
+                                    .min(w.animation.size.h.calculate/size.h), zoom);
             pos = [
-                animate(pos.x, client.overviewAnimation.pos.x, zoom).lround.to!int,
-                animate(pos.y, client.overviewAnimation.pos.y, zoom).lround.to!int
+                animate(pos.x, w.animation.pos.x.calculate, zoom).lround.to!int,
+                animate(pos.y, w.animation.pos.y.calculate, zoom).lround.to!int
             ];
             size = [
-                animate(size.w, client.overviewAnimation.size.w, zoom).lround.to!int,
-                animate(size.h, client.overviewAnimation.size.h, zoom).lround.to!int
+                animate(size.w, w.animation.size.w.calculate, zoom).lround.to!int,
+                animate(size.h, w.animation.size.h.calculate, zoom).lround.to!int
             ];
         }else{
             if(client.properties.overviewHide.value == 1){
@@ -564,12 +563,14 @@ class Overview {
 				return;
             double flop = client.hidden ? 1*alpha : state.sigmoid*alpha;
             int textHider;
-            if(!client.hidden){
-                textHider = -((1-state) * 30).lround.to!int;
-            }
+            //if(!client.hidden){
+                textHider = -((1-state).sigmoid * 30).lround.to!int;
+            //}
             backend.clip([pos.x, manager.height-pos.y], [size.w, 20]);
+            /+
             backend.setColor([0, 0, 0, 0.5*state.sigmoid*(client.hidden ? 0.5 : 1)]);
             backend.rect([pos.x, manager.height-pos.y], [size.w, 20]);
+            +/
             backend.setColor([flop,flop,flop,flop]);
             backend.text([pos.x+size.w/2, manager.height-pos.y+textHider+2], 20, client.title, 0.5);
             backend.noclip;
@@ -654,6 +655,14 @@ class Overview {
             }
         }
 		+/
+    }
+
+    void onMouseButton(Mouse.button button, bool pressed, int x, int y){
+        dock.onMouseButton(button, pressed, x, y);
+    }
+
+    void onMouseMove(int x, int y){
+        dock.onMouseMove(x, y);
     }
 
 }

@@ -186,6 +186,8 @@ void overview(bool activate){
 			doOverview = false;
 			root.replace(Atoms._FLATMAN_OVERVIEW, 0L);
 			Overview(false);
+            if(active)
+			    XSetInputFocus(dpy, active.orig, RevertToPointerRoot, CurrentTime);
 		}
 	}else if(activate && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
 		overviewStart = Clock.currTime-overviewTime.to!long.msecs;

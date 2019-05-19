@@ -79,6 +79,20 @@ double sinApproach(double a){
 }
 
 
+double[N] calculate(size_t N)(Animation[N] animation){
+    double[N] result;
+    foreach(i; 0..N)
+        result[i] = animation[i].calculate;
+    return result;
+}
+
+
+void replace(size_t N, T)(Animation[N] animation, T[N] target){
+    foreach(i; 0..N)
+        animation[i].replace(target[i]);
+}
+
+
 struct Profile {
 
     private struct Perf {
