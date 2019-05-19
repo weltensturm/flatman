@@ -201,11 +201,11 @@ class Client: Base {
     override void resize(int[2] size){
         if(this.size == size)
             return;
-        "%s resize %s".format(this, size).log;
         if(isFloating && !isfullscreen)
             sizeFloating = size;
         size.w = size.w.max(1).max(sizeMin.w).min(sizeMax.w);
         size.h = size.h.max(1).max(sizeMin.h).min(sizeMax.h);
+        "%s resize %s".format(this, size).log;
         this.size = size;
         XResizeWindow(dpy, win, size.w, size.h);
         if(frame){
@@ -417,18 +417,22 @@ class Client: Base {
     void setFullscreen(bool fullscreen){
         "%s fullscreen=%s".format(this, fullscreen).log;
         isfullscreen = fullscreen;
+        updateFullscreen;
+        this.monitor.update(this);
+        if(this == flatman.active)
+            focus(this);
+        restack;
+    }
+
+    void updateFullscreen(){
         auto proplist = getPropList(Atoms._NET_WM_STATE);
-        if(fullscreen){
+        if(isfullscreen){
             if(!proplist.canFind(Atoms._NET_WM_STATE_FULLSCREEN))
                 append(win, Atoms._NET_WM_STATE, [Atoms._NET_WM_STATE_FULLSCREEN]);
         }else{
             if(proplist.canFind(Atoms._NET_WM_STATE_FULLSCREEN))
                 replace(win, Atoms._NET_WM_STATE, proplist.without(Atoms._NET_WM_STATE_FULLSCREEN));
         }
-        this.monitor.update(this);
-        if(this == flatman.active)
-            focus(this);
-        restack;
     }
 
     void setState(long state){
