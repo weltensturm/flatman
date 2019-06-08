@@ -87,12 +87,20 @@ class Frame: Base {
 		if(button == Mouse.buttonLeft){
 			.drag.window(button, client, client.pos.a - cursorPos - pos);
 		}else if(button == Mouse.buttonRight){
-			dragStart = cursorPos;
+			auto cursorRoot = [pos.x + cursorPos.x, pos.y + cursorPos.y];
+			dragStart = cursorRoot;
 			auto startPos = client.pos;
-			auto anchor = client.pos.a + [0, client.size.h] + dragStart.a - pos;
+			auto startSize = client.size;
 			.drag.drag(button, (int[2] pos){
-				auto targetSize = pos.a-anchor;
-				client.moveResize(startPos, targetSize);
+				int[2] targetSize = [
+					startSize.w - (dragStart.x - pos.x),
+					startSize.h + (dragStart.y - pos.y)
+				];
+				int[2] targetPos = [
+					startPos.x,
+					startPos.y - (dragStart.y - pos.y)
+				];
+				client.moveResize(targetPos, targetSize);
 			});
 		}
 	}
