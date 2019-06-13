@@ -125,8 +125,6 @@ class KeybindSystem {
 	@WindowMouseButton
 	void onButton(Window window, bool _, int mask, Mouse.button button){
 		if(auto c = find(window)){
-			if(c.isFloating && !c.global)
-				c.parent.to!Floating.raise(c);
 			focus(c);
 			foreach(bind; buttons)
 				if(bind.button == button && cleanMask(bind.mask) == cleanMask(mask))
