@@ -9,6 +9,7 @@ import
     std.math,
 
     x11.X,
+    x11.Xlib,
     x11.Xatom,
 
     ws.gui.base,
@@ -16,6 +17,7 @@ import
 
     common.atoms,
     common.event,
+    common.xevents,
 
     composite.events,
     composite.util,
@@ -73,11 +75,11 @@ class OverviewDock: Widget {
     @Tick
     void tick(){
         indicator.animation.approach(indicator.targetPos, indicator.targetSize);
-        indicator.move(indicator.animation.pos.calculate);
-        indicator.resize(indicator.animation.size.calculate);
+        indicator.move(indicator.animation.pos);
+        indicator.resize(indicator.animation.size);
         indicatorEmpty.animation.approach(indicatorEmpty.targetPos, indicatorEmpty.targetSize);
-        indicatorEmpty.move(indicatorEmpty.animation.pos.calculate);
-        indicatorEmpty.resize(indicatorEmpty.animation.size.calculate);
+        indicatorEmpty.move(indicatorEmpty.animation.pos);
+        indicatorEmpty.resize(indicatorEmpty.animation.size);
     }
 
     @OverviewState
@@ -100,17 +102,21 @@ class OverviewDock: Widget {
             ws.draw(backend, state);
     }
 
+    void resized(int[2] size){
+
+    }
+
     @WindowProperty
-    void onProperty(x11.X.Window window, Atom atom){
+    void onProperty(x11.X.Window window, XPropertyEvent* e){
         if(window != .root)
             return;
-        if(atom == Atoms._NET_NUMBER_OF_DESKTOPS)
+        if(e.atom == Atoms._NET_NUMBER_OF_DESKTOPS)
             updateWorkspaceCount;
-        if(atom == Atoms._FLATMAN_WORKSPACE_HISTORY)
+        if(e.atom == Atoms._FLATMAN_WORKSPACE_HISTORY)
             updateWorkspaceSort;
-        if(atom == Atoms._FLATMAN_WORKSPACE_EMPTY)
+        if(e.atom == Atoms._FLATMAN_WORKSPACE_EMPTY)
             updateWorkspaceSort;
-        if(atom == Atoms._NET_CURRENT_DESKTOP)
+        if(e.atom == Atoms._NET_CURRENT_DESKTOP)
             updateCurrentWorkspace;
     }
 
@@ -287,8 +293,8 @@ class OverviewWorkspace: Widget {
     }
 
     @WindowProperty
-    void onProperty(x11.X.Window window, Atom atom){
-        if(window == .root && atom == Atoms._NET_DESKTOP_NAMES)
+    void onProperty(x11.X.Window window, XPropertyEvent* e){
+        if(window == .root && e.atom == Atoms._NET_DESKTOP_NAMES)
             updateWorkspaceName;
     }
 
@@ -347,7 +353,7 @@ class OverviewWorkspace: Widget {
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
         if(!pressed){
-            manager.overview.window.properties.workspace.request([index, CurrentTime]);
+            manager.properties.workspace.request([index, CurrentTime]);
         }
     }
 
@@ -368,12 +374,12 @@ class WorkspaceIndicator: Widget {
 
     int index;
 
-    OverviewAnimation animation;
+    RectAnimation animation;
 
     double state;
 
     this(IndicatorType type){
-        animation = new OverviewAnimation(pos, size);
+        animation = new RectAnimation(pos, size);
         this.type = type;
     }
 
@@ -404,7 +410,7 @@ class WorkspaceIndicator: Widget {
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
         if(!pressed){
-            manager.overview.window.properties.workspace.request([index, CurrentTime]);
+            manager.properties.workspace.request([index, CurrentTime]);
         }
     }
 
@@ -442,7 +448,7 @@ class Dock {
             auto y = manager.height - m.pos.y - m.size.h;
             auto dock = docks[i];
             dock.move([m.pos.x, y]);
-            dock.resize([m.size.w, m.size.h/8]);
+            dock.resize([m.size.w, m.size.h/8.max(m.workspaces.length.to!int)]);
         }
     }
 

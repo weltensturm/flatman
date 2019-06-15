@@ -3,6 +3,8 @@ module composite.main;
 import composite.events;
 import composite;
 
+import common.event, common.xevents, common.log;
+
 
 
 __gshared:
@@ -35,6 +37,8 @@ void main(){
 
 	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
 
+    Log.setLevel(Log.Level.info);
+
     try {
         signal(SIGINT, &stop);
         XSetErrorHandler(&xerror);
@@ -46,7 +50,7 @@ void main(){
             Profile.reset;
             manager.clear;
             with(Profile("events")){
-                wm.processEvents;
+                wm.processEvents((e) => handleEvent(e));
             }
             if(manager.restack){
                 with(Profile("restack")){
@@ -60,8 +64,8 @@ void main(){
             with(Profile("sleep")){
                 auto frame = now;
                 frameTimes ~= frame - lastFrame;
-                if(frame-lastFrame < 1/120.0)
-                    Thread.sleep(((1/120.0 - (frame-lastFrame))*1000).lround.msecs);
+                if(frame-lastFrame < 1/144.0)
+                    Thread.sleep(((1/144.0 - (frame-lastFrame))*1000).lround.msecs);
                 lastFrame = frame;
             }
         }
@@ -69,6 +73,7 @@ void main(){
         writeln(t);
     }
     manager.cleanup;
+    Log.shutdown;
 }
 
 string lastXerror;
@@ -184,20 +189,12 @@ class CompositeManager {
         properties.window(.root);
 
         wm.on([
-            CreateNotify: (XEvent* e) => evCreate(e.xcreatewindow.window),
-            DestroyNotify: (XEvent* e) => evDestroy(e.xdestroywindow.window),
-            ConfigureNotify: (XEvent* e) => evConfigure(e),
-            MapNotify: (XEvent* e) => evMap(&e.xmap),
-            UnmapNotify: (XEvent* e) => evUnmap(&e.xunmap),
-            PropertyNotify: (XEvent* e) => evProperty(&e.xproperty),
             ReparentNotify: (XEvent* e) => evReparent(&e.xreparent)
         ]);
 
-        composite.events.listen;
-
         "looking for windows".writeln;
         foreach(w; queryTree)
-            evCreate(w);
+            evCreate(false, w);
 
         //setupVerticalSync;
         overview = new Overview(this);
@@ -220,6 +217,8 @@ class CompositeManager {
 
         updateWallpaper;
         updateScreens;
+
+        Events ~= this;
     }
 
     void clear(){
@@ -246,7 +245,8 @@ class CompositeManager {
         return null;
     }
 
-    void evCreate(x11.X.Window window){
+    @WindowCreate
+    void evCreate(bool _, x11.X.Window window){
         if(find(window))
             return;
         XWindowAttributes wa;
@@ -260,6 +260,7 @@ class CompositeManager {
         clients ~= client;
     }
 
+    @WindowDestroy
     void evDestroy(x11.X.Window window){
         if(auto c = find(window)){
             if(!c.destroyed){
@@ -275,39 +276,50 @@ class CompositeManager {
         if(e.parent != .root)
             evDestroy(e.window);
         else
-            evCreate(e.window);
+            evCreate(false, e.window);
     }
 
-    void evConfigure(XEvent* e){
-        if(e.xconfigure.window == .root){
+    @WindowConfigure
+    void evConfigure(WindowHandle window, XConfigureEvent* e){
+        if(window == .root){
             updateScreens,
-            backend.resize([e.xconfigure.width, e.xconfigure.height]);
-            width = e.xconfigure.width;
-            height = e.xconfigure.height;
-        }else if(auto c = find(e.xconfigure.window)){
-            c.processEvent(e);
-            restack = true;
+            backend.resize([e.width, e.height]);
+            width = e.width;
+            height = e.height;
         }
     }
 
-    void evMap(XMapEvent* e){
-        if(auto c = find(e.window))
+    @WindowMap
+    void evMap(WindowHandle window){
+        if(auto c = find(window))
             c.onShow;
         else
-            evCreate(e.window);
+            evCreate(false, window);
     }
 
-    void evUnmap(XUnmapEvent* e){
-        if(auto c = find(e.window))
+    @WindowUnmap
+    void evUnmap(WindowHandle window){
+        if(auto c = find(window))
             c.onHide;
     }
 
-    void evProperty(XPropertyEvent* e){
-        if(e.window == root){
+    @WindowProperty
+    void evProperty(WindowHandle window, XPropertyEvent* e){
+        if(window == root){
             properties.update(e);
         }else{
-            if(auto c = find(e.window))
+            if(auto c = find(window))
                 c.properties.update(e);
+        }
+    }
+
+    @XorgEvent
+    void onEvent(XEvent* e){
+        if(e.type == ConfigureNotify){
+            if(auto c = find(e.xconfigure.window)){
+                c.processEvent(e);
+                restack = true;
+            }
         }
     }
 
@@ -351,6 +363,7 @@ class CompositeManager {
     }
 
     void updateStack(){
+        // TODO: keep destroyed in-place instead of drawing above all others
         auto destroyedOld = destroyed;
         destroyed = [];
         foreach(c; clients ~ destroyedOld){
@@ -430,7 +443,7 @@ class CompositeManager {
     void animate(CompositeClient c){
         c.animScale = 1;//alpha/4+0.75;
         c.animAlpha = c.animation.fade.calculate;
-        if(c.ghost && c.animation.size != c.size){
+        if(c.ghost && c.animation.rect.size != c.size){
             auto transition = ((c.animSize.w - c.ghost.size.w.to!double)/(c.size.x - c.ghost.size.w.to!double)
                             .min((c.animSize.h - c.ghost.size.h.to!double)/(c.size.h - c.ghost.size.h.to!double))
                             ).min(1).max(0);
@@ -439,16 +452,16 @@ class CompositeManager {
             c.animGhostAlpha = 0;
         }
         c.animPos = [
-            c.animation.pos.x.lround.to!int,
-            c.animation.pos.y.lround.to!int
+            c.animation.rect.pos.x.lround.to!int,
+            c.animation.rect.pos.y.lround.to!int
         ];
         c.animOffset = [
             c.animation.renderOffset.x.calculate.lround.to!int,
             c.animation.renderOffset.y.calculate.lround.to!int
         ];
         c.animSize = [
-            c.animation.size.x.lround.to!int,
-            c.animation.size.y.lround.to!int
+            c.animation.rect.size.x.lround.to!int,
+            c.animation.rect.size.y.lround.to!int
         ];
         overview.calcWindow(c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha, c.animGhostAlpha);
         if(c.animPos != c.oldPos || c.animSize != c.oldSize){
@@ -483,10 +496,11 @@ class CompositeManager {
 
     void draw(){
         frameTimer.tick;
+        double statePerSecond = 1/0.25*config.animationSpeed;
         if(overview.doOverview)
-            overview.state = (overview.state+frameTimer.dur*0.06*config.animationSpeed).min(1);
+            overview.state = (overview.state+frameTimer.dur*statePerSecond).min(1);
         else
-            overview.state = (overview.state-frameTimer.dur*0.06*config.animationSpeed).max(0);
+            overview.state = (overview.state-frameTimer.dur*statePerSecond).max(0);
         OverviewState(overview.state);
 
         Animation.update;
@@ -507,12 +521,7 @@ class CompositeManager {
                     }
                     if(c.a.override_redirect && !c.picture || (c.animation.fade.calculate <= 0.0001 && c.floating))
                         continue;
-                    double[2] targetP;
-                    double[2] targetS;
-                    targetP = [c.pos.x.to!double, c.pos.y.to!double];
-                    targetS = [c.size.w.to!double, c.size.h.to!double];
-                    c.animation.pos.rip(targetP, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
-                    c.animation.size.rip(targetS, 1, 100, frameTimer.dur/60.0*config.animationSpeed);
+                    c.animation.rect.approach(c.pos, c.size);
                 }
             }
 
@@ -595,9 +604,11 @@ void draw(Backend backend, CompositeClient c){
 
         double transition = 1;
 
-        if(c.ghost && c.animation.size != c.size){
+        if(c.ghost && c.animation.rect.size != c.size){
             auto distanceVector = c.size.a - c.ghost.size;
-            auto transitionVec = c.animSize.a - c.ghost.size;
+            auto transitionVec = [c.animation.rect.size.w.lround.to!int,
+                                  c.animation.rect.size.h.lround.to!int].a
+                                 - c.ghost.size;
 
             double length(Point vec){
                 return asqrt(vec[].map!"a^^2.0".sum);
@@ -607,12 +618,14 @@ void draw(Backend backend, CompositeClient c){
                 transition = length(transitionVec) / length(distanceVector);
                 transition = transition.sigmoid;
             }else{
-                transition = 0;
+                transition = 1;
             }
-            auto w = c.animSize.w.to!double/c.ghost.size.w;
-            auto h = c.animSize.h.to!double/c.ghost.size.h;
-            c.ghost.scale([w, h]);
-            backend.render(c.ghost, c.ghost.hasAlpha, c.ghost.hasAlpha ? (1-transition)*c.animAlpha : 1, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+            if(transition < 1){
+                auto w = c.animSize.w.to!double/c.ghost.size.w;
+                auto h = c.animSize.h.to!double/c.ghost.size.h;
+                c.ghost.scale([w, h]);
+                backend.render(c.ghost, c.ghost.hasAlpha, c.ghost.hasAlpha ? (1-transition)*c.animAlpha : 1, c.animOffset.to!(int[2]), c.animPos, c.animSize);
+            }
         }
 
         if(c.picture){

@@ -159,9 +159,11 @@ class CompositeClient: ws.wm.Window {
         }
         if(!(a.map_state & IsViewable))
             return;
-        if(animation.size == size && !stale){
+        if(animation.rect.size == size && !stale){
             // don't swap ghost mid-animation
             ghost = picture;
+        }else{
+            writeln("noswap ", animation.rect.size, ' ', size, ' ', stale);
         }
         picture = new ClientFramebuffer(windowHandle, a);
         stale = true;
@@ -174,7 +176,7 @@ class CompositeClient: ws.wm.Window {
 
     override void resized(int[2] size){
         if(animation.fade.completion < 0.1 || a.override_redirect){
-            animation.size = [size.x, size.y];
+            animation.rect.size = [size.x, size.y];
             overviewAnimation.size.w.change(size.w);
             overviewAnimation.size.h.change(size.h);
         }
@@ -187,7 +189,7 @@ class CompositeClient: ws.wm.Window {
         if(pos.y >= manager.height && !a.override_redirect)
             pos.y -= manager.height;
         if(properties.workspace.value < 0 || animation.fade.completion < 0.1 || a.override_redirect){
-            animation.pos = [pos.x, pos.y];
+            animation.rect.pos = [pos.x, pos.y];
             overviewAnimation.pos.x.replace(pos.x);
             overviewAnimation.pos.y.replace(pos.y);
         }
@@ -216,8 +218,8 @@ class CompositeClient: ws.wm.Window {
         "onShow %s".format(title).writeln;
         createPicture;
         animation.fade.change(1);
-        animation.pos = [pos.x, pos.y];
-        animation.size = [size.w, size.h];
+        animation.rect.pos = [pos.x, pos.y];
+        animation.rect.size = [size.w, size.h];
     }
 
     override void onHide(){
@@ -235,16 +237,14 @@ class CompositeClient: ws.wm.Window {
 
 class ClientAnimation {
 
-    double[2] pos;
-    double[2] size;
+    RectAnimation rect;
     Animation[2] renderOffset;
     Animation fade;
     Animation scale;
 
     this(int[2] pos, int[2] size){
         enum duration = .3;
-        this.pos = [pos.x, pos.y];
-        this.size = [size.w, size.h];
+        rect = new RectAnimation(pos, size);
         this.renderOffset = [
             new Animation(0, 0, duration/config.animationSpeed, &sinApproach),
             new Animation(0, 0, duration/config.animationSpeed, &sinApproach)

@@ -13,6 +13,7 @@ import
     common.event;
 
 
+alias XorgEvent              = Event!("XorgEvent", void function(XEvent*));
 alias WindowMouseButton      = Event!("WindowMouseButton", void function(WindowHandle, bool, Mouse.button),
                                                            void function(WindowHandle, bool, int, Mouse.button));
 alias WindowKey              = Event!("WindowKey", void function(WindowHandle, bool, Keyboard.key),
@@ -41,6 +42,7 @@ alias KeyboardMapping        = Event!("KeyboardMapping", void function(XMappingE
 
 
 void handleEvent(XEvent* e){
+    XorgEvent(e);
     switch(e.type){
         case ButtonPress:
             WindowMouseButton(e.xbutton.window, true, e.xbutton.button);
@@ -70,7 +72,8 @@ void handleEvent(XEvent* e){
             break;
 
         case CreateNotify:
-            WindowCreate(e.xcreatewindow.override_redirect > 0, e.xcreatewindow.window);
+            if(e.xcreatewindow.parent == XDefaultRootWindow(wm.displayHandle))
+                WindowCreate(e.xcreatewindow.override_redirect > 0, e.xcreatewindow.window);
             break;
         case DestroyNotify:
             WindowDestroy(e.xdestroywindow.window);

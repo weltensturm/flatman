@@ -10,7 +10,7 @@ class OverviewAnimation {
     Animation[2] size;
     Animation[2] pos;
     this(int[2] pos, int[2] size){
-    	enum duration = 0.2;
+    	enum duration = 0.25;
     	this.pos = [new Animation(pos.x, pos.x, duration/config.animationSpeed, &sigmoid),
     			    new Animation(pos.y, pos.y, duration/config.animationSpeed, &sigmoid)];
     	this.size = [new Animation(size.w, size.w, duration/config.animationSpeed, &sigmoid),
@@ -28,6 +28,33 @@ class OverviewAnimation {
     }
 }
 
+
+class RectAnimation {
+    double[2] size;
+    double[2] pos;
+    this(int[2] pos, int[2] size){
+        this.pos = pos.to!(double[]);
+        this.size = size.to!(double[]);
+    }
+    void approach(int[2] pos, int[2] size){
+        auto frt = manager.frameTimer.dur*config.animationSpeed;
+		double distancePos = sqrt((pos.x-this.pos.x)^^2 + (pos.y-this.pos.y)^^2);
+		double distanceSize = sqrt((size.w - this.size.w)^^2 + (size.h - this.size.h)^^2);
+		double ratioP = 1;
+		double ratioS = 1;
+		if(distancePos > distanceSize){
+			ratioS = distancePos.max(1)/distanceSize.max(1);
+		}else{
+			ratioP = distanceSize.max(1)/distancePos.max(1);
+		}
+		double[2] posScaled = [this.pos.x * ratioP, this.pos.y * ratioP];
+		double[2] sizeScaled = [this.size.w * ratioS, this.size.h * ratioS];
+        posScaled.rip([pos.x * ratioP, pos.y * ratioP], 1, 100, frt);
+        sizeScaled.rip([size.w * ratioS, size.h * ratioS], 1, 100, frt);
+		this.pos = [posScaled.x / ratioP, posScaled.y / ratioP];
+		this.size = [sizeScaled.w / ratioS, sizeScaled.h / ratioS];
+    }
+}
 
 
 class Animation {

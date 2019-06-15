@@ -5,7 +5,6 @@ import composite;
 
 class OverviewWindow: ws.wm.Window {
 
-    bool canSwitchWorkspace = true;
     Overview overview;
     CompositeClient target;
     bool active;
@@ -21,8 +20,6 @@ class OverviewWindow: ws.wm.Window {
     Dragging dragging;
 
     Properties!(
-        "workspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false,
-        "workspaces", "_NET_NUMBER_OF_DESKTOPS", XA_CARDINAL, false,
         "active", "_NET_ACTIVE_WINDOW", XA_WINDOW, false
     ) properties;
 
@@ -36,9 +33,6 @@ class OverviewWindow: ws.wm.Window {
             PropertyNotify: (XEvent* e) => properties.update(&e.xproperty)
         ]);
         properties.window(.root);
-        properties.workspace ~= (long){
-            canSwitchWorkspace = true;
-        };
         properties.update;
         draw.setFont("Roboto", 10);
     }
@@ -46,13 +40,7 @@ class OverviewWindow: ws.wm.Window {
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
         onMouseMove(x, y);
         writeln(button, ' ', pressed);
-        if(pressed && (button == Mouse.wheelDown || button == Mouse.wheelUp)){
-            auto selectedWorkspace = properties.workspace.value + (button == Mouse.wheelDown ? 1 : -1);
-            if(canSwitchWorkspace && selectedWorkspace >= 0 && selectedWorkspace < properties.workspaces.value){
-                canSwitchWorkspace = false;
-				properties.workspace.request([selectedWorkspace, CurrentTime]);
-            }
-        }else if(pressed && button == Mouse.buttonLeft && windowHit){
+        if(pressed && button == Mouse.buttonLeft && windowHit){
             dragging.pressed = true;
             dragging.window = windowHit;
             dragging.start = [x,y];
