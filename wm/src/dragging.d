@@ -7,12 +7,15 @@ import
     x11.X,
     x11.Xlib,
     ws.gui.base,
+
     common.event,
     common.log,
     common.xevents,
+
     flatman.util,
     flatman.flatman,
     flatman.client,
+    flatman.manage,
     flatman.events;
 
 
@@ -27,6 +30,7 @@ class DragSystem {
         int[2] cursorPos;
         void delegate(int[2]) dragDg;
         void delegate() dropDg;
+        bool mouseStale;
     }
 
     this(){
@@ -39,7 +43,7 @@ class DragSystem {
 
     @Tick
     void update(){
-        if(dragDg){
+        if(dragDg && !mouseStale){
             dragDg(cursorPos);
         }
     }
@@ -47,6 +51,7 @@ class DragSystem {
     @MouseMove
     void mouseMove(int[2] pos){
         cursorPos = pos;
+        mouseStale = false;
     }
 
     @(WindowMouseButton[AnyValue])
@@ -58,62 +63,76 @@ class DragSystem {
     void window(Mouse.button button, Client client, int[2] offset){
 
         auto width = client.size.w;
+        mouseStale = true;
 
         "start drag %s".format(client).log;
+
+        int[2] lastCursorPos;
 
         drag(button, (int[2] pos){
             with(Log("drag")){
                 if(!clients.canFind(client))
                     return;
 
+                // TODO: add window to closest container
+
                 auto x = pos.x;
                 auto y = pos.y;
 
+                bool allowSnap =
+                        (lastCursorPos.x-x).abs < 10
+                        && (lastCursorPos.y-y).abs < 10;
+
                 flatman.Monitor target;
-                if((target = findMonitor(pos)) != monitor && monitor){
-                    /+
-                    if(monitor && monitor.active)
-                        monitor.active.unfocus(true);
+                if((target = findMonitor(pos)) != monitor && target){
                     monitor = target;
-                    if(monitor.active)
-                        monitor.active.focus;
-                    +/
-                    monitor = target;
-                    //focus(null);
                 }
 
                 auto current = findMonitor(client);
-                if(current != target){
-                    current.remove(client);
-                    target.add(client, target.workspaceActive);
-                }
-
+                
                 auto snapBorder = 20;
 
-                if((y <= monitor.pos.y+snapBorder) == client.isFloating
+                auto xt = offset.x * client.size.w / width;
+
+                bool toggle =
+                        (y <= monitor.pos.y+snapBorder) == client.isFloating
                         && x > monitor.pos.x+snapBorder
-                        && x < monitor.pos.x+monitor.size.w-snapBorder)
+                        && x < monitor.pos.x+monitor.size.w-snapBorder;
+
+                if(toggle){
+                    if(!client.isFloating)
+                        client.posFloating = [x, y].a + [xt, offset.y];
                     client.togglefloating;
+                    restack;
+                }
 
                 if(client.isFloating){
-                    if(x <= monitor.pos.x+snapBorder && x >= monitor.pos.x){
+                    if(allowSnap && x <= monitor.pos.x+snapBorder && x >= monitor.pos.x){
                         if(client.isFloating){
-                            monitor.remove(client);
+                            current.remove(client);
                             client.isFloating = false;
                             monitor.workspace.split.add(client, -1);
+                            monitor.update(client);
+                            focus(client);
+                            restack;
                         }
                         return;
-                    }else if(x >= monitor.pos.x+monitor.size.w-snapBorder && x <= monitor.pos.x+monitor.size.w){
+                    }else if(allowSnap && x >= monitor.pos.x+monitor.size.w-snapBorder && x <= monitor.pos.x+monitor.size.w){
                         if(client.isFloating){
-                            monitor.remove(client);
+                            current.remove(client);
                             client.isFloating = false;
                             monitor.workspace.split.add(client, monitor.workspace.split.clients.length);
+                            monitor.update(client);
+                            focus(client);
+                            restack;
                         }
                         return;
                     }
-                    auto xt = offset.x * client.size.w / width;
-                    client.moveResize([x, y].a + [xt, offset.y], client.sizeFloating);
+                    client.move([x, y].a + [xt, offset.y]);
                 }
+
+                lastCursorPos = pos;
+
             }
         });
 
