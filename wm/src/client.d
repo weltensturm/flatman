@@ -177,7 +177,7 @@ class Client: Base {
     void onConfigure(XConfigureEvent* e){
         if(isFloating || global){
             auto current = findMonitor(this);
-            auto target = findMonitor([e.x, e.y], [e.width, e.height]);
+            auto target = findMonitor([e.x, e.y - (parent && parent.hidden ? rootSize.h : 0)], [e.width, e.height]);
             if(current != target){
                 current.remove(this);
                 target.add(this, current.workspaceActive);
