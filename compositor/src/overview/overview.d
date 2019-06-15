@@ -1,12 +1,15 @@
 module composite.overview.overview;
 
 import
+    std.range,
+
+    common.event,
+    common.log,
+
     composite,
+    composite.events,
     composite.overview.window,
     composite.overview.dock;
-
-import std.range;
-
 
 
 bool nodraw(CompositeClient client){
@@ -82,34 +85,24 @@ class Overview {
             | FocusChangeMask | EnterWindowMask | LeaveWindowMask;
 
         if(now){
-            resetPos = true;
-			prefill;
-            doOverview = true;
-            window.show;
-            window.active = true;
-            window.move([0, 0]);
-            window.resize([manager.width, manager.height]);
-            XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
+            with(Log("overview.start")){
+                resetPos = true;
+                prefill;
+                doOverview = true;
+                window.show;
+                window.active = true;
+                window.move([0, 0]);
+                window.resize([manager.width, manager.height]);
+                XSync(wm.displayHandle, False);
+                XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
+                XRaiseWindow(wm.displayHandle, window.windowHandle);
 
-            XGrabPointer(
-                    wm.displayHandle,
-                    window.windowHandle,
-                    True,
-                    GRAB_MASK,
-                    GrabModeAsync,
-                    GrabModeAsync,
-                    None,
-                    None,
-                    CurrentTime
-            );
-            XGrabButton(wm.displayHandle, AnyButton, AnyModifier, window.windowHandle, False,
-                        ButtonPressMask | ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None);
-
-            cleanup = true;
-            zoomList = [];
-            foreach(c; manager.clients ~ manager.destroyed){
-                if(!c.hidden)
-                    zoomList ~= c;
+                cleanup = true;
+                zoomList = [];
+                foreach(c; manager.clients ~ manager.destroyed){
+                    if(!c.hidden)
+                        zoomList ~= c;
+                }
             }
         }else{
             properties.overview.request([2, 1, CurrentTime]);
@@ -118,11 +111,13 @@ class Overview {
 
     void stop(bool now=false){
         if(now){
-            doOverview = false;
-            zoomList = [];
-            foreach(c; manager.clients ~ manager.destroyed){
-                if(!c.hidden)
-                    zoomList ~= c;
+            with(Log("overview.stop")){
+                doOverview = false;
+                zoomList = [];
+                foreach(c; manager.clients ~ manager.destroyed){
+                    if(!c.hidden)
+                        zoomList ~= c;
+                }
             }
         }else{
             properties.overview.request([2, 0, CurrentTime]);

@@ -64,7 +64,7 @@ void spawnCommand(string command){
 
 void registerFunctions(){
 	register("exec", &spawnCommand);
-	register("focus", &focus);
+	register("focus", &focusCmd);
 	register("resize", &resize);
 	register("move", &move);
 	register("toggle", &toggle);
@@ -81,7 +81,7 @@ void registerFunctions(){
 void workspaceHistory(string){}
 
 
-void focus(string what, string dir){
+void focusCmd(string what, string dir){
 	if(what == "tab")
 		focusTab(dir);
 	else if(what == "dir")
@@ -186,8 +186,10 @@ void overview(bool activate){
 			doOverview = false;
 			root.replace(Atoms._FLATMAN_OVERVIEW, 0L);
 			Overview(false);
-            if(active)
-			    XSetInputFocus(dpy, active.orig, RevertToPointerRoot, CurrentTime);
+			if(active){
+				currentFocus = null;
+				focus(active);
+			}
 		}
 	}else if(activate && overviewStart > Clock.currTime-overviewTime.to!long.msecs)
 		overviewStart = Clock.currTime-overviewTime.to!long.msecs;
