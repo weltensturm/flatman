@@ -573,8 +573,7 @@ class Client: Base {
                               &type, &format, &count, &extra, cast(ubyte**)&p) != 0)
             return;
         if(xicon)
-            xicon.destroy(dpy);
-        xicon = null;
+            destroy(xicon);
         if(p){
             long* data = cast(long*)p;
             long start = 0;

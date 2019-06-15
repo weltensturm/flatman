@@ -453,6 +453,8 @@ class AudioPanel: ws.wm.Window {
 				CurrentTime
 		);
 		super.onShow;
+		XSync(wm.displayHandle, False);
+		XRaiseWindow(wm.displayHandle, windowHandle);
 	}
 
 	override void onHide(){

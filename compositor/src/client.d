@@ -4,6 +4,9 @@ module composite.client;
 import composite;
 
 
+import common.log;
+
+
 class ClientFramebuffer {
 
     Picture picture;
@@ -215,16 +218,18 @@ class CompositeClient: ws.wm.Window {
 
     override void onShow(){
         hidden = false;
-        "onShow %s".format(title).writeln;
-        createPicture;
-        animation.fade.change(1);
-        animation.rect.pos = [pos.x, pos.y];
-        animation.rect.size = [size.w, size.h];
+        with(Log(this.to!string ~ " onShow")){
+            "onShow %s".format(title).writeln;
+            createPicture;
+            animation.fade.change(1);
+            animation.rect.pos = [pos.x, pos.y];
+            animation.rect.size = [size.w, size.h];
+        }
     }
 
     override void onHide(){
         hidden = true;
-        "onHide %s".format(title).writeln;
+        Log(this.to!string ~ " onHide");
         animation.fade.change(0);
     }
 

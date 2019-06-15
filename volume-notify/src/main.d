@@ -7,6 +7,7 @@ import
 	std.datetime,
 	std.algorithm,
 	std.stdio,
+    x11.Xlib,
 	ws.math,
 	ws.wm,
     common.screens,
@@ -28,6 +29,8 @@ class NotifyWindow: Window {
 
     override void show(){
         super.show;
+        XSync(wm.displayHandle, false);
+        XRaiseWindow(wm.displayHandle, windowHandle);
         auto screen = screens(wm.displayHandle)[0];
         move([screen.x+50, screen.y+50+40]);
     }
