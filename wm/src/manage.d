@@ -79,7 +79,7 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 	if(find(w))
 		return;
 	with(Log(Log.RED ~ "manage" ~ Log.DEFAULT)){
-		XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|KeyReleaseMask|KeyPressMask);
+		XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask);
 		auto c = new Client(w);
 		auto monitor = findMonitor(c.pos, c.size);
 		if(!monitor || !scan)
@@ -185,7 +185,7 @@ void killClient(Client client=null){
 		client = monitor.active;
 	}
 	if(!client.sentDelete){
-		client.sendEvent(wm.delete_);
+		client.sendEvent(Atoms.WM_DELETE_WINDOW);
 		client.sentDelete = true;
 	}else{
 		XGrabServer(dpy);

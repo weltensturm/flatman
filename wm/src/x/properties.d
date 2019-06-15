@@ -9,7 +9,7 @@ long getstate(Window w){
 	ubyte* p = null;
 	ulong n, extra;
 	Atom _real;
-	if(XGetWindowProperty(dpy, w, wm.state, 0L, 2L, false, wm.state,
+	if(XGetWindowProperty(dpy, w, Atoms.WM_STATE, 0L, 2L, false, Atoms.WM_STATE,
 	                      &_real, &format, &n, &extra, cast(ubyte**)&p) != 0)
 		return -1;
 	if(n != 0)

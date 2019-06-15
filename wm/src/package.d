@@ -67,7 +67,6 @@ public import
 
 	flatman.x.atoms,
 	flatman.x.ewmh,
-	flatman.x.icccm,
 	flatman.x.motif,
 	flatman.x.properties,
 	flatman.x.error,

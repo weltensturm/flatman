@@ -60,6 +60,8 @@ class Client: Base {
     bool iconified;
     bool isDock;
 
+    Atom[] wmProtocols;
+
     ubyte[] icon;
     Icon xicon;
     long[2] iconSize;
@@ -86,6 +88,7 @@ class Client: Base {
         updateFloating;
         updateType;
         updateWmHints;
+        updateWmProtocols;
         updateIcon;
         updateTitle;
         updateDecorated;
@@ -307,16 +310,6 @@ class Client: Base {
         }
     }
 
-    void raise(){
-        XRaiseWindow(dpy, orig);
-        if(frame)
-            XRaiseWindow(dpy, frame.window);
-    }
-
-    void lower(){
-        XLowerWindow(dpy, win);
-    }
-
     void hideSoft(){
         XMoveWindow(dpy, win, pos.x, rootSize.h+pos.y);
         if(frame)
@@ -392,22 +385,15 @@ class Client: Base {
         isUrgent = true;
     }
 
-    bool sendEvent(Atom proto){
-        int n;
-        Atom *protocols;
-        bool exists = false;
-        XEvent ev;
-        if(XGetWMProtocols(dpy, orig, &protocols, &n)){
-            while(!exists && n--)
-                exists = protocols[n] == proto;
-            XFree(protocols);
-        }
+    bool sendEvent(Atom atom){
+        bool exists = wmProtocols.canFind(atom);
         if(exists){
+            XEvent ev;
             ev.type = ClientMessage;
             ev.xclient.window = orig;
-            ev.xclient.message_type = wm.protocols;
+            ev.xclient.message_type = Atoms.WM_PROTOCOLS;
             ev.xclient.format = 32;
-            ev.xclient.data.l[0] = proto;
+            ev.xclient.data.l[0] = atom;
             ev.xclient.data.l[1] = CurrentTime;
             XSendEvent(dpy, orig, false, NoEventMask, &ev);
         }
@@ -437,7 +423,7 @@ class Client: Base {
 
     void setState(long state){
         long[] data = [ state, None ];
-        XChangeProperty(dpy, orig, wm.state, wm.state, 32, PropModeReplace, cast(ubyte*)data, 2);
+        XChangeProperty(dpy, orig, Atoms.WM_STATE, Atoms.WM_STATE, 32, PropModeReplace, cast(ubyte*)data, 2);
     }
 
     void setWorkspace(long i){
@@ -569,6 +555,15 @@ class Client: Base {
         }
     }
 
+    void updateWmProtocols(){
+        int n;
+        Atom* protocols;
+        if(XGetWMProtocols(dpy, orig, &protocols, &n)){
+            wmProtocols = protocols[0..n].dup;
+            XFree(protocols);
+        }
+    }
+
     void updateIcon(){
         int format;
         ubyte* p = null;
@@ -639,7 +634,8 @@ class Client: Base {
             XA_WM_NORMAL_HINTS:             &updateSizeHints,
             XA_WM_HINTS:                    &updateWmHints,
             XA_WM_NAME:                     &updateTitle,
-            wm.state:                       &updateState,
+            Atoms.WM_STATE:                 &updateState,
+            Atoms.WM_PROTOCOLS:             &updateWmProtocols,
             Atoms._NET_WM_NAME:             &updateTitle,
             Atoms._NET_WM_STATE:            &updateType,
             Atoms._NET_WM_WINDOW_TYPE:      &updateType,

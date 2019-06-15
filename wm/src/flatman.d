@@ -138,8 +138,6 @@ void setup(bool autostart){
 	cursor[CurResize] = new ws.x.draw.Cur(dpy, XC_sizing);
 	cursor[CurMove] = new ws.x.draw.Cur(dpy, XC_fleur);
 
-	wm.fillAtoms;
-
 	moveResizeMonitors();
 
 	XDeleteProperty(dpy, root, Atoms._NET_SUPPORTED);
@@ -153,7 +151,7 @@ void setup(bool autostart){
 	wa.cursor = cursor[CurNormal].cursor;
 	wa.event_mask =
 			SubstructureRedirectMask|SubstructureNotifyMask|ButtonPressMask
-			|PointerMotionMask|EnterWindowMask|StructureNotifyMask
+			|PointerMotionMask|EnterWindowMask|StructureNotifyMask|FocusChangeMask
 			|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
@@ -265,11 +263,17 @@ void loop(){
 			requestFocus = null;
 			focus(currentFocus.monitor);
 			monitor.setActive(currentFocus);
-			XSetInputFocus(dpy, currentFocus.orig, RevertToPointerRoot, CurrentTime);
+			if(!doOverview){
+				if(currentFocus.neverfocus && currentFocus.wmProtocols.canFind(Atoms.WM_TAKE_FOCUS)){
+					// FeelsBadMan, but we have to nicely ask the client to take focus for itself
+					currentFocus.sendEvent(Atoms.WM_TAKE_FOCUS);
+				}else{
+					XSetInputFocus(dpy, currentFocus.orig, RevertToPointerRoot, CurrentTime);
+				}
+			}
 			XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
 		                    XA_WINDOW, 32, PropModeReplace,
 		                    cast(ubyte*) &(currentFocus.orig), 1);
-	        currentFocus.sendEvent(wm.takeFocus);
 			restack;
 		}
 	}

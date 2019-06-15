@@ -207,7 +207,7 @@ void onClientMessage(XClientMessageEvent* cme){
             if(cme.data.l[2] == 8)
                 drag.window(cme.data.l[3].to!int, c, c.pos.a - cme.data.l[0..2].to!(int[2]));
         },
-        wm.state: {
+        Atoms.WM_STATE: {
             if(cme.data.l[0] == IconicState){
                 "iconify %s".format(c).log;
             }
