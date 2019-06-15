@@ -110,7 +110,6 @@ class Bar: ws.wm.Window {
 		currentWindow ~= (x11.X.Window window){
 			foreach(client; app.clients){
 				if(client.window == window){
-					writeln("client updated");
 					currentClient = client;
 					break;
 				}
@@ -136,12 +135,12 @@ class Bar: ws.wm.Window {
 		_draw = new XDraw(this);
 		draw.setFont("Segoe UI", 10);
 		glow = generateGlow([0.877, 0.544, 0]);
-		initAlpha;
 	}
 
 	override void close(){
 		Events.forget(this);
 		widgets.each!(a => a.destroy);
+		XRenderFreePicture(dpy, glow);
 		super.close;
 	}
 

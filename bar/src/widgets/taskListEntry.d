@@ -47,15 +47,14 @@ class TaskListEntry: Base {
         auto centerOffset = size.w/2.0 - draw.width(txt)/2.0;
         double iconWidth = 0;
         if(client.icon.length){
+            client.xicon = draw.to!XDraw.icon(client.icon, client.iconSize.to!(int[2]));
+            client.icon = [];
+        }
+        if(client.xicon){
             auto scale = (20.0)/client.iconSize.h;
             iconWidth = client.iconSize.w*scale;
             centerOffset = (centerOffset - iconWidth).max(10);
-
             draw.text([pos.x + iconWidth.to!int + centerOffset.max(0).to!int, 5], txt);
-
-            if(!client.xicon){
-                client.xicon = draw.to!XDraw.icon(client.icon, client.iconSize.to!(int[2]));
-            }
             draw.to!XDraw.icon(client.xicon, pos.x + centerOffset.max(0).to!int, size.h-22, scale, client.hidden ? alpha[128] : None);
         }else if(txt.length){
             draw.text([pos.x + centerOffset.max(0).to!int, 5], txt);

@@ -3,7 +3,7 @@ module bar.client;
 import bar;
 
 
-import common.xevents;
+import common.xevents, common.log;
 
 
 class Client {
@@ -15,9 +15,6 @@ class Client {
 	Property!(XA_CARDINAL, false) workspace;
 	Property!(XA_CARDINAL, false) flatmanTab;
 	Property!(XA_CARDINAL, false) flatmanTabs;
-	Property!(XA_CARDINAL, true) iconProperty;
-	Property!(XA_STRING, false) titleProperty;
-	Property!(XA_STRING, false) titleProperty2;
 	Property!(XA_ATOM, true) state;
 
 	string title;
@@ -31,28 +28,24 @@ class Client {
 
 	this(x11.X.Window window){
 		this.window = window;
-		title = window.getTitle;
 		properties = new PropertyList;
 		workspace = new Property!(XA_CARDINAL, false)(window, "_NET_WM_DESKTOP", properties);
 		flatmanTab = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TAB", properties);
 		flatmanTabs = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TABS", properties);
-		iconProperty = new Property!(XA_CARDINAL, true)(window, "_NET_WM_ICON", properties);
 		state = new Property!(XA_ATOM, true)(window, "_NET_WM_STATE", properties);
-		titleProperty = new Property!(XA_STRING, false)(window, "_NET_WM_NAME", properties);
-		titleProperty ~= (string){ title = window.getTitle; };
-		titleProperty2 = new Property!(XA_STRING, false)(window, "WM_NAME", properties);
-		titleProperty2 ~= (string){ title = window.getTitle; };
-		//window.props._NET_WM_ICON.get(&updateIcon);
-		iconProperty ~= &updateIcon;
-		iconProperty.update;
+
+		properties.update;
+
+		updateIcon(window.props._NET_WM_ICON.get!(long[]));
+		title = window.getTitle;
 
 		Events[window] ~= this;
 
 		XSelectInput(wm.displayHandle, window, StructureNotifyMask | PropertyChangeMask);
 	}
 
-	@WindowDestroy
-	void destroy(){
+	~this(){
+		Log("DestroyWindow " ~ window.to!string);
 		Events.forget(this);
 	}
 
@@ -95,6 +88,10 @@ class Client {
 
 	}
 
+	override string toString(){
+		return "%s:%s".format(window, title);
+	}
+
 	@WindowMap
 	void onMap(){
 		hidden = false;
@@ -107,6 +104,11 @@ class Client {
 
 	@WindowProperty
 	void onProperty(XPropertyEvent* e){
+		if(e.atom == Atoms._NET_WM_ICON){
+			updateIcon(window.props._NET_WM_ICON.get!(long[]));
+		}else if([Atoms._NET_WM_NAME, Atoms.WM_NAME].canFind(e.atom)){
+			title = window.getTitle;
+		}
 		properties.update(e);
 	}
 

@@ -3,16 +3,16 @@ module bar.widget.taskList;
 import bar;
 
 
+import common.log, common.xevents;
+
+
 class TaskList: Widget {
 
     Bar bar;
     int[] separators;
     int start;
     int extents;
-
-    Properties!(
-        "currentWorkspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false
-    ) properties;
+    long currentWorkspace;
 
     override int width(){
         return size.w;
@@ -20,8 +20,19 @@ class TaskList: Widget {
 
     this(Bar bar){
         this.bar = bar;
-        properties.window(.root);
-        wm.on([PropertyNotify: (XEvent* e) => properties.update(&e.xproperty)]);
+        currentWorkspace = .root.props._NET_CURRENT_DESKTOP.get!long;
+        Events[.root] ~= this;
+    }
+
+    override void destroy(){
+        Events.forget(this);
+    }
+
+    @WindowProperty
+    void windowProperty(XPropertyEvent* e){
+        if(e.atom == Atoms._NET_CURRENT_DESKTOP){
+            currentWorkspace = .root.props._NET_CURRENT_DESKTOP.get!long;
+        }
     }
 
     void update(Client[] clients){
@@ -30,7 +41,7 @@ class TaskList: Widget {
 
         auto tabs = clients
             .filter!(a => !a.state.value.canFind(Atoms._NET_WM_STATE_SKIP_TASKBAR)
-                          && a.workspace.value == properties.currentWorkspace.value
+                          && a.workspace.value == currentWorkspace
                           && a.screen == bar.screen
                           && a.flatmanTabs.value != 0)
             .array

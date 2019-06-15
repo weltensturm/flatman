@@ -1,7 +1,7 @@
 module bar.widget.workspaceIndicator;
 
 
-import bar;
+import bar, common.xevents;
 
 
 class WorkspaceIndicator: Widget {
@@ -15,10 +15,19 @@ class WorkspaceIndicator: Widget {
 
     this(){
         properties.window(.root);
-        wm.on([PropertyNotify: (XEvent* e) => properties.update(&e.xproperty)]);
         properties.workspaceNames ~= (v) => update;
         properties.currentWorkspace ~= (v) => update;
         update;
+        Events ~= this;
+    }
+
+    override void destroy(){
+        Events.forget(this);
+    }
+
+    @WindowProperty
+    void windowProperty(WindowHandle window, XPropertyEvent* e){
+        properties.update(e);
     }
 
     override int width(){

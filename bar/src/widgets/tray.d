@@ -46,17 +46,6 @@ class Tray: Widget {
         bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_VISUAL, XA_VISUALID, 32, [wm.graphicsInfo.visualid]);
         .root.send(Atoms.MANAGER, 32, [CurrentTime, Atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle]);
         XDamageQueryExtension(wm.displayHandle, &damageEvent, &damageError);
-        wm.on([
-            damageEvent + XDamageNotify: (XEvent* e){
-                auto ev = cast(XDamageNotifyEvent*)e;
-                foreach(c; clients){
-                    if(c.window == e.xany.window){
-                        bar.update = true;
-                    }
-                    repair(ev);
-                }
-            }
-        ]);
         Events ~= this;
     }
 
@@ -71,6 +60,19 @@ class Tray: Widget {
             writeln("removing ", client);
             Xembed.unembed(client.window);
             X.UnmapWindow(dpy, client.window);
+        }
+    }
+
+    @XorgEvent
+    void onEvent(XEvent* e){
+        if(e.type == damageEvent + XDamageNotify){
+            auto ev = cast(XDamageNotifyEvent*)e;
+            foreach(c; clients){
+                if(c.window == e.xany.window){
+                    bar.update = true;
+                }
+                repair(ev);
+            }
         }
     }
 

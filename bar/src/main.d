@@ -2,7 +2,7 @@ module bar.main;
 
 import bar;
 
-import common.xevents;
+import std.typecons, common.xevents, common.log;
 
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
@@ -32,13 +32,17 @@ void main(){
 
 	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
 
+	Log.setLevel(Log.Level.info);
+
 	XSetErrorHandler(&xerror);
 	signal(SIGINT, &stop);
 	auto app = new App;
 	try {
 		while(wm.hasActiveWindows && running){
 			Inotify.update;
-			wm.processEvents((e) => handleEvent(e));
+			wm.processEvents((e){
+				handleEvent(e);
+			});
 			foreach(bar; app.bars){
 				bar.onDraw;
 			}
@@ -50,6 +54,8 @@ void main(){
 	foreach(bar; app.bars){
 		bar.close;
 	}
+
+	Log.shutdown;
 	writeln("quit");
 }
 
@@ -84,13 +90,14 @@ class App {
 		    | ExposureMask
 		    | PropertyChangeMask);
 
+		initAlpha;
 		scan;
 
 	}
 
 	@(ConfigLoaded!Config)
 	void configChanged(){
-		writeln("reloading config");
+		Log("reloading config");
 		foreach(bar; bars){
 			bar.close;
 			bar.destroy;
@@ -162,6 +169,7 @@ class App {
 		if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly || wa.override_redirect){
 			return;
 		}
+		Log.info("CreateWindow " ~ window.to!string);
 		auto client = new Client(window);
 		if(wa.map_state != IsViewable)
 			client.hidden = true;
@@ -178,7 +186,10 @@ class App {
 			clients = clients.without(client);
 			foreach(bar; bars){
 				bar.update = true;
+				if(bar.currentClient == client)
+					bar.currentClient = null;
 			}
+			destroy(client);
 		}
 	}
 
