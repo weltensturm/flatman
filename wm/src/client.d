@@ -377,7 +377,7 @@ class Client: Base {
             isUrgent = false;
             return;
         }
-        if(!isVisible && this != previousFocus){
+        if(!isVisible && this != requestFocus){
             "%s requests attention".format(this).log;
             ["notify-send", "%s requests attention".format(name)].spawnProcess;
 

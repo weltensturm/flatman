@@ -20,7 +20,7 @@ class Tabs: Container {
     }
 
     WindowHandle[] stack(){
-        return (active && !active.isfullscreen ? [active.win] : [])
+        return (active ? [active.win] : [])
                ~ clients.filter!(a => a != active).map!(a => a.win).array;
     }
 

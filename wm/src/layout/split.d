@@ -93,6 +93,7 @@ class Separator: Base {
     }
 
     void destroy(){
+        draw.destroy;
         XDestroyWindow(dpy, window);
         Events.forget(this);
     }
@@ -152,9 +153,8 @@ class Split: Container {
             return [];
         WindowHandle[] stack;
         stack ~= children[clientActive].to!Tabs.stack;
-        foreach(offset; 1..clientActive.max(children.length-clientActive)){
-            Log("ASDF %s %s %s %s".format(clientActive, children.length, offset, clientActive-offset.to!long));
-            if(clientActive-offset.to!long > 0)
+        foreach(offset; 1..clientActive.max(children.length-1-clientActive)+1){
+            if(clientActive-offset.to!long >= 0)
                 stack ~= children[clientActive-offset].to!Tabs.stack;
             if(clientActive+offset < children.length)
                 stack ~= children[clientActive+offset].to!Tabs.stack;
@@ -260,6 +260,7 @@ class Split: Container {
                 Client client = tabs.active;
                 remove(client);
                 tabsNext.add(client);
+                client.focus;
             }else{
                 Client client = tabs.active;
                 remove(client);
@@ -390,15 +391,8 @@ class Split: Container {
     }
 
     Client clientDir(short direction){
-        foreach(container; [clientActive, clientActive+direction]){
-            if(container < 0 || container >= children.length)
-                continue;
-            auto target = children[container]
-                .to!Tabs
-                .clientDir(container == clientActive ? direction : 0);
-            if(target)
-                return target;
-        }
+        if(clientActive >= 0 && clientActive < children.length)
+            return children[clientActive].to!Tabs.clientDir(direction);
         return null;
     }
 

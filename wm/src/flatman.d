@@ -258,24 +258,23 @@ void loop(){
 
 	if(requestFocus){
 		with(Log(Log.RED ~ "focus" ~ Log.DEFAULT ~ " %s".format(requestFocus))){
-			previousFocus = currentFocus;
-			currentFocus = requestFocus;
-			requestFocus = null;
-			focus(currentFocus.monitor);
-			monitor.setActive(currentFocus);
-			if(!doOverview){
-				if(currentFocus.neverfocus && currentFocus.wmProtocols.canFind(Atoms.WM_TAKE_FOCUS)){
-					// FeelsBadMan, but we have to nicely ask the client to take focus for itself
-					currentFocus.sendEvent(Atoms.WM_TAKE_FOCUS);
-				}else{
-					XSetInputFocus(dpy, currentFocus.orig, RevertToPointerRoot, CurrentTime);
+			if(requestFocus.monitor){
+				focus(requestFocus.monitor);
+				monitor.setActive(requestFocus);
+				if(!doOverview){
+					if(requestFocus.neverfocus && requestFocus.wmProtocols.canFind(Atoms.WM_TAKE_FOCUS)){
+						// FeelsBadMan, but we have to nicely ask the client to take focus for itself
+						requestFocus.sendEvent(Atoms.WM_TAKE_FOCUS);
+					}else{
+						XSetInputFocus(dpy, requestFocus.orig, RevertToPointerRoot, CurrentTime);
+					}
 				}
+				XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW, XA_WINDOW, 32,
+								PropModeReplace, cast(ubyte*)&(requestFocus.orig), 1);
+				restack;
 			}
-			XChangeProperty(dpy, .root, Atoms._NET_ACTIVE_WINDOW,
-		                    XA_WINDOW, 32, PropModeReplace,
-		                    cast(ubyte*) &(currentFocus.orig), 1);
-			restack;
 		}
+		requestFocus = null;
 	}
 	
 	if(queueRestack){
@@ -286,8 +285,10 @@ void loop(){
 				if(monitor.workspace){
 					stack ~= monitor.workspace.floating.stack;
 				}
-				if(monitor.active && monitor.active.isfullscreen)
+				if(monitor.active && monitor.active.isfullscreen){
+					Log("fullscreen " ~ monitor.active.win.to!string);
 					stack ~= monitor.active.win;
+				}
 				stack ~= monitor.globals.filter!(a => a.isDock).map!(a => a.win).array;
 			}
 			foreach(monitor; monitors){

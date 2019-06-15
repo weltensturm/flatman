@@ -318,21 +318,13 @@ void onEnter(Window window){
 
 
 void onFocus(x11.X.Window window){
-    //if(currentFocus && ev.window == currentFocus.orig)
-    //	focus(currentFocus);
-    //auto c = find(ev.window);
-    //if(c && c != active)
-    //	c.requestAttention;
     if(window == .root && monitor.active){
-        currentFocus = null;
         focus(monitor.active);
     }
 }
 
 
 void onFocusOut(x11.X.Window window){
-    if(currentFocus && currentFocus.win == window)
-        currentFocus = null;
 }
 
 

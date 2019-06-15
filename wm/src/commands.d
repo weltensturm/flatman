@@ -187,7 +187,6 @@ void overview(bool activate){
 			root.replace(Atoms._FLATMAN_OVERVIEW, 0L);
 			Overview(false);
 			if(active){
-				currentFocus = null;
 				focus(active);
 			}
 		}

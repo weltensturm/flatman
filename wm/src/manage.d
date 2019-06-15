@@ -4,13 +4,11 @@ module flatman.manage;
 import flatman;
 
 
-Client previousFocus;
-Client currentFocus;
 Client requestFocus;
 
 
 void focus(Client client){
-    if(client.destroyed || client == currentFocus && !requestFocus || requestFocus == client)
+    if(client.destroyed)
         return;
 	"queue focus %s".format(client).log;
 	requestFocus = client;
