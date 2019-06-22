@@ -217,6 +217,8 @@ class CompositeClient: ws.wm.Window {
     }
 
     override void onShow(){
+        if(destroyed) // otherwise reparented windows pop up as duplicates
+            return;
         hidden = false;
         with(Log(this.to!string ~ " onShow")){
             "onShow %s".format(title).writeln;
