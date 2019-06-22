@@ -1,6 +1,6 @@
 module composite.damage;
 
-import composite;
+import composite, common.xerror;
 
 
 class WindowDamage {

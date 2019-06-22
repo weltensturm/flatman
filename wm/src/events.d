@@ -46,6 +46,16 @@ auto formatEvent(XEvent* ev, WindowHandle root){
         return "%s %s (%s)".format(ev.xkey.keycode, keysym, ev.xkey.state);
     };
 
+    auto formatWindow(WindowHandle window){
+        auto client = find(window);
+        if(client)
+            return "%s".format(client);
+        else if(window == root)
+            return Log.RED ~ "%s:root".format(window) ~ Log.DEFAULT;
+        else
+            return Log.GREY ~ "%s".format(window) ~ Log.DEFAULT;
+    }
+
     alias events = AliasSeq!(
         tuple(ButtonPress,       "ButtonPress",       "xbutton",           () => formatButton()),
         tuple(ButtonRelease,     "ButtonRelease",     "xbutton",           () => formatButton()),
@@ -55,6 +65,7 @@ auto formatEvent(XEvent* ev, WindowHandle root){
         tuple(ClientMessage,     "ClientMessage",     "xclient",           () => ev.xclient.to!string),
         tuple(ConfigureRequest,  "ConfigureRequest",  "xconfigurerequest", () => ev.xconfigurerequest.to!string),
         tuple(ConfigureNotify,   "ConfigureNotify",   "xconfigure",        () => ev.xconfigure.to!string),
+        tuple(CreateNotify,      "CreateNotify",      "xcreatewindow",     () => ev.xcreatewindow.to!string),
         tuple(DestroyNotify,     "DestroyNotify",     "xdestroywindow",    () => ev.xdestroywindow.to!string),
         tuple(EnterNotify,       "EnterNotify",       "xcrossing",         () => ev.xcrossing.to!string),
         tuple(Expose,            "Expose",            "xexpose",           () => ev.xexpose.to!string),
@@ -66,7 +77,8 @@ auto formatEvent(XEvent* ev, WindowHandle root){
         tuple(MapRequest,        "MapRequest",        "xmaprequest",       () => ""),
         tuple(PropertyNotify,    "PropertyNotify",    "xproperty",         () => XGetAtomName(dpy, ev.xproperty.atom).to!string),
         tuple(UnmapNotify,       "UnmapNotify",       "xmap",              () => ""),
-        tuple(MapNotify,         "MapNotify",         "xmap",              () => "")
+        tuple(MapNotify,         "MapNotify",         "xmap",              () => ""),
+        tuple(ReparentNotify,    "ReparentNotify",    "xreparent",         () => formatWindow(ev.xreparent.parent))
     );
 
     static foreach(event; events){
@@ -74,13 +86,7 @@ auto formatEvent(XEvent* ev, WindowHandle root){
             auto msg = "";
             static if(event[2].length){
                 auto win = __traits(getMember, ev, event[2]).window;
-                auto client = find(win);
-                if(client)
-                    msg ~= "%s".format(client);
-                else if(win == root)
-                    msg ~= Log.RED ~ "%s:root".format(win) ~ Log.DEFAULT;
-                else
-                    msg ~= Log.GREY ~ "%s".format(win) ~ Log.DEFAULT;
+                msg ~= formatWindow(win);
             }
             return Log.GREY ~ Log.BOLD ~ ev.xany.serial.to!string ~ Log.DEFAULT ~ " " ~ msg ~ " " ~ event[1] ~ " " ~ event[3]();
         }

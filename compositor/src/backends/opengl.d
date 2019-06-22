@@ -16,7 +16,6 @@ class OpenGLBackend: Backend {
         //draw = new GlDraw;
         draw.setFont("Roboto", 10);
         initAlpha;
-        checkXerror;
     }
 
     override void render(Picture picture, bool transparent, double alpha, int[2] offset, int[2] pos, int[2] size){

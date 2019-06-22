@@ -234,7 +234,7 @@ class CompositeClient: ws.wm.Window {
     }
 
     override string toString(){
-        return title ~ ":" ~ windowHandle.to!string;
+        return Log.GREY ~ "%s:%s".format(windowHandle, title) ~ Log.DEFAULT;
     }
 
 }

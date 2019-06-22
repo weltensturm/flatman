@@ -3,6 +3,9 @@ module common.xerror;
 
 import
     std.traits,
+    std.stdio,
+    std.string,
+    std.conv,
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
@@ -11,10 +14,31 @@ import
 	x11.extensions.render,
 	x11.extensions.Xrender,
 	x11.extensions.Xcomposite,
+	x11.extensions.Xfixes,
 	x11.Xatom;
 
 
 string lastXerror;
+
+
+extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
+    try {
+        write("XError: ");
+        char[128] buffer;
+        XGetErrorText(dpy, e.error_code, buffer.ptr, buffer.length);
+        debug(XError){
+            lastXerror = "%s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, cast(XRequestCode)e.request_code, e.minor_code, e.serial);
+        }
+        "%s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, cast(XRequestCode)e.request_code, e.minor_code, e.serial).writeln;
+    }
+    catch(Exception e){
+        try {
+            writeln(e);
+        }catch(Throwable){}
+    }
+    return 0;
+}
+
 
 void checkXerror(string prefix){
     if(lastXerror.length){
@@ -31,23 +55,32 @@ void checkXerror(string prefix){
 class X {
     // the things I do for debugging
     template opDispatch(string s){
-        mixin("alias ParameterTypes = Parameters!X" ~ s ~ ";");
-        static auto opDispatch(ParameterTypes args){
-            checkXerror("?: ");
-            mixin("alias returns = ReturnType!(X" ~ s ~ ");");
-            static if(!is(returns == void)){
-                mixin("auto result = X" ~ s ~ "(args);");
-                debug {
+
+        debug {
+
+            mixin("alias Fn = X" ~ s ~ ";");
+
+            alias ParameterTypes = Parameters!Fn;
+            alias Returns = ReturnType!Fn;
+
+            static auto opDispatch(ParameterTypes args){
+                checkXerror("?: ");
+                static if(!is(Returns == void)){
+                    auto result = Fn(args);
                     checkXerror(s ~ ": ");
-                }
-                return result;
-            }else{
-                mixin("X" ~ s ~ "(args);");
-                debug {
+                    return result;
+                }else{
+                    Fn(args);
                     checkXerror(s ~ ": ");
                 }
             }
+
+        }else{
+
+            mixin("alias opDispatch = X" ~ s ~ ";");
+
         }
+
     }
 }
 

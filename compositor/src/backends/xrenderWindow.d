@@ -18,7 +18,6 @@ class XRenderWindowBackend: Backend {
         draw = xdraw;
         draw.setFont("Roboto", 10);
         initAlpha;
-        checkXerror;
     }
 
     override void damage(RootDamage damage){

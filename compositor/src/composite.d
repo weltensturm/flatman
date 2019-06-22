@@ -3,7 +3,7 @@ module composite.main;
 import composite.events;
 import composite;
 
-import common.event, common.xevents, common.log;
+import common.event, common.xevents, common.log, common.xerror, std.typecons;
 
 
 
@@ -50,7 +50,15 @@ void main(){
             Profile.reset;
             manager.clear;
             with(Profile("events")){
-                wm.processEvents((e) => handleEvent(e));
+                wm.processEvents((e){
+                    if(e.type == 91){
+                        handleEvent(e);
+                    }else{
+                        with(Log(formatEvent(e, root))){
+                            handleEvent(e);
+                        }
+                    }
+                });
             }
             if(manager.restack){
                 with(Profile("restack")){
@@ -76,32 +84,72 @@ void main(){
     Log.shutdown;
 }
 
-string lastXerror;
 
-void checkXerror(){
-    if(lastXerror.length){
-        //defaultTraceHandler.writeln;
-        throw new Exception(lastXerror);
+auto formatEvent(XEvent* ev, WindowHandle root){
+
+    auto dpy = wm.displayHandle;
+
+    auto formatButton = {
+        return "%s (%s)".format(ev.xbutton.button, ev.xbutton.state);
+    };
+
+    auto formatMotion = {
+        return "[%s, %s] root[%s, %s]".format(ev.xmotion.x, ev.xmotion.y, ev.xmotion.x_root, ev.xmotion.y_root);
+    };
+
+    auto formatKey = {
+        KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)ev.xkey.keycode, 0);
+        return "%s %s (%s)".format(ev.xkey.keycode, keysym, ev.xkey.state);
+    };
+
+    auto formatWindow(WindowHandle window){
+        auto client = manager.find(window);
+        if(client)
+            return "%s".format(client);
+        else if(window == root)
+            return Log.RED ~ "%s:root".format(window) ~ Log.DEFAULT;
+        else
+            return Log.GREY ~ "%s".format(window) ~ Log.DEFAULT;
     }
-}
 
+    alias events = AliasSeq!(
+        tuple(ButtonPress,       "ButtonPress",       "xbutton",           () => formatButton()),
+        tuple(ButtonRelease,     "ButtonRelease",     "xbutton",           () => formatButton()),
 
-extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
-    try {
-        write("XError: ");
-        char[128] buffer;
-        XGetErrorText(wm.displayHandle, e.error_code, buffer.ptr, buffer.length);
-        debug(XError){
-            lastXerror = "%s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, XRequestCodes.get(e.request_code, e.request_code.to!string), e.minor_code, e.serial);
+        tuple(MotionNotify,      "MotionNotify",      "xmotion",           () => formatMotion()),
+
+        tuple(ClientMessage,     "ClientMessage",     "xclient",           () => ev.xclient.to!string),
+        tuple(ConfigureRequest,  "ConfigureRequest",  "xconfigurerequest", () => ev.xconfigurerequest.to!string),
+        tuple(ConfigureNotify,   "ConfigureNotify",   "xconfigure",        () => ev.xconfigure.to!string),
+        tuple(CreateNotify,      "CreateNotify",      "xcreatewindow",     () => ev.xcreatewindow.to!string),
+        tuple(DestroyNotify,     "DestroyNotify",     "xdestroywindow",    () => ev.xdestroywindow.to!string),
+        tuple(EnterNotify,       "EnterNotify",       "xcrossing",         () => ev.xcrossing.to!string),
+        tuple(Expose,            "Expose",            "xexpose",           () => ev.xexpose.to!string),
+        tuple(FocusIn,           "FocusIn",           "xfocus",            () => ev.xfocus.to!string),
+        tuple(FocusOut,          "FocusOut",          "xfocus",            () => ev.xfocus.to!string),
+        tuple(KeyPress,          "KeyPress",          "xkey",              () => formatKey()),
+        tuple(KeyRelease,        "KeyRelease",        "xkey",              () => formatKey()),
+        tuple(MappingNotify,     "MappingNotify",     "",                  () => ""),
+        tuple(MapRequest,        "MapRequest",        "xmaprequest",       () => ""),
+        tuple(PropertyNotify,    "PropertyNotify",    "xproperty",         () => XGetAtomName(dpy, ev.xproperty.atom).to!string),
+        tuple(UnmapNotify,       "UnmapNotify",       "xmap",              () => ""),
+        tuple(MapNotify,         "MapNotify",         "xmap",              () => ""),
+        tuple(ReparentNotify,    "ReparentNotify",    "xreparent",         () => formatWindow(ev.xreparent.parent))
+    );
+
+    static foreach(event; events){
+        if(event[0] == ev.type){
+            auto msg = "";
+            static if(event[2].length){
+                auto win = __traits(getMember, ev, event[2]).window;
+                msg ~= formatWindow(win);
+            }
+            return Log.GREY ~ Log.BOLD ~ ev.xany.serial.to!string ~ Log.DEFAULT ~ " " ~ msg ~ " " ~ event[1] ~ " " ~ event[3]();
         }
-        "%s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, e.request_code, e.minor_code, e.serial).writeln;
     }
-    catch(Exception e){
-        try {
-            writeln(e);
-        }catch(Throwable){}
-    }
-    return 0;
+
+    return "Event %s".format(ev.type);
+
 }
 
 
@@ -163,11 +211,15 @@ class CompositeManager {
         height = DisplayHeight(wm.displayHandle, DefaultScreen(wm.displayHandle));
 
         if(config.redirect){
-            auto reg_win = XCreateSimpleWindow(wm.displayHandle, RootWindow(wm.displayHandle, 0), 0, 0, 1, 1, 0, None, None);
+            auto reg_win = XCreateSimpleWindow(wm.displayHandle, RootWindow(wm.displayHandle, 0),
+                                               0, 0, 1, 1, 0, None, None);
             if(!reg_win)
                 throw new Exception("Failed to create simple window");
             "created simple window".writeln;
-            Xutf8SetWMProperties(wm.displayHandle, reg_win, cast(char*)"xcompmgr".toStringz, cast(char*)"xcompmgr".toStringz, null, 0, null, null, null);
+            Xutf8SetWMProperties(wm.displayHandle, reg_win,
+                    cast(char*)"flatman-compositor".toStringz,
+                    cast(char*)"flatman-compositor".toStringz,
+                    null, 0, null, null, null);
             Atom a = Atoms._NET_WM_CM_S0;
             XSetSelectionOwner(wm.displayHandle, a, reg_win, 0);
             "selected CM_S0 owner".writeln;
@@ -179,18 +231,13 @@ class CompositeManager {
 
         "redirected subwindows".writeln;
         XSelectInput(wm.displayHandle, root,
-            StructureNotifyMask
-            | SubstructureNotifyMask
+            SubstructureNotifyMask
             | ExposureMask
             | PropertyChangeMask);
 
         "created backbuffer".writeln;
 
         properties.window(.root);
-
-        wm.on([
-            ReparentNotify: (XEvent* e) => evReparent(&e.xreparent)
-        ]);
 
         "looking for windows".writeln;
         foreach(w; queryTree)
@@ -264,6 +311,7 @@ class CompositeManager {
     void evDestroy(x11.X.Window window){
         if(auto c = find(window)){
             if(!c.destroyed){
+                Log(Log.RED ~ "destroyed" ~ Log.DEFAULT);
                 c.destroyed = true;
                 c.onHide;
                 restack = true;
@@ -272,11 +320,12 @@ class CompositeManager {
         }
     }
 
-    void evReparent(XReparentEvent* e){
-        if(e.parent != .root)
-            evDestroy(e.window);
+    @WindowReparent
+    void evReparent(WindowHandle window, WindowHandle parent){
+        if(parent != .root)
+            evDestroy(window);
         else
-            evCreate(false, e.window);
+            evCreate(false, window);
     }
 
     @WindowConfigure
@@ -293,8 +342,6 @@ class CompositeManager {
     void evMap(WindowHandle window){
         if(auto c = find(window))
             c.onShow;
-        else
-            evCreate(false, window);
     }
 
     @WindowUnmap

@@ -1,6 +1,6 @@
 module composite.backend.xrender;
 
-import composite;
+import composite, common.xerror;
 
 
 class XRenderBackend: Backend {
@@ -17,7 +17,6 @@ class XRenderBackend: Backend {
         draw = xdraw;
         draw.setFont("Roboto", 10);
         initAlpha;
-        checkXerror;
     }
 
     override void damage(RootDamage damage){

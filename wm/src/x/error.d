@@ -7,6 +7,8 @@ import flatman;
 extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
 extern(C) nothrow int function(Display*) xerrorfatalxlib;
 
+
+/+
 /* There's no way to check accesses to destroyed windows, thus those cases are
  * ignored (especially on UnmapNotify's).  Other types of errors call Xlibs
  * default error handler, which may call exit.  */
@@ -28,6 +30,8 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
 	return 0;
 	//return xerrorxlib(dpy, ee); /* may call exit */
 }
++/
+
 
 extern(C) nothrow int xerrorfatal(Display* dpy){
 	try{
