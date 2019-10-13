@@ -21,9 +21,6 @@ class Monitor {
     this(int[2] pos, int[2] size){
         this.pos = pos;
         this.size = size;
-        workspaces ~= new Workspace(pos, size);
-        WorkspaceCreate(0);
-        workspace.show;
         Inotify.watch("~/.flatman".expandTilde, (path, file, action){
             if(action != Inotify.Modify)
                 return;

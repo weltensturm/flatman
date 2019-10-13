@@ -330,14 +330,27 @@ bool moveResizeMonitors(){
 		bool dirty;
 		auto screens = screens(dpy);
 		while(monitors.length != screens.length){
-			if(monitors.length < screens.length)
-				monitors ~= [new Monitor([0,0], [1,1])];
-			else {
+			if(monitors.length < screens.length){
+				auto nm = new Monitor([0,0], [1,1]);
+				if(monitors.length == 0){ // no monitors yet, create first workspace
+					nm.workspaces ~= new Workspace([0,0], [1,1]);
+					WorkspaceCreate(0);
+					nm.workspace.show;
+				}else{
+					foreach(i; 0..monitor.workspaces.length){
+						nm.workspaces ~= new Workspace([0,0], [1,1]);
+						if(i == monitor.workspaceActive)
+							nm.workspace.show;
+					}
+				}
+				monitors ~= nm;
+			}else{
 				foreach(c; monitors[$-1].clients){
 					monitors[$-1].remove(c);
 					monitors[$-2].add(c);
 				}
 				monitors = monitors[0..$-1];
+				dirty = true;
 			}
 		}
 		foreach(i, monitor; monitors){
