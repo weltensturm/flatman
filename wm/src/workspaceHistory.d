@@ -74,7 +74,7 @@ class WorkspaceHistory {
 	void workspaceCreate(int ws){
 		log(Log.RED ~ "WS CREATE " ~ ws.to!string ~ Log.DEFAULT ~ " " ~ history.to!string);
 		foreach(ref entry; history){
-			if(entry.workspace > ws)
+			if(entry.workspace >= ws)
 				entry.workspace++;
 		}
 		if(ws == monitor.workspaceActive)
