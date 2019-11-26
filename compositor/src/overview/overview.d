@@ -553,7 +553,7 @@ class Overview {
             ];
         }else{
             if(client.properties.overviewHide.value == 1){
-                alpha = 1-state.sigmoid;
+                alpha = alpha*(1-state.sigmoid);
             }
             //alpha = animate(alpha, 0, state.sigmoid);
         }

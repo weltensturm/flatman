@@ -12,6 +12,7 @@ class Tabs: Container {
     bool mouseFocus;
     bool mousePressed;
     bool containerFocused;
+    bool inOverview;
 
     this(){
         size = [10,10];
@@ -140,6 +141,11 @@ class Tabs: Container {
         super.active = client;
         if(!hidden)
             resize(size);
+        /+
+        if(config.tabs.sortBy == config.tabs.SortBy.history && !inOverview){
+            moveActiveToFront;
+        }
+        +/
     }
 
     override void resize(int[2] size){
@@ -162,13 +168,17 @@ class Tabs: Container {
 
     @Overview
     void onOverview(bool enter){
-        if(config.tabs.sortBy == config.tabs.SortBy.history && !enter){
-            if(clientActive != 0){
-                Log("%s %s %s %s".format(config.tabs.sortBy, enter, clientActive, children.length));
-                children = children[clientActive] ~ children[0..clientActive] ~ children[clientActive+1..$];
-                clientActive = 0;
-                updateHints;
-            }
+        inOverview = enter;
+        if(config.tabs.sortBy == config.tabs.SortBy.history){
+            moveActiveToFront;
+        }
+    }
+
+    private void moveActiveToFront(){
+        if(clientActive != 0){
+            children = children[clientActive] ~ children[0..clientActive] ~ children[clientActive+1..$];
+            clientActive = 0;
+            updateHints;
         }
     }
 

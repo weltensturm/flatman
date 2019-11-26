@@ -18,11 +18,13 @@ class WorkspaceHistory {
 
 	string[] workspaceNames;
 
-	WorkspaceHistoryWindow window;
+	WorkspaceHistoryWindow[] windows;
 
 	this(){
 		Events ~= this;
-		//window = new WorkspaceHistoryWindow(this);
+        foreach(monitor; monitors){
+		  windows  ~= new WorkspaceHistoryWindow(this, monitor);
+        }
 		foreach(i, ws; monitor.workspaces)
 			push(0, i.to!int);
 		updateNames;
@@ -44,7 +46,7 @@ class WorkspaceHistory {
 				auto entry = history[historySelector];
 				monitors[entry.monitor].focus;
 				switchWorkspace(entry.workspace);
-				//window.update;
+				foreach(window; windows) window.update;
 			}
 		}
 	}
@@ -113,9 +115,10 @@ class WorkspaceHistory {
 				}
 			}
 			historySelector = -1;
-			//window.hide;
+			foreach(window; windows) window.hide;
 		}else{
 			historySelector = 0;
+			foreach(window; windows) window.show;
 		}
 	}
 
@@ -160,6 +163,7 @@ class WorkspaceHistoryWindow: Base {
 	int[2] _cursorPos;
 
 	WorkspaceHistory history;
+    .Monitor monitor;
 
 	override int[2] cursorPos(){
 		return _cursorPos;
@@ -169,8 +173,9 @@ class WorkspaceHistoryWindow: Base {
 		return _draw;
 	}
 
-	this(WorkspaceHistory history){
+	this(WorkspaceHistory history, .Monitor monitor){
 		this.history = history;
+        this.monitor = monitor;
 
 		size = [10, 10];
 		hidden = true;
@@ -199,21 +204,19 @@ class WorkspaceHistoryWindow: Base {
 								  ButtonReleaseMask | PointerMotionMask);
         _draw = new XDraw(dpy, window);
 		draw.setFont(config.tabs.title.font, config.tabs.title.fontSize);
+		window.replace(Atoms._FLATMAN_OVERVIEW_HIDE, 1L);
 		Events[window] ~= this;
 	}
 
 	void update(){
 		show;
 
-		auto rowHeight = draw.fontHeight*2;
-		auto padding = rowHeight;
-
-		auto width = history.workspaceNames.map!(a => draw.width(a)).fold!max(0) + padding;
-		auto height = history.history.length.to!int*rowHeight + padding;
+		auto width = history.workspaceNames.map!(a => draw.width(a)).fold!max(0) + 8;
+		auto height = (history.history.length.to!int - 1)*16 + 8;
 
 		int[2] size = [width, height];
-		move(monitors[0].pos.a + monitors[0].size.a/2 - size.a/2);
-		resize(size);
+		move(monitor.pos.a - [0, -24]);// + monitor.size.a/2 - size.a/2);
+		resize([monitor.size.w, 24]);
 		onDraw;
 	}
 
@@ -275,15 +278,18 @@ class WorkspaceHistoryWindow: Base {
 		if(hidden)
 			return;
 
-		auto rowHeight = draw.fontHeight*2;
-		auto background = config.tabs.background.normal;
-		draw.setColor(background);
+		auto rowHeight = 24;
+		draw.setColor([0.066666, 0.066666, 0.066666]);
 		draw.rect([0,0], size);
 
-		foreach(i, entry; history.history){
-			if(i == history.historySelector){
+		int offset = 0;
+
+		draw.setFont("Segoe UI", 10);
+		foreach(index, entry; history.history.enumerate){
+			auto width = draw.width(history.workspaceNames[entry.workspace]) + 5 + 5;
+			if(index == history.historySelector){
 				draw.setColor([0.3, 0.3, 0.3, 1]);
-				draw.rect([0, i.to!int*rowHeight + rowHeight/2], [size.w, rowHeight]);
+				draw.rect([offset, 0], [width, rowHeight]);
 			}
 			if(entry.workspace < history.workspaceNames.length){
 				auto name = history.workspaceNames[entry.workspace];
@@ -293,13 +299,15 @@ class WorkspaceHistoryWindow: Base {
 				if(prefix.length)
 					prefix ~= "/";
 				auto cwd = name.split("/")[$-1];
-				int x = rowHeight/2;
+				int x = 5;
 				draw.setColor([0.5, 0.5, 0.5, 1]);
-				x += draw.text([x, i.to!int*rowHeight + rowHeight/2], rowHeight, prefix, 0);
+				x += draw.text([offset + x, 0], rowHeight, prefix, 0);
 				draw.setColor([1, 1, 1, 1]);
-				x += draw.text([x, i.to!int*rowHeight + rowHeight/2], rowHeight, cwd, 0);
+				x += draw.text([offset + x, 0], rowHeight, cwd, 0);
+				offset += width;
 			}else{
-				draw.text([0, i.to!int*rowHeight], "Workspace " ~ entry.workspace.to!string);
+				draw.text([offset + 5, 0], "Workspace " ~ entry.workspace.to!string);
+				offset += draw.width("Workspace " ~ entry.workspace.to!string);
 			}
 		}
 
