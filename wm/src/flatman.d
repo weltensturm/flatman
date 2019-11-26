@@ -343,6 +343,7 @@ bool moveResizeMonitors(){
 							nm.workspace.show;
 					}
 				}
+				monitor = nm;
 				monitors ~= nm;
 			}else{
 				foreach(c; monitors[$-1].clients){
