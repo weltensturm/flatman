@@ -253,19 +253,24 @@ class Client: Base {
 
     long[4] getStrut(){
         int actualFormat;
-        ulong bytes, items, count;
+        ulong bytes, count;
         ubyte* data;
-        Atom actualType, atom;
-        if(XGetWindowProperty(dpy, orig, Atoms._NET_WM_STRUT_PARTIAL, 0, 12, false, XA_CARDINAL, &actualType,
-                              &actualFormat, &count, &bytes, &data) == Success && data){
-            assert(actualType == XA_CARDINAL);
-            assert(actualFormat == 32);
-            assert(count == 12);
+        Atom actualType;
+        if(XGetWindowProperty(dpy, orig, Atoms._NET_WM_STRUT_PARTIAL, 0, 12, false, XA_CARDINAL,
+                              &actualType, &actualFormat, &count, &bytes, &data)
+                    == Success
+                && data){
+            if(actualType != XA_CARDINAL || actualFormat != 32 || count != 12){
+                Log("WARNING: invalid strut on " ~ orig.to!string);
+                XFree(data);
+                return [0,0,0,0];
+            }
             auto array = (cast(CARDINAL*)data)[0..12];
             XFree(data);
-            "found strut %s %s".format(name, array);
-            if(array.any!"a < 0")
+            if(array.any!"a < 0"){
+                Log("WARNING: invalid strut on " ~ orig.to!string);
                 return [0,0,0,0];
+            }
             return array[0..4];
         }
         return [0,0,0,0];
