@@ -19,6 +19,8 @@ keys {
     mod+Left            focus dir left
     mod+semicolon       focus dir right
     mod+Right           focus dir right
+    mod+a               focus dir left
+    mod+d               focus dir right
 
     mod+shift+j         move left
     mod+shift+semicolon move right
@@ -28,6 +30,10 @@ keys {
     mod+shift+Right     move right
     mod+shift+Down      move down
     mod+shift+Up        move up
+    mod+shift+a         move left
+    mod+shift+d         move right
+    mod+shift+w         move down
+    mod+shift+s         move up
 
     mod+ctrl+j          resize -
     mod+ctrl+semicolon  resize +

@@ -39,11 +39,12 @@ class WorkspaceIndicator: Widget {
         auto parts = workspace.split("/");
         if(!parts.length)
             return;
-        auto x = draw.text([5,5], parts[0..$-1].join("/"));
+        auto x = pos.x;
+        x += draw.text([5+x,5], parts[0..$-1].join("/"), 0);
         if(parts.length > 1)
-            x += draw.text([5+x, 5], "/");
+            x += draw.text([5+x, 5], "/", 0);
         draw.setColor(config.theme.foregroundMain);
-        draw.text([5+x, 5], parts[$-1]);
+        draw.text([5+x, 5], parts[$-1], 0);
     }
 
     void update(){

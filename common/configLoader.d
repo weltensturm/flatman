@@ -199,13 +199,20 @@ void fillStruct(T)(ref T value, string prefix, Entry[] values){
         auto name = (prefix ~ " " ~ field.camelToDashed).strip;
         auto filtered = values.filter!(a => (a.name ~ " ").startsWith(name ~ " ") && a.value.strip.length).array;
         try {
-            if(!filtered.length)
-                throw new ConfigException("No value for config field \"" ~ name ~ "\"");
-
             static if(isType!field)
-                return;
+                continue;
 
             mixin("alias Raw = typeof(value." ~ field ~ ");");
+
+            if(!filtered.length){
+                if(__traits(getMember, value, field) != Raw.init)
+                    continue;
+
+                //throw new ConfigException("No value for config field \"" ~ name ~ "\"");
+                continue; // TODO: no easy way to see if members have static initializers, bool f; and bool f = false; are the same
+            }
+
+            __traits(getMember, value, field) = Raw.init; // unset defaults, otherwise we append to default values
 
             static if(isDynamicArray!Raw && !is(Raw == string) || isAssociativeArray!Raw)
                 alias Field = ForeachType!Raw;

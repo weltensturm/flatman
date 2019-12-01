@@ -2,8 +2,9 @@ module bar.bar;
 
 import bar;
 
-
-import common.xevents;
+import
+	common.log,
+	common.xevents;
 
 
 Picture generateGlow(float[3] color){
@@ -12,6 +13,7 @@ Picture generateGlow(float[3] color){
 	pa.repeat = true;
 	auto picture = XRenderCreatePicture(dpy, pixmap, XRenderFindStandardFormat(dpy, PictStandardARGB32), CPRepeat, &pa);
 	XRenderColor c;
+
 	foreach(x; 0..200){
 		foreach(y; 0..1){
 			auto len = asqrt((x-100.0).pow(2) + y*y).min(100);
@@ -23,6 +25,7 @@ Picture generateGlow(float[3] color){
 			XRenderFillRectangle(dpy, PictOpSrc, picture, &c, x, y, 1, 1);
 		}
 	}
+
 	XFreePixmap(dpy, pixmap);
 	return picture;
 }
@@ -33,11 +36,16 @@ class Bar: ws.wm.Window {
 
 	Property!(XA_CARDINAL, false) workspace;
 	Property!(XA_WINDOW, false) currentWindow;
-	Property!(XA_CARDINAL, true) strut;
+	Property!(XA_CARDINAL, true) strutProperty;
 
 	Client currentClient;
 
 	bool autohide = false;
+
+	string alignment;
+
+	bool overviewOnly;
+	bool strut;
 
 	bool hidden;
 
@@ -60,31 +68,38 @@ class Bar: ws.wm.Window {
 
 	Widget[] widgets;
 
-	this(App app){
+	this(App app, string barName, bool strut, bool overviewOnly){
+		Log("creating bar - " ~ barName);
 		this.app = app;
+		this.strut = strut && !overviewOnly;
+		this.overviewOnly = overviewOnly;
 		auto screens = screens(wm.displayHandle);
 
-		workspaceIndicator = addNew!WorkspaceIndicator;
-		workspaceIndicator.alignment = Widget.Alignment.left;
-		widgets ~= workspaceIndicator;
+		if(!overviewOnly){
+			workspaceIndicator = addNew!WorkspaceIndicator;
+			workspaceIndicator.alignment = Widget.Alignment.left;
+			widgets ~= workspaceIndicator;
 
-		taskList = addNew!TaskList(this);
-		taskList.alignment = Widget.Alignment.center;
-		widgets ~= taskList;
+			taskList = addNew!TaskList(this);
+			taskList.alignment = Widget.Alignment.center;
+			widgets ~= taskList;
 
-		tray = addNew!Tray(this);
-		tray.alignment = Widget.Alignment.right;
-		widgets ~= tray;
+			tray = addNew!Tray(this);
+			tray.alignment = Widget.Alignment.right;
+			widgets ~= tray;
 
-		battery = addNew!Battery;
-		battery.alignment = Widget.Alignment.right;
-		widgets ~= battery;
+			battery = addNew!Battery;
+			battery.alignment = Widget.Alignment.right;
+			widgets ~= battery;
 
-		clock = addNew!ClockWidget;
-		clock.alignment = Widget.Alignment.right;
-		widgets ~= clock;
+			clock = addNew!ClockWidget;
+			clock.alignment = Widget.Alignment.right;
+			widgets ~= clock;
+		}else{
+			widgets ~= addNew!WorkspaceList;
+		}
 
-		super(screens[0].w, 24, "flatman bar");
+		super(screens[0].w, 24, "flatman bar - " ~ barName);
 
 		if(autohide){
 			resize([size.w, 1]);
@@ -116,14 +131,18 @@ class Bar: ws.wm.Window {
 			}
 		};
 
-		strut = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
-		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+		strutProperty = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
+		if(this.strut){
+			strutProperty = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+		}
 
 		Events ~= this;
 
 	}
 
 	void systray(bool enable){
+		if(!tray)
+			return;
 		if(enable){
 			tray.enable;
 		}else if(!enable){
@@ -147,15 +166,15 @@ class Bar: ws.wm.Window {
 	void tick(){
 		foreach(w; widgets)
 			w.tick;
-		bool resize;
+		bool layout;
 		foreach(w; widgets){
 			if(w.savedWidth != w.width){
 				w.savedWidth = w.width;
-				resize = true;
+				layout = true;
 			}
 		}
-		if(resize)
-			resized(size);
+		if(layout)
+			this.layout();
 	}
 
 	override void onDraw(){
@@ -163,7 +182,7 @@ class Bar: ws.wm.Window {
 		tick;
 		auto time = Clock.currTime;
 		if(update || time.second != second){
-			if(update)
+			if(update && taskList)
 				taskList.update(app.clients);
 
 			draw.setColor(config.theme.background);
@@ -180,12 +199,21 @@ class Bar: ws.wm.Window {
 
 	override void moved(int[2] pos){
 		super.moved(pos);
-		strut = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+		if(strut){
+			strutProperty = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+		}
 	}
 
 	override void resized(int[2] size){
 		super.resized(size);
-		writeln("resized ", size);
+		if(strut){
+			strutProperty = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+		}
+		layout;
+		onDraw;
+	}
+
+	void layout(){
 		int left = config.theme.padding;
 		foreach(w; widgets.filter!(a => a.alignment == Widget.Alignment.left)){
 			w.move([left, 0]);
@@ -221,6 +249,16 @@ class Bar: ws.wm.Window {
 	void evProperty(WindowHandle, XPropertyEvent* e){
 		properties.update(e);
 		update = true;
+	}
+
+	@Overview
+	void onOverview(bool on){
+		if(overviewOnly){
+			if(on)
+				show;
+			else
+				hide;
+		}
 	}
 
 }

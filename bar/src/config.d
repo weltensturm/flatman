@@ -47,9 +47,12 @@ struct Config {
 	Theme theme;
 
 	struct Bar {
-		int screen = 0;
-		string aligned = "top";
-		bool systray = false;
+		string screen = "all";
+		string alignment = "top";
+		bool systray = true;
+		bool overviewOnly = false;
+		bool workspacesOnly = false;
+		bool strut = true;
 	}
 	Bar[string] bars;
 

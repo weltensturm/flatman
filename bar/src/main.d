@@ -28,6 +28,9 @@ extern(C) nothrow @nogc @system void stop(int){
 }
 
 
+alias Overview = Event!("FlatmanOverview", void function(bool));
+
+
 void main(){
 
 	version(unittest){ import core.stdc.stdlib: exit; exit(0); }
@@ -97,32 +100,39 @@ class App {
 
 	@(ConfigLoaded!Config)
 	void configChanged(){
-		Log("reloading config");
-		foreach(bar; bars){
-			bar.close;
-			bar.destroy;
-		}
-		bars = [];
-		void delegate()[] delay;
-		auto screens = .screens(wm.displayHandle);
-		foreach(barConf; config.bars){
-			if(barConf.screen !in screens)
-				continue;
-			auto bar = new Bar(this);
-			wm.add(bar);
-			bar.show;
-			bar.screen = barConf.screen;
-			if(!barConf.systray){
-				bar.systray(false);
-			}else{
-				delay ~= { bar.systray(true); };
+		with(Log("reloading config")){
+			foreach(bar; bars){
+				bar.close;
+				bar.destroy;
+				wm.remove(bar);
 			}
-			bars ~= bar;
+			bars = [];
+			void delegate()[] delay;
+			auto screens = .screens(wm.displayHandle);
+			bool systraySet = false;
+			foreach(barName, barConf; config.bars){
+				foreach(i, screen; screens){
+					if(barConf.screen == "all" || barConf.screen.to!int == i){
+						auto bar = new Bar(this, barName ~ " - " ~ i.to!string, barConf.strut, barConf.overviewOnly);
+						bar.screen = i;
+						bar.alignment = barConf.alignment;
+						wm.add(bar);
+						bar.show;
+						if(!barConf.systray || systraySet){
+							bar.systray(false);
+						}else{
+							systraySet = true;
+							delay ~= { bar.systray(true); };
+						}
+						bars ~= bar;
+					}
+				}
+			}
+			if(!bars.length)
+				Log("WARNING: no bars created");
+			foreach(d;delay){d();}
+			updateScreens;
 		}
-		if(!bars.length)
-			writeln("WARNING: no bars created");
-		foreach(d;delay){d();}
-		updateScreens;
 	}
 
 	void scan(){
@@ -144,16 +154,47 @@ class App {
 	}
 
 	void updateScreens(){
+
+		alias Rect = Tuple!(int[2], int[2]);
+
+		Tuple!(int[2], int[2]) delegate(int[2], int[2])[string] alignments = [
+			"left": (pos, size) => Rect([24, size.h], [pos.x, pos.y]),
+			"right": (pos, size) => Rect([24, size.h], [pos.x+size.w, pos.y]),
+			"top": (pos, size) => Rect([size.w, 24], [pos.x, pos.y]),
+			"bottom": (pos, size) => Rect([size.w, 24], [pos.x, pos.y+size.h-24])
+		];
+
 		screens = .screens(wm.displayHandle);
-		writeln(screens);
+		Log("screens: " ~ screens.to!string);
+		auto realEstate = screens.dup;
 		foreach(bar; bars){
 			if(bar.screen in screens){
+				auto screen = realEstate[bar.screen];
+				auto rect = alignments[bar.alignment]([screen.x, screen.y], [screen.w, screen.h]);
+				if(bar.strut){
+					final switch(bar.alignment){
+						case "left":
+							realEstate[bar.screen].x += rect[0].w;
+							realEstate[bar.screen].w -= rect[0].w;
+							break;
+						case "right":
+							realEstate[bar.screen].w -= rect[0].w;
+							break;
+						case "top":
+							realEstate[bar.screen].y += rect[0].h;
+							realEstate[bar.screen].h -= rect[0].h;
+							break;
+						case "bottom":
+							realEstate[bar.screen].h -= rect[0].h;
+							break;
+					}
+				}
+				bar.resize(rect[0]);
+				bar.move(rect[1]);
 				bar.show;
-				bar.resize([screens[bar.screen].w, bar.size.h]);
-				bar.move([screens[bar.screen].x, screens[bar.screen].y]);
 			}else{
 				bar.hide;
-				writeln("WARNING: could not find screen ", bar.screen);
+				Log("WARNING: could not find screen " ~ bar.screen.to!string);
 			}
 		}
 	}
@@ -207,6 +248,16 @@ class App {
 				c.screen = screens.findScreen([e.x, e.y], [e.width, e.height]);
 				return;
 			}
+		}
+	}
+
+    @WindowProperty
+	void evProperty(WindowHandle window, XPropertyEvent* e){
+		if(window == .root && e.atom == Atoms._FLATMAN_OVERVIEW){
+			if(window.props._FLATMAN_OVERVIEW.get!long)
+				Overview(true);
+			else
+				Overview(false);
 		}
 	}
 

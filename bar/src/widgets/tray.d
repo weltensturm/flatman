@@ -222,7 +222,6 @@ class TrayClient: Base {
 
     @WindowConfigure
     void configure(XConfigureEvent* e){
-        writeln("configured ", pos, size);
         pos = [e.x, e.y];
         size = [e.width, e.height];
         createPicture;
@@ -230,7 +229,6 @@ class TrayClient: Base {
 
     @WindowMap
     override void onShow(){
-        writeln("shown");
         createPicture;
     }
 
@@ -269,7 +267,6 @@ class TrayClient: Base {
         //XRenderColor color = { 0, 0, 0, 0 };
         //X.RenderFillRectangle(dpy, PictOpSrc, picture, &color, 0, 0, a.width, a.height);
         window.sendExpose;
-        writeln("Created picture");
     }
 
     void drawTo(Picture target){
