@@ -346,6 +346,8 @@ void onMapRequest(Window parent, Window window){
     }
     if(auto c = find(window)){
         c.show;
+        if(!monitor.workspace.clients.canFind!("a.orig == b")(window))
+            return;
         c.focus;
         return;
     }
