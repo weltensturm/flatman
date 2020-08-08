@@ -166,14 +166,20 @@ void setup(bool autostart){
 	ewmh.updateWorkarea;
 	ewmh.setSupportingWm;
 
+    ConfigLoaded!NestedConfig ~= {
+        writeln("Config reloaded");
+        Log.info("Config reloaded");
+        if(!config.logging)
+            Log.setLevel(Log.Level.error);
+        else
+            Log.setLevel(Log.Level.info);
+    };
+
 	auto configs = ["/etc/flatman/config.ws", "~/.config/flatman/config.ws"];
 	config.loadAndWatch(configs, (string msg, bool fatal){
 		Log.error(msg);
 		notify(msg);
 	});
-
-	if(!config.logging)
-		Log.setLevel(Log.Level.error);
 
 }
 

@@ -51,12 +51,14 @@ struct Log {
     enum BOLD = "\033[1m";
 
     enum Level {
-        error = 0,
-        info = 1
+        dbg = 0,
+        info = 1,
+        warning = 2,
+        error = 3
     }
 
-    this(lazy string s){
-        info(s);
+    this(lazy string s, Level level=Level.info){
+        log(s, level);
         synchronized(mutex)
             indent++;
     }
@@ -65,17 +67,29 @@ struct Log {
         synchronized(mutex)
             indent--;
     }
+    
+    static void log(lazy string s, Level level){
+        if(level >= this.level){
+            string text = format(s());
+            logger.send(text);
+        }
+    }
+
+    static void dbg(lazy string s){
+        log(s, Level.dbg);
+    }
+
+    static void info(lazy string s){
+        log(s, Level.info);
+    }
+
+    static void warning(lazy string s){
+        log(s, Level.warning);
+    }
 
     static void error(string s){
         string text = format(RED ~ s);
         logger.send(s);
-    }
-
-    static void info(lazy string s){
-        if(level >= 1){
-            string text = format(s());
-            logger.send(text);
-        }
     }
 
     static void setLevel(Level level){

@@ -20,7 +20,8 @@ import
 
 /// Called after config has successfully loaded and been replaced
 template ConfigLoaded(T){
-    alias ConfigLoaded = Event!("ConfigLoaded!" ~ T.stringof, void function());
+    alias ConfigLoaded = Event!("ConfigLoaded!" ~ T.stringof, void function(),
+                                                              void function(ref T));
 }
 
 
@@ -53,6 +54,7 @@ void loadAndWatch(T)(auto ref T config, string[] configs, void delegate(string m
     }
 
     auto reload = {
+        T old = config;
         try{
             auto newConfig = T();
             newConfig.fillConfigNested(configs);
@@ -65,21 +67,22 @@ void loadAndWatch(T)(auto ref T config, string[] configs, void delegate(string m
             errorHandler(e.toString, false);
             return;
         }
+        ConfigLoaded!T(old);
         ConfigLoaded!T();
     };
 
     reload();
 
-    foreach(file; configs){
+    configs.each!((file){
         file = file.expandTilde;
-        if(!file.exists)
-            continue;
-        Inotify.watch(file.dirName, (path, f, m){
-            if(file == buildPath(path, f) && m == Inotify.Modify){
-                reload();
-            }
-        });
-    }
+        if(file.exists){
+            Inotify.watch(file.dirName, (path, f, m){
+                if(file == buildPath(path, f) && m == Inotify.Modify){
+                    reload();
+                }
+            });
+        }
+    });
 
 }
 
