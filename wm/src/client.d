@@ -293,7 +293,7 @@ class Client: Base {
                 orig,
                 true,
                 ButtonPressMask,
-                GrabModeAsync,
+                GrabModeSync,
                 GrabModeAsync,
                 .root,
                 None
@@ -313,6 +313,11 @@ class Client: Base {
                 orig
             );
         }
+    }
+
+    @WindowMouseButton
+    void onButton(bool pressed, int button){
+        XAllowEvents(dpy, ReplayPointer, CurrentTime);
     }
 
     void hideSoft(){
