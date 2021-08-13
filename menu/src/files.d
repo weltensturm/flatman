@@ -496,7 +496,7 @@ class DirectoryTree: FileTree, Path {
 		return true;
 	}
 
-	alias add = super.add;
+	alias add = typeof(super).add;
 
 	void add(string path){
 		try {
