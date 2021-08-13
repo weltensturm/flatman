@@ -21,10 +21,28 @@ class Backend {
 
     void swap(){
     }
+    void swap(ref CompositeMonitor){
+    }
 
     void destroy(){
     }
 
+    DrawEmpty target(CompositeMonitor){ return null; }
+
+    void freezeDamage(ref CompositeMonitor){}
+
     void damage(RootDamage){}
+    void damage(CompositeMonitor, RootDamage){}
 
 }
+
+
+class BackendMonitor {
+
+    int[2] size;
+    int[2] pos;
+    DrawEmpty draw;
+
+}
+
+

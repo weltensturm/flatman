@@ -66,9 +66,21 @@ double[N] calculate(size_t N)(Animation[N] animation){
 }
 
 
+T area(T)(T[2] size){
+    return size.w * size.h;
+}
+
+
 void replace(size_t N, T)(Animation[N] animation, T[N] target){
     foreach(i; 0..N)
         animation[i].replace(target[i]);
+}
+
+
+auto median(alias comparator, T)(T input) if(isInputRange!T) {
+    auto sorted = input.dup;
+    sorted.sort!comparator;
+    return sorted[(sorted.length/2).min(sorted.length-1).max(0)];
 }
 
 
@@ -84,17 +96,28 @@ struct Profile {
         string fullName;
         string name;
         size_t level;
+        double sum = 0;
         RotatingArray!(240, double) times;
     }
 
     private static Stack!string levels;
     private static PerfSection[string] sections;
     private static bool[string] ticked;
+    private static double lastDraw = 0;
 
     static reset(){
         debug(Profile){
             foreach(ref b; ticked)
                 b = false;
+            string[] marked;
+            foreach(name, ref section; sections){
+                if(section.times.elements[].sum == 0)
+                    marked ~= name;
+            }
+            foreach(name; marked){
+                sections.remove(name);
+                ticked.remove(name);
+            }
         }
     }
 
@@ -119,7 +142,7 @@ struct Profile {
             levels.pop;
             ticked[perf.fullName] = true;
             auto diff = now - start;
-            perf.times ~= diff;
+            perf.sum += diff;
         }
     }
 
@@ -129,18 +152,23 @@ struct Profile {
         }
     }
 
-    static display(Backend backend){
+    static display(DrawEmpty backend, int[2] pos){
         debug(Profile){
+            auto currTime = now;
             foreach(name, ref section; sections){
                 if(section.fullName !in ticked || !ticked[section.fullName]){
                     section.times ~= 0;
+                }else{
+                    section.times ~= section.sum;
+                    section.sum = 0;
                 }
             }
+            lastDraw = currTime;
             //writeln(" ".replicate(level*4) ~ "%3.5f".format(diff) ~ ": " ~ name());
-            int y = 50;
-            backend.setFont("ProggyTinyTT", 12);
+            int y = pos.y + 50;
+            backend.setFont("Monospace", 8);
             backend.clip([0, 0], [400, manager.height]);
-            backend.setColor([0, 0, 0, 0.4]);
+            backend.setColor([0, 0, 0, 0.7]);
             backend.rect([0, 0], [400, manager.height]);
             foreach(section; sections.keys.sort){
                 auto perf = sections[section];
@@ -149,6 +177,7 @@ struct Profile {
                     time = perf.times.first;
                 else
                     time = perf.times.fold!max;
+                auto time_frame = perf.times.first;
                 bool zero = true;
                 foreach(v; perf.times){
                     if(v > 0)
@@ -165,9 +194,10 @@ struct Profile {
                 }else{
                     backend.setColor([1, 1 - time*60, 1 - time*60, time*60]);
                 }
-                backend.text([100, manager.height-y], "%s".format((time * 1000000).to!long), 1);
+                backend.text([50, y], "%s".format((time_frame * 1000000).to!long), 1);
+                backend.text([100, y], "%s".format((time * 1000000).to!long), 1);
                 backend.setColor([1, 1, 1]);
-                backend.text([100 + 10, manager.height-y], "- ".repeat(perf.level-1).join ~ perf.name);
+                backend.text([100 + 10, y], "- ".repeat(perf.level-1).join ~ perf.name);
                 y += backend.fontHeight;
             }
             backend.noclip;
@@ -212,7 +242,7 @@ struct RotatingArray(size_t Size, T) {
             counter = 0;
     }
     T first(){
-        return elements[counter];
+        return elements[counter.max(1)-1];
     }
     int opApply(int delegate(T value) dg){
         int res = 0;

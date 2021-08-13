@@ -61,7 +61,6 @@ public import
 	composite.main,
 	composite.config,
 	composite.backend.backend,
-	composite.backend.xrender,
 	composite.backend.xrenderWindow,
 	composite.overview.overview,
 	composite.damage,

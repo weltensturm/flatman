@@ -1,9 +1,19 @@
 module composite.main;
 
-import composite.events;
-import composite;
+import composite.events,
+       composite.xpresent,
+       composite,
+       composite.backend.xrenderMulti,
+       composite.backend.xrenderMultiDraw;
 
-import common.event, common.xevents, common.log, common.xerror, std.typecons;
+import
+    std.meta,
+    x11.extensions.Xrandr,
+    common.event,
+    common.xevents,
+    common.log,
+    common.xerror,
+    std.typecons;
 
 
 
@@ -22,10 +32,6 @@ extern(C) nothrow @nogc @system void stop(int){
 
 auto batterySave = false;
 
-
-RotatingArray!(30, double) frameTimes;
-
-
 x11.Xlib.Screen screen;
 ulong root;
 
@@ -39,26 +45,32 @@ void main(){
 
     Log.setLevel(Log.Level.info);
 
+    // core.memory.GC.disable();
+
     try {
         signal(SIGINT, &stop);
         XSetErrorHandler(&xerror);
         Xdbe.init(wm.displayHandle);
         root = XDefaultRootWindow(wm.displayHandle);
+        xrr_update;
         new CompositeManager;
-        double lastFrame = now;
         while(running){
             Profile.reset;
-            manager.clear;
+            // with(Profile("gc.collect")){
+            //     core.memory.GC.collect();
+            // }
             with(Profile("events")){
                 wm.processEvents((e){
-                    if(e.type == 91){
-                        handleEvent(e);
-                    }else{
-                        with(Log(formatEvent(e, root))){
+                    with(Profile(formatEventAscii(e, root))){
+                        if(e.type == 91 || e.type == 35){
                             handleEvent(e);
+                        }else{
+                            with(Log(formatEvent(e, root))){
+                                handleEvent(e);
+                            }
                         }
                     }
-                });
+                }, true);
             }
             if(manager.restack){
                 with(Profile("restack")){
@@ -66,22 +78,121 @@ void main(){
                     manager.restack = false;
                 }
             }
-            Tick();
+            with(Profile("Tick")){
+                Tick();
+            }
+            manager.animate;
             Profile.damagee(manager.damage);
             manager.draw;
-            with(Profile("sleep")){
-                auto frame = now;
-                frameTimes ~= frame - lastFrame;
-                if(frame-lastFrame < 1/144.0)
-                    Thread.sleep(((1/144.0 - (frame-lastFrame))*1000).lround.msecs);
-                lastFrame = frame;
-            }
+            
         }
     }catch(Throwable t){
         writeln(t);
     }
     manager.cleanup;
     Log.shutdown;
+}
+
+
+auto eventType(XEvent* ev){
+
+    alias events = AliasSeq!(
+        tuple(ButtonPress,       "ButtonPress"),
+        tuple(ButtonRelease,     "ButtonRelease"),
+
+        tuple(MotionNotify,      "MotionNotify"),
+
+        tuple(ClientMessage,     "ClientMessage"),
+        tuple(ConfigureRequest,  "ConfigureRequest"),
+        tuple(ConfigureNotify,   "ConfigureNotify"),
+        tuple(CreateNotify,      "CreateNotify"),
+        tuple(DestroyNotify,     "DestroyNotify"),
+        tuple(EnterNotify,       "EnterNotify"),
+        tuple(Expose,            "Expose"),
+        tuple(FocusIn,           "FocusIn"),
+        tuple(FocusOut,          "FocusOut"),
+        tuple(KeyPress,          "KeyPress"),
+        tuple(KeyRelease,        "KeyRelease"),
+        tuple(MappingNotify,     "MappingNotify"),
+        tuple(MapRequest,        "MapRequest"),
+        tuple(PropertyNotify,    "PropertyNotify"),
+        tuple(UnmapNotify,       "UnmapNotify"),
+        tuple(MapNotify,         "MapNotify"),
+        tuple(ReparentNotify,    "ReparentNotify")
+    );
+
+    static foreach(event; events){
+        if(event[0] == ev.type){
+            return event[1];
+        }
+    }
+
+    return "Event %s".format(ev.type);
+}
+
+
+auto formatEventAscii(XEvent* ev, WindowHandle root){
+
+    auto dpy = wm.displayHandle;
+
+    auto formatButton = {
+        return "%s (%s)".format(ev.xbutton.button, ev.xbutton.state);
+    };
+
+    auto formatMotion = {
+        return "[%s, %s] root[%s, %s]".format(ev.xmotion.x, ev.xmotion.y, ev.xmotion.x_root, ev.xmotion.y_root);
+    };
+
+    auto formatKey = {
+        KeySym keysym = XKeycodeToKeysym(dpy, cast(KeyCode)ev.xkey.keycode, 0);
+        return "%s %s (%s)".format(ev.xkey.keycode, keysym, ev.xkey.state);
+    };
+
+    auto formatWindow(WindowHandle window){
+        if(window == root)
+            return "%s:root".format(window);
+        else
+            return "%s".format(window);
+    }
+
+    alias events = AliasSeq!(
+        tuple(ButtonPress,       "ButtonPress",       "xbutton",           () => formatButton()),
+        tuple(ButtonRelease,     "ButtonRelease",     "xbutton",           () => formatButton()),
+
+        tuple(MotionNotify,      "MotionNotify",      "xmotion",           () => formatMotion()),
+
+        tuple(ClientMessage,     "ClientMessage",     "xclient",           () => ev.xclient.to!string),
+        tuple(ConfigureRequest,  "ConfigureRequest",  "xconfigurerequest", () => ev.xconfigurerequest.to!string),
+        tuple(ConfigureNotify,   "ConfigureNotify",   "xconfigure",        () => ev.xconfigure.to!string),
+        tuple(CreateNotify,      "CreateNotify",      "xcreatewindow",     () => ev.xcreatewindow.to!string),
+        tuple(DestroyNotify,     "DestroyNotify",     "xdestroywindow",    () => ev.xdestroywindow.to!string),
+        tuple(EnterNotify,       "EnterNotify",       "xcrossing",         () => ev.xcrossing.to!string),
+        tuple(Expose,            "Expose",            "xexpose",           () => ev.xexpose.to!string),
+        tuple(FocusIn,           "FocusIn",           "xfocus",            () => ev.xfocus.to!string),
+        tuple(FocusOut,          "FocusOut",          "xfocus",            () => ev.xfocus.to!string),
+        tuple(KeyPress,          "KeyPress",          "xkey",              () => formatKey()),
+        tuple(KeyRelease,        "KeyRelease",        "xkey",              () => formatKey()),
+        tuple(MappingNotify,     "MappingNotify",     "",                  () => ""),
+        tuple(MapRequest,        "MapRequest",        "xmaprequest",       () => ""),
+        tuple(PropertyNotify,    "PropertyNotify",    "xproperty",         () => XGetAtomName(dpy, ev.xproperty.atom).to!string),
+        tuple(UnmapNotify,       "UnmapNotify",       "xmap",              () => ""),
+        tuple(MapNotify,         "MapNotify",         "xmap",              () => ""),
+        tuple(ReparentNotify,    "ReparentNotify",    "xreparent",         () => formatWindow(ev.xreparent.parent))
+    );
+
+    static foreach(event; events){
+        if(event[0] == ev.type){
+            auto msg = "";
+            static if(event[2].length){
+                auto win = __traits(getMember, ev, event[2]).window;
+                msg ~= formatWindow(win);
+            }
+            return msg ~ " " ~ event[1] ~ " " ~ event[3]();
+        }
+    }
+
+    return "Event %s".format(ev.type);
+
 }
 
 
@@ -153,10 +264,31 @@ auto formatEvent(XEvent* ev, WindowHandle root){
 }
 
 
+struct CompositeMonitor {
+    int[2] pos;
+    int[2] size;
+    RRCrtc crtc;
+    bool backbufferReady;
+    bool presenting;
+    bool pixmapIdle = true;
+    RotatingArray!(30, double) frameTimes;
+    double lastFrame;
+}
+
+
+struct PresentInfo {
+    int opcode;
+    int eventbase;
+    int errorbase;
+}
+
+
 class CompositeManager {
 
     FrameTimer frameTimer;
     GLXPixmap glxPixmap;
+
+    x11.X.Window overlayWindow;
 
     int width;
     int height;
@@ -168,8 +300,11 @@ class CompositeManager {
     CompositeClient[] destroyed;
     x11.X.Window[] windows;
 
+    PresentInfo present;
+
     Overview overview;
 
+    CompositeMonitor[] monitors;
     common.screens.Screen[int] screens;
 
     Properties!(
@@ -235,7 +370,21 @@ class CompositeManager {
             | ExposureMask
             | PropertyChangeMask);
 
-        "created backbuffer".writeln;
+        if(true){
+            overlayWindow = XCompositeGetOverlayWindow(wm.displayHandle, root);
+            XserverRegion region = XFixesCreateRegion(wm.displayHandle, null, 0);
+            XFixesSetWindowShapeRegion(wm.displayHandle, overlayWindow, 0, 0, 0, 0);
+            XFixesSetWindowShapeRegion(wm.displayHandle, overlayWindow, 2, 0, 0, region);
+            XFixesDestroyRegion(wm.displayHandle, region);
+            XSelectInput(wm.displayHandle, overlayWindow, ExposureMask);
+        }else{
+            overlayWindow = root;
+        }
+
+        XPresentQueryExtension(wm.displayHandle, &present.opcode, &present.eventbase, &present.errorbase);
+        XPresentSelectInput(wm.displayHandle, overlayWindow, PresentCompleteNotifyMask | PresentIdleNotifyMask);
+
+        XSync(wm.displayHandle, false);
 
         properties.window(.root);
 
@@ -247,11 +396,10 @@ class CompositeManager {
         overview = new Overview(this);
 
         if(config.redirect){
-            backend = new XRenderBackend;
+            backend = new XRenderMultiBackend;
         }else{
             backend = new XRenderWindowBackend(overview.window);
         }
-        backend.resize([width, height]);
 
         properties.workspace ~= (workspace){
             foreach(c; clients)
@@ -268,14 +416,22 @@ class CompositeManager {
         Events ~= this;
     }
 
-    void clear(){
-        if(!config.redirect && !overview.visible)
-            return;
-        damage.reset(clients.map!(a => a.damage));
-    }
-
     void updateScreens(){
+        monitors = [];
+        auto crcts = xrr_info();
+        foreach(s; .screens(wm.displayHandle)){
+            RRCrtc crtc_found;
+            int a, area = -1;
+            foreach(crtc; crcts){
+                if((a = intersectArea([s.x, s.y], [s.w, s.h], crtc.pos, crtc.size)) > area){
+                    area = a;
+                    crtc_found = crtc.crtc;
+                }
+            }
+            monitors ~= CompositeMonitor([s.x, s.y], [s.w, s.h], crtc_found);
+        }
 		screens = .screens(wm.displayHandle);
+        backend.resize([width, height]);
     }
 
     void cleanup(){
@@ -296,6 +452,9 @@ class CompositeManager {
     void evCreate(bool _, x11.X.Window window){
         if(find(window))
             return;
+        if(window == overlayWindow){
+            return;
+        }
         XWindowAttributes wa;
         if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly)
             return;
@@ -332,7 +491,6 @@ class CompositeManager {
     void evConfigure(WindowHandle window, XConfigureEvent* e){
         if(window == .root){
             updateScreens,
-            backend.resize([e.width, e.height]);
             width = e.width;
             height = e.height;
         }
@@ -367,6 +525,37 @@ class CompositeManager {
                 c.processEvent(e);
                 restack = true;
             }
+        }else if(e.type == GenericEvent){
+            auto generic_event = cast(XGenericEvent*) e;
+            auto generic_event_cookie = cast(XGenericEventCookie*) generic_event;
+
+            if(generic_event_cookie.extension == present.opcode){
+                XGetEventData(wm.displayHandle, generic_event_cookie);
+
+                if(generic_event_cookie.evtype == PresentCompleteNotify){
+                    foreach(ref monitor; monitors){
+                        if(monitor.crtc == (cast(XPresentCompleteNotifyEvent*)generic_event_cookie.data).serial_number){
+                            //Log.info("" ~ monitor.crtc.to!string ~ " ready");
+                            monitor.presenting = false;
+                        }
+                    }
+                }else if (generic_event_cookie.evtype == PresentIdleNotify){
+                    foreach(ref monitor; monitors){
+                        if(monitor.crtc == (cast(XPresentIdleNotifyEvent*)generic_event_cookie.data).serial_number){
+                            //Log.info("" ~ monitor.crtc.to!string ~ " pixmap idle");
+                            monitor.pixmapIdle = true;
+                        }
+                    }
+                }
+                XFreeEventData(wm.displayHandle, generic_event_cookie);
+            }
+        }
+    }
+
+    @WindowExpose
+    void onExpose(x11.X.Window window){
+        if(window == overlayWindow){
+            damage.damage([0,0], [width, height]);
         }
     }
 
@@ -433,60 +622,6 @@ class CompositeManager {
         clients.sort!((a, b) => a.sortIndex < b.sortIndex);
     }
 
-    x11.X.Window vsyncWindow;
-
-    void setupVerticalSync(){
-        GLint[] att = [GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, 0];
-        auto graphicsInfo = glXChooseVisual(wm.displayHandle, 0, att.ptr);
-        auto graphicsContext = glXCreateContext(wm.displayHandle, graphicsInfo, null, True);
-        writeln(graphicsContext);
-        vsyncWindow = XCreateSimpleWindow(wm.displayHandle, root, 0, 0, 1, 1, 0, 0, 0);
-        //XMapWindow(wm.displayHandle, vsyncWindow);
-        glXMakeCurrent(wm.displayHandle, cast(uint)vsyncWindow, cast(__GLXcontextRec*)graphicsContext);
-
-    }
-
-    void setupVerticalSyncPixmap(){
-        /+
-        import derelict.opengl3.glx;
-        import derelict.opengl3.glxext;
-
-        int[] pixmap_attribs = [
-            GLX_TEXTURE_TARGET_EXT, GLX_TEXTURE_2D_EXT,
-            GLX_TEXTURE_FORMAT_EXT, GLX_TEXTURE_FORMAT_RGB_EXT,
-            None
-        ];
-        glxPixmap = glXCreatePixmap(wm.displayHandle, null, cast(uint)backBuffer, pixmap_attribs.ptr);
-
-        GLint[] att = [GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, 0];
-        auto graphicsInfo = glXChooseVisual(wm.displayHandle, 0, att.ptr);
-        auto graphicsContext = glXCreateContext(wm.displayHandle, graphicsInfo, null, True);
-        glXMakeCurrent(wm.displayHandle, cast(uint)glxPixmap, cast(__GLXcontextRec*)graphicsContext);
-        +/
-
-    }
-
-    void verticalSync(){
-        glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
-        glFinish();
-    }
-
-    void verticalSyncDraw(){
-        glViewport(0,0,width,height);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(0,1,0,1,0,1);
-        glMatrixMode(GL_MODELVIEW);
-
-        glBegin(GL_QUADS);
-        glVertex2f(0,0);
-        glVertex2f(1,0);
-        glVertex2f(1,1);
-        glVertex2f(0,1);
-        glEnd();
-        glXSwapBuffers(wm.displayHandle, cast(uint)vsyncWindow);
-    }
-
     void animate(CompositeClient c){
         c.animScale = 1;//alpha/4+0.75;
         c.animAlpha = c.animation.fade.calculate;
@@ -511,6 +646,13 @@ class CompositeManager {
             c.animation.rect.size.y.lround.to!int
         ];
         overview.calcWindow(c, c.animPos, c.animOffset, c.animSize, c.animScale, c.animAlpha, c.animGhostAlpha);
+        if(c.attachedTo){
+            c.animPos = [
+                c.attachedTo.animPos.x,
+                c.attachedTo.animPos.y-c.animSize.h
+            ];
+            c.animSize.w = c.attachedTo.animSize.w;
+        }
         if(c.animPos != c.oldPos || c.animSize != c.oldSize){
             moved(c, c.animPos, c.animSize);
             c.oldPos = c.animPos;
@@ -539,9 +681,11 @@ class CompositeManager {
                 ]
             );
         }
+        c.damage.areas = [];
     }
 
-    void draw(){
+    void animate(){
+
         frameTimer.tick;
         double statePerSecond = 1/0.25*config.animationSpeed;
         if(overview.doOverview)
@@ -557,6 +701,7 @@ class CompositeManager {
             return;
     
         CompositeClient[] windowsDraw;
+        windowsDraw.reserve(clients.length);
 
         with(Profile("calc draw")){
 
@@ -584,7 +729,8 @@ class CompositeManager {
                             continue;
                         if((!overview.visible && c.animation.fade.calculate <= 0.0001
     								|| !overview.visible
-    									&& ![manager.properties.workspace.value, -1].canFind(c.properties.workspace.value)
+                                        && c.properties.workspace.value != manager.properties.workspace.value
+                                        && c.properties.workspace.value != -1
     									&& !c.a.override_redirect
                                     || c.animPos.x+c.animSize.w <= 0
                                     || c.animPos.y+c.animSize.h <= 0
@@ -605,47 +751,120 @@ class CompositeManager {
                 }
             }
 
-            with(Profile("calc draw damage")){
-                backend.damage(damage);
-            }
-
-            backend.render(root_picture, false, 1, [0, 0], [0, 0], [width, height]);
-            if(overview.visible){
-                backend.setColor([0,0,0,0.7*overview.state.sinApproach]);
-                backend.rect([0,0], [width, height]);
-            }
-
-        }
-
-        if(overview.visible){
-            with(Profile("overview draw")){
-                overview.draw(backend, windowsDraw);
-            }
-        }else{
-            with(Profile("draw")){
-                foreach(c; windowsDraw){
-                    .draw(backend, c);
+            debug(FPS){
+                foreach(monitor; monitors){
+                    damage.damage([monitor.pos.x + monitor.size.w/2 - 13, monitor.pos.y + 28], [25, 20]);
                 }
-            }    
-        }
-        
-        with(Profile("profile draw")){
-            Profile.display(backend);
+            }
+
         }
 
-        with(Profile("XSync")){
-            XSync(wm.displayHandle, false);
-        }
-        backend.swap;
     }
+
+    void draw(){
+
+        if(!config.redirect && !overview.visible)
+            return;
+        
+        bool profileDrawn;
+
+        foreach(ref monitor; monitors){
+
+            if(monitor.backbufferReady || !monitor.pixmapIdle)
+                continue;
+
+            monitor.pixmapIdle = false;
+
+            auto frame = now;
+            monitor.frameTimes ~= frame - monitor.lastFrame;
+            monitor.lastFrame = frame;
+
+            with(Profile("calc draw damage")){
+                backend.damage(monitor, damage);
+            }
+
+            auto draw = cast(XRenderMultiDraw)backend.target(monitor);
+
+            draw.render(root_picture, false, 1, monitor.pos, monitor.pos, monitor.size);
+
+            CompositeClient[] windowsDraw;
+
+            foreach(c; clients.chain(destroyed)){
+                if(c.a.override_redirect && !c.picture)
+                    continue;
+                if(c.animation.fade.calculate <= 0.0001 && c.floating)
+                    continue;
+                if(!overview.visible && c.animation.fade.calculate <= 0.0001
+                   || !overview.visible
+                       && c.properties.workspace.value != manager.properties.workspace.value
+                       && c.properties.workspace.value != -1
+                       && !c.a.override_redirect
+                   || c.animPos.x+c.animSize.w <= monitor.pos.x
+                   || c.animPos.y+c.animSize.h <= monitor.pos.y
+                   || c.animPos.x >= monitor.pos.x+monitor.size.w
+                   || c.animPos.y >= monitor.pos.y+monitor.size.h)
+                    continue;
+                windowsDraw ~= c;
+            }
+
+            if(overview.visible){
+                draw.setColor([0,0,0,0.7*overview.state.sinApproach]);
+                draw.rect(monitor.pos, monitor.size);
+            }
+
+            draw.setColor([0, 0, 0, 0.7]);
+            draw.rect([monitor.pos.x + 60, monitor.pos.y + 28], [25, 20]);
+            
+            if(overview.visible){
+                with(Profile("overview draw")){
+                    overview.draw(monitor, draw, windowsDraw);
+                }
+            }else{
+                with(Profile("draw")){
+                    foreach(c; windowsDraw){
+                        .draw(monitor, draw, c);
+                    }
+                }    
+            }
+            
+            debug(FPS){
+                draw.setFont("Consolas", 10);
+                draw.setColor([0, 0, 0, 0.7]);
+                draw.rect([monitor.pos.x + monitor.size.w/2 - 13, monitor.pos.y + 28], [25, 20]);
+                draw.setColor([1, 1, 1, 0.7]);
+                draw.text([monitor.pos.x + monitor.size.w/2, monitor.pos.y + 25], 20, "%.0f".format(1/monitor.frameTimes.fold!max), 0.5);
+            }
+
+            if(!profileDrawn){
+                profileDrawn = true;
+                with(Profile("profile draw")){
+                    Profile.display(draw, monitor.pos);
+                }
+            }
+
+            monitor.backbufferReady = true;
+            damage.reset(monitor, windowsDraw.map!(a => a.damage));
+
+        }
+
+        foreach(ref monitor; monitors){
+            if(!monitor.backbufferReady)
+                continue;
+            with(Profile("Present")){
+                backend.swap(monitor);
+            }
+        }
+
+    }
+
 
 }
 
 
-void draw(Backend backend, CompositeClient c){
+void draw(CompositeMonitor monitor, XRenderMultiDraw backend, CompositeClient c){
 
-    if(!c.damage.damaged)
-        return;
+    //if(!c.damage.damaged)
+    //    return;
 
     with(Profile(c.title)){
 
@@ -689,10 +908,11 @@ void draw(Backend backend, CompositeClient c){
                     backend.render(c.ghost, c.ghost.hasAlpha, c.animAlpha*transition, c.animOffset.to!(int[2]), c.animPos, c.animSize);
                 }else{
                     backend.setColor([0,0,0,c.animAlpha*transition]);
-                    backend.rect([c.animPos.x, manager.height - c.animSize.h - c.animPos.y], c.animSize);
+                    backend.rect(c.animPos, c.animSize);
                 }
             }
         }
         //drawShadow(c.animPos, c.animSize);
     }
 }
+

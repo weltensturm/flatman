@@ -60,6 +60,9 @@ class RectAnimation {
 class Animation {
 
 	static double time;
+	static this(){
+		time = 0;
+	}
 	static void update(){
 		time = now;
 	}

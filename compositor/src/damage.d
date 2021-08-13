@@ -1,6 +1,9 @@
 module composite.damage;
 
-import composite, common.xerror;
+import
+    composite,
+    common.log,
+    common.xerror;
 
 
 class WindowDamage {
@@ -58,11 +61,19 @@ class RootDamage {
         all = XFixesCreateRegion(wm.displayHandle, null, 0);
     }
 
-    void reset(T)(T clients){
-        XFixesSetRegion(wm.displayHandle, all, null, 0);
+    void reset(T)(CompositeMonitor monitor, T clients){
+
+        XRectangle r;
+        r.x = monitor.pos.x.to!short;
+        r.y = monitor.pos.y.to!short;
+        r.width = monitor.size.w.to!ushort;
+        r.height = monitor.size.h.to!ushort;
+        XserverRegion region = XFixesCreateRegion(wm.displayHandle, &r, 1);
+        XFixesSubtractRegion(wm.displayHandle, all, all, region);
+        XFixesDestroyRegion(wm.displayHandle, region);
+
         foreach(c; clients){
             c.damaged = false;
-            c.areas = [];
         }
     }
 
@@ -84,14 +95,15 @@ class RootDamage {
         XDamageSubtract(wm.displayHandle, event.damage, None, None);
     }
 
+    /*
     void damage(XDamageNotifyEvent* event){
         XserverRegion region = XFixesCreateRegion(wm.displayHandle, null, 0);
         XDamageSubtract(wm.displayHandle, event.damage, None, region);
         XFixesTranslateRegion(wm.displayHandle, region, event.geometry.x, event.geometry.y);
         XFixesUnionRegion(wm.displayHandle, all, all, region);
-        //XFixesSetPictureClipRegion( dpy, picture, 0, 0, region );
         XFixesDestroyRegion(wm.displayHandle, region);
     }
+    */
 
     void damage(int[2] pos, int[2] size){
         if(pos.x >= short.max || pos.y >= short.max || size.w >= ushort.max || size.h >= ushort.max){

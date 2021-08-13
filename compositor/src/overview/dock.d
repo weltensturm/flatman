@@ -24,8 +24,13 @@ import
     composite.main,
     composite.animation,
     composite.overview.overview,
+    
+    composite.overview.widget,
     composite.damage,
-    composite.backend.backend;
+    composite.backend.backend,
+    
+    composite.backend.xrenderMultiDraw
+    ;
 
 
 
@@ -93,7 +98,7 @@ class OverviewDock: Widget {
             ws.calcWindow(window);
     }
 
-    void draw(Backend backend, double state){
+    void draw(XRenderMultiDraw backend, double state){
         backend.setColor([0, 0, 0, 0.7*state]);
         backend.rect(pos, size);
         indicator.draw(backend);
@@ -205,74 +210,6 @@ class OverviewDock: Widget {
 }
 
 
-class Widget: Base {
-
-    struct Damage {
-        int[2] pos;
-        int[2] size;
-    }
-
-    Damage[] trackedDamage;
-
-    bool tagged;
-
-    override void move(int[2] pos){
-        if(pos == this.pos)
-            return;
-        damage(this.pos, size);
-        this.pos = pos;
-        damage;
-    }
-
-    void move(double[2] pos){
-        move([
-            pos.x.round.to!int,
-            pos.y.round.to!int
-        ]);
-    }
-
-    void resize(double[2] size){
-        resize([
-            size.w.round.to!int,
-            size.h.round.to!int
-        ]);
-    }
-
-    override void resize(int[2] size){
-        if(size == this.size)
-            return;
-        damage(pos, this.size);
-        this.size = size;
-        damage;
-    }
-
-    void damage(int[2] pos, int[2] size){
-        trackedDamage ~= Damage(pos, size);
-    }
-
-    void damage(){
-        tagged = true;
-    }
-
-    void damage(RootDamage damage){
-        auto translatedDamage = (int[2] pos, int[2] size){
-            damage.damage(
-                [pos.x, manager.height - pos.y - size.h],
-                size
-            );
-        };
-        if(tagged)
-            translatedDamage(pos, size);
-        tagged = false;
-
-        foreach(dmg; trackedDamage)
-            translatedDamage(dmg.pos, dmg.size);
-        trackedDamage = [];
-    }
-
-}
-
-
 class OverviewWorkspace: Widget {
 
     OverviewDock dock;
@@ -306,10 +243,11 @@ class OverviewWorkspace: Widget {
         }
     }
 
-    void draw(Backend backend, double state){
+    void draw(XRenderMultiDraw backend, double state){
         if(sortIndex == 0)
             return;
-        int[2] textp = [pos.x, pos.y+10];
+        int[2] textp = [pos.x, pos.y+size.h-22];
+        backend.setFont("Consolas", 10);
 
         textp.x += (size.w/2 - backend.width(name)/2).lround.to!int;
         auto last = name.split("/").length-1;
@@ -335,7 +273,7 @@ class OverviewWorkspace: Widget {
         foreach(winInfo; workspace.windows){
             if(winInfo.window == window.window){
                 if(window.window.properties.workspace.value != manager.properties.workspace.value){
-                    window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y - dock.pos.y;
+                    // window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y - dock.pos.y;
                     // TODO: same coordinate system everywhere
                     window.targetSize = [
                         (window.targetSize.w*scale).to!int,
@@ -345,7 +283,6 @@ class OverviewWorkspace: Widget {
                         (offset.x + window.targetPos.x*scale+pos.x - dock.monitor.pos.x*scale).to!int,
                         (offset.y + window.targetPos.y*scale+pos.y - dock.monitor.pos.y*scale + 6).to!int
                     ];
-                    window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y;
                 }
             }
         }
@@ -390,7 +327,7 @@ class WorkspaceIndicator: Widget {
         damage;
     }
 
-    void draw(Backend backend){
+    void draw(XRenderMultiDraw backend){
         enum border = 4;
         backend.setColor([1, 1, 1, state]);
         if(type == IndicatorType.current){
@@ -432,6 +369,8 @@ class Dock {
 
     @Tick
     void tick(){
+        if(state <= 0)
+            return;
         docks
             .filter!(a => !overview.monitors.canFind(a.monitor))
             .each!(a => a.destroy);
@@ -445,10 +384,9 @@ class Dock {
             .array;
 
         foreach(i, m; overview.monitors){
-            auto y = manager.height - m.pos.y - m.size.h;
             auto dock = docks[i];
-            dock.move([m.pos.x, y]);
             dock.resize([m.size.w, m.size.h/8.max(m.workspaces.length.to!int)]);
+            dock.move([m.pos.x, m.pos.y+m.size.h-dock.size.h]);
         }
     }
 
@@ -462,7 +400,7 @@ class Dock {
         foreach(dock; docks) dock.damage(damage);
     }
 
-    void draw(Backend backend, double state, Overview.Monitor[] monitors, string[] workspaceNames){
+    void draw(XRenderMultiDraw backend, double state, Overview.Monitor[] monitors, string[] workspaceNames){
         state = state.sinApproach;
         this.state = state;
         foreach(dock; docks)

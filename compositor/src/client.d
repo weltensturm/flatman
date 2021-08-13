@@ -102,6 +102,8 @@ class CompositeClient: ws.wm.Window {
     bool stale = true;
     bool hiddenRedrawn;
 
+    CompositeClient attachedTo;
+
     Properties!(
         "workspace", "_NET_WM_DESKTOP", XA_CARDINAL, false,
         "tab", "_FLATMAN_TAB", XA_CARDINAL, false,
@@ -111,7 +113,8 @@ class CompositeClient: ws.wm.Window {
         "overviewHide", "_FLATMAN_OVERVIEW_HIDE", XA_CARDINAL, false,
         "name", "_NET_WM_NAME", XA_STRING, false,
         "xaname", "WM_NAME", XA_STRING, false,
-        "wintype", "_NET_WM_WINDOW_TYPE", XA_ATOM, true
+        "wintype", "_NET_WM_WINDOW_TYPE", XA_ATOM, true,
+        "attachTo", "_FLATMAN_ATTACH_TO", XA_WINDOW, false
     ) properties;
 
     override void hide(){}
@@ -136,6 +139,14 @@ class CompositeClient: ws.wm.Window {
         properties.xaname ~= (string){
             title = getTitle;
         };
+        properties.attachTo ~= (x11.X.Window window){
+            foreach(client; manager.clients){
+                if(client.windowHandle == window){
+                    attachedTo = client;
+                    return;
+                }
+            }
+        };
         if(a.map_state & IsViewable)
             onShow;
         properties.update;
@@ -155,7 +166,7 @@ class CompositeClient: ws.wm.Window {
     void createPicture(bool force=false){
         if(hidden)
             return;
-        "create picture".writeln;
+        Log("create picture");
         if(!XGetWindowAttributes(wm.displayHandle, windowHandle, &a)){
             "could not get attributes".writeln;
             return;
@@ -166,7 +177,7 @@ class CompositeClient: ws.wm.Window {
             // don't swap ghost mid-animation
             ghost = picture;
         }else{
-            writeln("noswap ", animation.rect.size, ' ', size, ' ', stale);
+            Log("noswap %s %s %s".format(animation.rect.size, size, stale));
         }
         picture = new ClientFramebuffer(windowHandle, a);
         stale = true;
@@ -183,7 +194,7 @@ class CompositeClient: ws.wm.Window {
             overviewAnimation.size.w.change(size.w);
             overviewAnimation.size.h.change(size.h);
         }
-        "resize %s %s old %s".format(title, size, this.size).writeln;
+        Log("resize %s %s old %s".format(title, size, this.size));
         createPicture;
         this.size = size;
     }
@@ -221,7 +232,6 @@ class CompositeClient: ws.wm.Window {
             return;
         hidden = false;
         with(Log(this.to!string ~ " onShow")){
-            "onShow %s".format(title).writeln;
             createPicture;
             animation.fade.change(1);
             animation.rect.pos = [pos.x, pos.y];

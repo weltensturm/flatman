@@ -66,6 +66,7 @@ class Frame: Base {
         _draw = new XDraw(dpy, window);
 		draw.setFont(config.tabs.title.font, config.tabs.title.fontSize.to!int);
 		window.replace(Atoms._FLATMAN_OVERVIEW_HIDE, 1L);
+		window.replace(Atoms._FLATMAN_ATTACH_TO, client.orig);
 		Events[window] ~= this;
 	}
 

@@ -9,7 +9,12 @@ import
     composite,
     composite.events,
     composite.overview.window,
-    composite.overview.dock;
+    composite.overview.dock,
+    
+    composite.backend.xrenderMultiDraw,
+
+    composite.overview.activeContainerIndicator
+    ;
 
 
 bool nodraw(CompositeClient client){
@@ -103,7 +108,6 @@ class Overview {
                 window.active = true;
                 window.move([0, 0]);
                 window.resize([manager.width, manager.height]);
-                XSync(wm.displayHandle, False);
                 XSetInputFocus(wm.displayHandle, window.windowHandle, RevertToPointerRoot, CurrentTime);
                 XRaiseWindow(wm.displayHandle, window.windowHandle);
 
@@ -164,135 +168,6 @@ class Overview {
         this(CompositeClient window){
             this.window = window;
         }
-    }
-
-    private void prefill2(){
-        auto allMonitors = manager.screens
-            .byPair
-            .map!(a => new Monitor([a.value.x, a.value.y], [a.value.w, a.value.h], a.key));
-        monitors = monitors.filter!(a => allMonitors.canFind!"a.pos == b.pos"(a)).array;
-        monitors ~= allMonitors.filter!(a => !monitors.canFind!"a.pos == b.pos"(a)).array;
-
-        foreach(monitor; monitors){
-            auto count = properties.workspaceCount.value;
-            while(monitor.workspaces.length < count)
-                monitor.workspaces ~= new Workspace;
-            while(monitor.workspaces.length >= count)
-                monitor.workspaces = monitor.workspaces[0..$-1];
-        }
-
-        foreach(m; monitors){
-            foreach(ws; m.workspaces){
-                ws.windows = [];
-            }
-        }
-
-        foreach(client; manager.clients ~ manager.destroyed){
-            if(client.a.override_redirect && client.properties.overviewHide.value != 1)
-                continue;
-            if(client.hidden && client.floating)
-                continue;
-            foreach(m; monitors){
-                if(m.index != manager.screens.findScreen(client.pos, client.size))
-                    continue;
-                foreach(i, ws; m.workspaces){
-                    if(i != client.properties.workspace.value)
-                        continue;
-                    auto w = new WinInfo(client);
-                    w.animation = client.overviewAnimation; //new OverviewAnimation(client.pos, client.size); // TODO: keep windows around so we don't have to use a "global" window attribute
-                    ws.windows ~= w;
-                }
-            }
-        }
-        struct Group {
-            int width;
-            int[2] pos;
-            int[2] size;
-            WinInfo[] windows;
-        }
-        auto strut = [0.5/7.5, 0.5/7.5, 1.0/40, 1.0/7.5];
-
-        auto layoutGroup(ref Group group){
-            //ws.separators ~= group.size.w;
-
-            auto sorted = group.windows;
-            sorted.sort!((a, b) => a.window.properties.tab.value < b.window.properties.tab.value);
-            auto split = sorted.countUntil!(a => !a.window.hidden);
-            if(split >= sorted.length || split < 0)
-                split = 0;
-
-            foreach(i, w; sorted[split..$]){
-                if(w.window is null || w.window.animation.rect.size.w == 0)
-                    continue;
-                auto targetWidth = w.window.size.w/(i/4.0+1.5);
-                auto aspect = w.window.size.h.to!double/w.window.size.w;
-                int[2] size = [targetWidth.to!int, (targetWidth*aspect).to!int];
-                int[2] pos = [(group.pos.x + group.size.w/2 - size.w/2).to!int,
-                              (group.pos.y - group.size.h/6*(sqrt(i.to!double*1.5) - sqrt(sorted.length.to!double))).to!int];
-                w.targetPos = pos;
-                w.targetSize = size;
-                w.targetAlpha = 1;
-                dock.calc(w);
-                if(resetPos){
-                    w.animation.pos.replace(w.targetPos);
-                    w.animation.size.replace(w.targetSize);
-                }
-            }
-            foreach(i, w; sorted[0..split]){
-                w.targetPos = [group.pos.x, group.pos.y + group.size.h];
-                w.targetSize = [group.size.w, group.size.h];
-                w.targetAlpha = 0;
-            }
-        }
-
-        auto layoutWorkspace(ref Workspace workspace){
-            Group[long] groups;
-            long unscaledWidth;
-            foreach(w; workspace.windows){
-                if(nodraw(w.window))
-                    continue;
-                auto tabs = w.window.properties.tabs.value.max(0);
-                if(tabs == 0 && (w.window.hidden || !w.window.picture))
-                    continue;
-                if(tabs !in groups){
-                    auto width = tabs > 0 ? w.window.size.w : (workspace.size.w/5).to!int;
-                    groups[tabs] = Group(width);
-                    unscaledWidth += width;
-                }
-                groups[tabs].windows ~= w;
-            }
-            auto containerScale = (unscaledWidth.to!double / workspace.size.w);
-            int offsetX = workspace.pos.x;
-            import std.typecons;
-            foreach(groupIndex, group; sort(groups.keys).map!(a => tuple(a, groups[a]))){
-                auto width = (group.width/containerScale).floor;
-                group.pos = [offsetX, workspace.pos.y];
-                group.size = [width.to!int, (workspace.size.h).to!int];
-                layoutGroup(group);
-                offsetX += group.size.w;// width.to!int;
-            }
-            //if(ws.separators.length)
-            //    ws.separators = ws.separators[0..$-1];
-        }
-
-        auto layoutMonitor(ref Monitor monitor){
-            auto mstrut = [strut[0]*monitor.size.w, strut[1]*monitor.size.w,
-                           strut[2]*monitor.size.h, strut[3]*monitor.size.h];
-            auto size = [monitor.size.w - mstrut[0] - mstrut[1],
-                          monitor.size.h - mstrut[2] - mstrut[3]];
-            auto pos = [monitor.pos.x + mstrut[0],
-                         monitor.pos.y + mstrut[2]];
-            foreach(ref ws; monitor.workspaces){
-                ws.pos = pos.to!(int[2]);
-                ws.size = size.to!(int[2]);
-                layoutWorkspace(ws);
-            }
-        }
-
-        foreach(ref monitor; monitors){
-            layoutMonitor(monitor);
-        }
-        resetPos = false;
     }
 
     private void prefill(){
@@ -371,23 +246,22 @@ class Overview {
                     group.width = sum/group.windows.length.to!long;
                     unscaledWidth += group.width;
                 }
-                auto containerScale = (unscaledWidth.to!double / msize.w);
+                auto containerScale = (msize.h/monitor.size.h).min(msize.w/monitor.size.w);
 
                 auto splitPadding = [msize.w/40.0, msize.h/80.0 + 30];
                 import std.typecons: tuple;
                 int offsetX;
                 foreach(k, v; sort(groups.keys).map!(a => tuple(a, groups[a]))){
                     
-                    int[2] smallestWindow = [int.max, int.max];
-                    foreach(window; v.windows){
-                        if(window.window.size.w < smallestWindow.w)
-                            smallestWindow.w = window.window.size.w;
-                        if(window.window.size.h < smallestWindow.h)
-                            smallestWindow.h = window.window.size.h;
-                    }
+                    auto avgWindow = v.windows.median!((a, b) => a.window.size.area < b.window.size.area);
+                    auto smallestWindow = [avgWindow.window.size.w*containerScale,
+                                           avgWindow.window.size.h*containerScale];
+                    auto width = smallestWindow.w - splitPadding.w;
+                    auto height = smallestWindow.h - splitPadding.h;
+                    offsetX = ((avgWindow.window.pos.x - monitor.pos.x)
+                               * containerScale
+                                + (monitor.size.w - msize.w)).to!int;
 
-                    auto width = (v.width/containerScale).floor - splitPadding.w;
-                    auto height = msize.h - splitPadding.h;
                     ws.separators ~= offsetX+width.min(monitor.size.w).to!int;
                     auto count = v.windows.length.to!double;
                     auto columns = sqrt(count).ceil.lround.to!double;
@@ -405,11 +279,16 @@ class Overview {
                         if(w.window.size.w == 0)
                             continue;
                         auto maxY = ((count/columns).ceil)*(cellHeight+padding.h)-padding.h;
-                        auto offsetY = msize.h/2-maxY/2;
+
+                        auto offsetY = ((avgWindow.window.pos.y - monitor.pos.y)
+                                        * containerScale
+                                        + smallestWindow.h/2
+                                        - maxY/2).to!int;
+
                         if(w.window.windowHandle == properties.windowActive.value){
                             auto splitPos = [
                                 (offsetX + mpos.x + splitPadding.w/2 + padding.w).to!int,
-                                (manager.height - height - (mpos.y + splitPadding.h/2)).to!int
+                                ((mpos.y + splitPadding.h/2)).to!int
                             ];
                             activeContainer.targetSize = [
                                 ((cellWidth + padding.w)*columns + padding.w).lround.to!int,
@@ -422,8 +301,8 @@ class Overview {
                                     + (width - activeContainer.targetSize.w)/2
                                 ).lround.to!int,
                                 (
-                                    manager.height - activeContainer.targetSize.h - (mpos.y + offsetY - 4)
-                                    + splitPadding.h/2
+                                    (mpos.y + offsetY - 4)
+                                    - splitPadding.h/2
                                 ).lround.to!int
                             ];
                         }
@@ -614,7 +493,7 @@ class Overview {
 		+/
     }
 
-	void drawPre(Backend backend, CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
+	void drawPre(XRenderMultiDraw backend, CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
         if(!visible || client.a.override_redirect || !client.title.length || nodraw(client))
             return;
         with(Profile("overview draw pre")){
@@ -628,21 +507,21 @@ class Overview {
 				return;
             double flop = client.hidden ? 1*alpha : state.sigmoid*alpha;
             int textHider;
-            //if(!client.hidden){
                 textHider = -((1-state).sigmoid * 30).lround.to!int;
             //}
-            backend.clip([pos.x, manager.height-pos.y], [size.w, 20]);
+            backend.clip([pos.x, pos.y-20], [size.w, 20]);
             /+
             backend.setColor([0, 0, 0, 0.5*state.sigmoid*(client.hidden ? 0.5 : 1)]);
             backend.rect([pos.x, manager.height-pos.y], [size.w, 20]);
             +/
             backend.setColor([flop,flop,flop,flop]);
-            backend.text([pos.x+size.w/2, manager.height-pos.y+textHider+2], 20, client.title, 0.5);
+            backend.setFont("Consolas", 9);
+            backend.text([pos.x+size.w/2, pos.y-20-textHider+2], 20, client.title, 0.5);
             backend.noclip;
         }
 	}
 
-	void drawPost(Backend backend, CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
+	void drawPost(XRenderMultiDraw backend, CompositeClient client, int[2] pos, double[2] offset, int[2] size, double scale, double alpha){
         if(!visible || client.a.override_redirect || nodraw(client))
             return;
         with(Profile("overview")){
@@ -653,93 +532,22 @@ class Overview {
             }
             if(client.hidden){
                 backend.setColor([0,0,0,0.3*flop]);
-                backend.rect([pos.x, manager.height-pos.y-size.h], size);
+                backend.rect(pos, size);
             }
         }
 	}
 
-    void draw(Backend backend, CompositeClient[] windows){
-
-        /+
-        foreach(w; windows){
-            if(w.properties.workspace.value == properties.workspace.value){
-                drawPre(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
-                .draw(backend, w);
-                drawPost(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
-            }
-        }
-        +/
-
-        activeContainer.draw(backend);
+    void draw(CompositeMonitor monitor, XRenderMultiDraw backend, CompositeClient[] windows){
+        
 		dock.draw(backend, state, monitors, workspaceNames);
 
         foreach(w; windows){
-            //if(w.properties.workspace.value != properties.workspace.value){
-                drawPre(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
-                .draw(backend, w);
-                drawPost(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
-            //}
+            drawPre(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
+            .draw(monitor, backend, w);
+            drawPost(backend, w, w.animPos, w.animOffset, w.animSize, w.animScale, w.animAlpha);
         }
 
-        /+
-        foreach(ref m; monitors){
-            foreach(wsi, ws; m.workspaces){
-                if(wsi != manager.properties.workspace.value)
-                    continue;
-                auto y = manager.height - m.size.h - m.pos.y;
-                with(Profile("Sep")){
-                    foreach(sep; ws.separators){
-                        backend.setColor([0.5,0.5,0.5,0.3*state^^2]);
-                        backend.rect([sep-1+m.pos.x, y + m.size.h/20-1], [4, m.size.h-m.size.h/10+2]);
-                        backend.setColor([0,0,0,0.3*state^^2]);
-                        backend.rect([sep+m.pos.x, y + m.size.h/20], [2, m.size.h-m.size.h/10]);
-                    }
-                }
-            }
-        }
-        +/
-
-		/+
-
-        foreach(ref m; monitors){
-            with(Profile("Frt")){
-
-                backend.setColor([0.5, 0.5, 0.5, 0.75]);
-                backend.text([m.pos.x+m.size.w/2, manager.height - m.size.h - m.pos.y+30], frameTimes.fold!max.to!string, 0);
-                /+
-                backend.setColor([0.5, 0.5, 0.5, 0.75]);
-
-                if(window && window.windowHit){
-                    backend.text([m.pos.x+m.size.w/2, manager.height - m.size.h - m.pos.y+30], window.windowHit.windowHandle.to!string, 0.5);
-                }
-
-                foreach(i, frt; frameTimes){
-                    auto height = (frt*1000).lround.to!int;
-                    backend.rect([m.pos.x+m.size.w/2-frameTimes.size/2+i.to!int, manager.height - m.size.h - m.pos.y + 10], [1, height]);
-                }
-                auto fps60 = (1.0/60*1000).lround.to!int;
-                auto fps30 = (1.0/30*1000).lround.to!int;
-                backend.setColor([1, 0.5, 0.5, 0.75]);
-                backend.rect([m.pos.x+m.size.w/2-frameTimes.size/2, manager.height - m.size.h - m.pos.y + 10 + fps60], [frameTimes.size, 1]);
-                backend.setColor([1, 0, 0, 0.75]);
-                backend.rect([m.pos.x+m.size.w/2-frameTimes.size/2, manager.height - m.size.h - m.pos.y + 10 + fps30], [frameTimes.size, 1]);
-                +/
-            }
-            foreach(wsi, ws; m.workspaces){
-                if(wsi != manager.properties.workspace.value)
-                    continue;
-                auto y = manager.height - m.size.h - m.pos.y;
-                with(Profile("Sep")){
-                    foreach(sep; ws.separators){
-                        backend.setColor([0.5,0.5,0.5,0.3*state^^2]);
-                        backend.rect([sep-1+m.pos.x, y + m.size.h/20-1], [4, m.size.h-m.size.h/10+2]);
-                        backend.setColor([0,0,0,0.3*state^^2]);
-                        backend.rect([sep+m.pos.x, y + m.size.h/20], [2, m.size.h-m.size.h/10]);
-                    }
-                }
-            }
-        }
-		+/
+        activeContainer.draw(backend);
     }
 
     void onMouseButton(Mouse.button button, bool pressed, int x, int y){
@@ -775,50 +583,6 @@ class Overview {
 
 }
 
-
-class ActiveContainerIndicator: Widget {
-
-    int[2] targetPos;
-    int[2] targetSize;
-
-    OverviewAnimation animation;
-
-    double state;
-
-    this(){
-        animation = new OverviewAnimation(pos, size);
-        Events ~= this;
-    }
-
-    ~this(){
-        Events.forget(this);
-    }
-
-    @OverviewState
-    void onState(double state){
-        if(state == this.state)
-            return;
-        this.state = state;
-        damage;
-    }
-
-    @Tick
-    void onTick(){
-        animation.approach(targetPos, targetSize);
-        move(animation.pos.calculate);
-        resize(animation.size.calculate);
-    }
-
-    void draw(Backend backend){
-        enum border = 4;
-        backend.setColor([1, 1, 1, state]);
-        backend.rect([pos.x, pos.y], [border, size.h]);
-        backend.rect([pos.x+size.w-border, pos.y], [border, size.h]);
-        backend.rect([pos.x+border, pos.y], [size.w-border*2, border]);
-        backend.rect([pos.x+border, pos.y+size.h-border], [size.w-border*2, border]);
-    }
-
-}
 
 
 double sigmoid(double time){
