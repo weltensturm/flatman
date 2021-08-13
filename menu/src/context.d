@@ -17,7 +17,7 @@ class Context {
 	static void init(){
 		change = new ws.event.Event!string;
 		string currentContext = "";
-		Inotify.watch("~/.flatman/current".normalize, (path, file, action){
+		Inotify.watch("~/.flatman".normalize, (path, file, action){
 			current = "~/.flatman/current".normalize.readText;
 			currentPath = current.readText;
 			if(currentContext != currentPath){
