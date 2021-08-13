@@ -5,7 +5,11 @@ import
     std.conv,
     std.math,
     std.algorithm,
+    common.event,
     pulseaudio_h;
+
+
+alias PulseaudioUpdate = Event!("PulseaudioUpdate", void function());
 
 
 extern(C){
@@ -222,7 +226,6 @@ class Pulseaudio {
     }
 
     void update(){
-        writeln("update");
         run(&pa_context_get_server_info, &server_info_cb, cast(void*)this);
         writeln(info.default_sink_name);
         writeln(info.default_source_name);
