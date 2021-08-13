@@ -3,6 +3,7 @@ module common.log;
 
 import
     core.sync.mutex,
+    std.algorithm,
     std.stdio,
     std.string,
     std.file,
@@ -109,10 +110,11 @@ struct Log {
         int indent;
         synchronized(mutex)
             indent = .indent;
-        return "%s%s.%02d%s %s\n".format(
+        auto currTime = Clock.currTime;
+        return "%s%s.%03d%s %s\n".format(
                 GREY,
-                Clock.currTime.toISOExtString[0..19],
-                Clock.currTime.fracSecs.total!"msecs"/10,
+                currTime.toISOExtString[0..19],
+                min(currTime.fracSecs.total!"msecs", 999),
                 " ".replicate(indent*2),
                 DEFAULT ~ s ~ DEFAULT
         );
