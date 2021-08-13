@@ -6,7 +6,7 @@ mod super
 keys {
     Super_L             overview
     Super_R             overview
-    alt+d               exec dinu -f -fn Ubuntu-10 -as 0 -l 0 -r 0.3333 -y 24 -c "$(flatman-context -p)"
+    alt+d               exec dinu -f -fn Ubuntu-10 -as 0 -l 0 -r 0.3333 -y 12 -c "$(flatman-context -p)"
     mod+Return          exec flatman-terminal
     mod+n               exec firefox
     mod+shift+w         exec i3lock -c 000000 && systemctl suspend
@@ -15,41 +15,43 @@ keys {
     alt+Tab             focus tab next
     mod+shift+Tab       focus tab previous
     alt+shift+Tab       focus tab previous
-    mod+j               focus dir left
+    mod+h               focus dir left
+    mod+l               focus dir right
+    mod+j               focus dir down
+    mod+k               focus dir up
     mod+Left            focus dir left
-    mod+semicolon       focus dir right
     mod+Right           focus dir right
+    mod+Up              focus dir up
+    mod+Down            focus dir down
+    mod+w               focus dir up
     mod+a               focus dir left
+    mod+s               focus dir down
     mod+d               focus dir right
 
-    mod+shift+j         move left
-    mod+shift+semicolon move right
-    mod+shift+k         move down
-    mod+shift+l         move up
+    mod+shift+h         move left
+    mod+shift+l         move right
+    mod+shift+j         move down
+    mod+shift+k         move up
     mod+shift+Left      move left
     mod+shift+Right     move right
     mod+shift+Down      move down
     mod+shift+Up        move up
     mod+shift+a         move left
     mod+shift+d         move right
-    mod+shift+w         move down
-    mod+shift+s         move up
+    mod+shift+w         move up
+    mod+shift+s         move down
 
-    mod+ctrl+j          resize -
-    mod+ctrl+semicolon  resize +
+    mod+ctrl+h          resize -
+    mod+ctrl+l          resize +
     
     mod+r               resize mouse
     mod+m               move mouse
 
-    mod+k               workspace-history next
-    mod+Down            workspace-history next
     mod+grave           workspace-history next
-    mod+l               workspace-history prev
-    mod+Up              workspace-history prev
     mod+shift+grave     workspace-history prev
+    mod+i               workspace-history next
+    mod+u               workspace-history prev
 
-    mod+ctrl+l          workspace - create
-    mod+ctrl+k          workspace + create
     mod+0               workspace last s
     mod+9               workspace last create
     mod+1               workspace first s
@@ -75,9 +77,14 @@ keys {
 workspace-wrap false
 
 
+workspace-padding 0
+
+
 split {
-    padding-elem 6
+    padding 0
+    spacing 0
     background 111111
+    separator-size 0
 }
 
 
