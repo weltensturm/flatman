@@ -152,6 +152,7 @@ void setup(bool autostart){
 	wa.event_mask =
 			SubstructureRedirectMask|SubstructureNotifyMask|ButtonPressMask
 			|PointerMotionMask|EnterWindowMask|StructureNotifyMask|FocusChangeMask
+			|KeyPress|KeyRelease
 			|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);

@@ -46,10 +46,13 @@ struct NestedConfig {
 	string[string] keys;
 
 	bool workspaceWrap;
+	int workspacePadding;
 
 	struct Split {
-		int paddingElem;
+		int padding;
+		int spacing;
 		ConfigColor background;
+		int separatorSize;
 	}
 	Split split;
 

@@ -20,7 +20,7 @@ class Tabs: Container {
         Events ~= this;
     }
 
-    WindowHandle[] stack(){
+    override WindowHandle[] stack(){
         return (active ? [active.win] : [])
                ~ clients.filter!(a => a != active).map!(a => a.win).array;
     }
@@ -43,11 +43,15 @@ class Tabs: Container {
             active.hideSoft;
     }
 
-    void destroy(){
+    override void destroy(){
         Events.forget(this);
     }
 
     alias add = Base.add;
+
+    override void add(Client client, int[2]){
+        add(client);
+    }
 
     override void add(Client client){
         //add(client.to!Base);
@@ -79,7 +83,10 @@ class Tabs: Container {
     void updateHints(){
         foreach(i, c; children.to!(Client[])){
             c.win.replace(Atoms._FLATMAN_TAB, cast(long)i);
-            c.win.replace(Atoms._FLATMAN_TABS, parent.children.countUntil(this)+1);
+            auto position = containerId;
+            while(position < 10^^9) // padding to keep rough sort order
+                position *= 10;
+            c.win.replace(Atoms._FLATMAN_TABS, position);
         }
     }
 
@@ -95,11 +102,26 @@ class Tabs: Container {
         return children[clientActive-1].to!Client;
     }
 
-    Client clientDir(short direction){
+    override Client tabDir(int direction){
         auto target = clientActive+direction;
         if(target < 0 || target >= children.length)
             return null;
         return children[target].to!Client;
+    }
+
+    override Client clientDir(int[2] direction){
+        return (cast(Container)parent).clientDir(direction);
+    }
+
+    override void moveClient(int[2] dir){
+        if(dir.x && config.tabs.sortBy != config.tabs.sortBy.history){
+            if(dir.x > 0)
+                moveRight;
+            else
+                moveLeft;
+        }else{
+            (cast(Container)parent).moveClient(dir);
+        }
     }
 
     void moveLeft(){

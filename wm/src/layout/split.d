@@ -1,8 +1,10 @@
 module flatman.layout.split;
 
-import flatman;
-
-import common.xevents;
+import
+    ws.wm.x11.cursorfont,
+    flatman,
+	flatman.simpleWindow,
+    common.xevents;
 
 
 __gshared:
@@ -43,27 +45,53 @@ class Separator: Base {
         this.split = split;
         this.index = index;
         size = [10,10];
+
+        XVisualInfo* visual;
+        visual = new XVisualInfo;
+        if(!XMatchVisualInfo(dpy, DefaultScreen(dpy), 32, TrueColor, visual))
+            writeln("XMatchVisualInfo failed");
+
         XSetWindowAttributes wa;
         wa.override_redirect = true;
-        wa.background_pixmap = ParentRelative;
+        wa.background_pixmap = None;
+		wa.border_pixmap = None;
+		wa.border_pixel = 0;
+		wa.bit_gravity = NorthWestGravity;
+		wa.colormap = XCreateColormap(dpy, flatman.root, visual.visual, AllocNone);
+
         window = XCreateWindow(
-                dpy, flatman.root, pos.x, pos.y, size.w, size.h,
-                0, DefaultDepth(dpy, screen), CopyFromParent,
-                DefaultVisual(dpy, screen),
-                CWOverrideRedirect|CWBackPixmap|CWEventMask, &wa
+                dpy,
+                flatman.root,
+                pos.x, pos.y,
+                size.w, size.h,
+                0,
+                visual.depth,
+                CopyFromParent,
+                visual.visual,
+				CWOverrideRedirect | CWBorderPixel | CWBitGravity | CWColormap | CWBackPixmap,
+                &wa
         );
+
         _draw = new XDraw(dpy, window);
         XSelectInput(dpy, window, ExposureMask | EnterWindowMask | LeaveWindowMask | ButtonPressMask);
         window.replace(Atoms._FLATMAN_OVERVIEW_HIDE, 1L);
         hide;
         Events[window] ~= this;
+
+        auto cursor = XCreateFontCursor(dpy, split.horizontal ? XC_sb_h_double_arrow : XC_sb_v_double_arrow);
+        XDefineCursor(dpy, window, cursor);
+
     }
 
     @WindowMouseButton
     void mouse(bool pressed, Mouse.button button){
         if(button == Mouse.buttonLeft && pressed){
             .drag.drag(button, (int[2] cursor){
-                auto diff = pos.x - cursor.x + size.w/2;
+                int diff;
+                if(split.horizontal)
+                    diff = pos.x - cursor.x + size.w/2;
+                else
+                    diff = pos.y - cursor.y + size.h/2;
                 if(!diff)
                     return;
                 split.sizes[index] -= diff;
@@ -117,8 +145,21 @@ class Separator: Base {
 
     @WindowExpose
     void drawWindow(){
+        /+
         draw.setColor(config.split.background);
         draw.rect([0,0], size);
+        draw.finishFrame;
+        +/
+        draw.clear;
+        //draw.setColor(split.horizontal ? [0, 0, 0, 0.9] : [1, 1, 1, 0.9]);
+        if(config.split.separatorSize){
+            int width = config.split.separatorSize;
+            draw.setColor([0, 0, 0, 0.9]);
+            if(split.horizontal)
+                draw.rect([size.w/2-width/2, 0], [width, size.h]);
+            else
+                draw.rect([0, size.h/2-width/2], [size.w, width]);
+        }
         draw.finishFrame;
     }
 
@@ -127,44 +168,45 @@ class Separator: Base {
 
 class Split: Container {
 
-    enum {
-        horizontal,
-        vertical
-    }
-
-    int mode;
+    bool horizontal;
 
     long[] sizes;
 
     Separator[] separators;
+    SimpleWindow background;
 
     bool lock;
 
-    this(int[2] pos, int[2] size, int mode=horizontal){
+    this(int[2] pos, int[2] size, bool horizontal=true){
         hidden = true;
-        this.mode = mode;
+        this.horizontal = horizontal;
+        background = new SimpleWindow;
+        background.color = (horizontal ? [0, 0, 0, 0.9]: [1, 1, 1, 0.9]);
 
         move(pos);
         resize(size);
     }
 
-    WindowHandle[] stack(){
+    override WindowHandle[] stack(){
         if(clientActive < 0 || clientActive >= children.length)
             return [];
         WindowHandle[] stack;
-        stack ~= children[clientActive].to!Tabs.stack;
+        stack ~= children[clientActive].to!Container.stack;
         foreach(offset; 1..clientActive.max(children.length-1-clientActive)+1){
             if(clientActive-offset.to!long >= 0)
-                stack ~= children[clientActive-offset].to!Tabs.stack;
+                stack ~= children[clientActive-offset].to!Container.stack;
             if(clientActive+offset < children.length)
-                stack ~= children[clientActive+offset].to!Tabs.stack;
+                stack ~= children[clientActive+offset].to!Container.stack;
         }
-        return stack ~ separators.map!(a => a.window).array;
+        return stack ~ separators.map!(a => a.window).array ~ background.window;
     }
 
-    void destroy(){
+    override void destroy(){
         foreach(c; children)
             c.to!Container.destroy;
+        foreach(s; separators)
+            s.destroy;
+        background.destroy;
     }
 
     void sizeInc(){
@@ -184,7 +226,7 @@ class Split: Container {
             hidden = false;
             if(!children.length)
                 return;
-            foreach(c; children ~ separators.to!(Base[]))
+            foreach(c; children ~ separators.to!(Base[]) ~ background)
                 c.show;
             rebuild;
         }
@@ -195,7 +237,7 @@ class Split: Container {
             return;
         with(Log("split.hide")){
             hidden = true;
-            foreach(c; children ~ separators.to!(Base[]))
+            foreach(c; children ~ separators.to!(Base[]) ~ background)
                 c.hide;
         }
     }
@@ -206,45 +248,140 @@ class Split: Container {
         add(client, long.max);
     }
 
+    void addRelative(Client c, int[2] pos){
+        add(c, clientActive + (horizontal ? pos.x : pos.y));
+    }
+
+    override void add(Client c, int[2] pos){
+        add(c, horizontal ? pos.x : pos.y);
+    }
+
     void add(Client client, long position=long.max){
         if(position == long.max)
             position = clientActive;
         with(Log("split.add %s pos=%s".format(client, position))){
-            Tabs tab;
+            Container container;
             if(position >= 0 && position < children.length){
-                tab = children[position].to!Tabs;
+                container = children[position].to!Container;
             }else{
-                tab = new Tabs;
-                tab.parent = this;
+                container = new Tabs;
+                container.parent = this;
+                auto size = horizontal ? client.size.w : client.size.h;
                 if(position >= 0 && position < children.length.to!long){
-                    children = children[0..position+1] ~ tab ~ children[position+1..$];
-                    sizes = sizes[0..position+1] ~ client.size.w ~ sizes[position+1..$];
+                    children = children[0..position+1] ~ container ~ children[position+1..$];
+                    sizes = sizes[0..position+1] ~ size ~ sizes[position+1..$];
                 }else{
                     if(position < 0){
-                        children = tab ~ children;
-                        sizes = client.size.w ~ sizes;
+                        children = container ~ children;
+                        sizes = size ~ sizes;
                     }else{
-                        children ~= tab;
-                        sizes ~= client.size.w;
+                        children ~= container;
+                        sizes ~= size;
                     }
                 }
                 if(children.length > 1)
                     separators ~= new Separator(this, separators.length);
                 if(!hidden){
-                    tab.show;
+                    container.show;
                     if(separators.length)
                         separators[$-1].show;
                 }
             }
-            foreach(child; children.to!(Tabs[]))
-                child.updateHints;
+            // foreach(child; children.to!(Container[]))
+                // child.updateHints;
             rebuild;
-            tab.add(client);
+            container.add(client);
             rebuild; // TODO: nicify
         }
     }
 
-    void moveClient(int dir){
+    void add(Container container, long position=long.max){
+        if(position == long.max)
+            position = clientActive;
+        with(Log("split.add %s pos=%s".format(container, position))){
+            container.parent = this;
+            auto size = horizontal ? container.size.w : container.size.h;
+            if(position >= 0 && position < children.length.to!long){
+                children = children[0..position+1] ~ container ~ children[position+1..$];
+                sizes = sizes[0..position+1] ~ size ~ sizes[position+1..$];
+            }else{
+                if(position < 0){
+                    children = container ~ children;
+                    sizes = size ~ sizes;
+                }else{
+                    children ~= container;
+                    sizes ~= size;
+                }
+            }
+            if(children.length > 1)
+                separators ~= new Separator(this, separators.length);
+            if(!hidden){
+                container.show;
+                if(separators.length)
+                    separators[$-1].show;
+            }
+            //foreach(child; children.to!(Container[]))
+            //    child.updateHints;
+            rebuild;
+        }
+    }
+
+    override void moveClient(int[2] dir){
+        auto shift = horizontal ? dir.x : dir.y;
+        auto activeContainer = clientActive >= 0 && clientActive < children.length
+                               ? cast(Container)children[clientActive]
+                               : null;
+        
+        if(!shift){
+            auto split = cast(Split)activeContainer;
+            if(split && split.horizontal != horizontal
+               || activeContainer.clients.length == 1){
+                with(Log("split.moveClient parent" ~ dir.to!string)){
+                    (cast(Container)parent).moveClient(dir);
+                }
+            }else{
+                with(Log("split.moveClient into new" ~ dir.to!string)){
+                    auto newContainer = new Split(activeContainer.pos, activeContainer.size, !horizontal);
+                    newContainer.parent = this;
+                    auto client = active;
+                    activeContainer.remove(client);
+                    activeContainer.parent = null;
+                    children[clientActive] = newContainer;
+                    newContainer.add(activeContainer);
+                    newContainer.addRelative(client, dir);
+                    newContainer.show;
+                    client.focus;
+                }
+            }
+        }else if(clientActive+shift >= 0 && clientActive+shift < children.length){
+            with(Log("split.moveClient" ~ dir.to!string)){
+                auto target = cast(Container)children[clientActive+shift];
+                auto client = active;
+                remove(client);
+                target.add(client, [-dir.x, -dir.y]);
+                if(children.length == 1){
+                    (cast(Container)parent).tryMerge;
+                }
+                client.focus;
+            }
+        }else{
+            if(activeContainer.clients.length > 1){
+                with(Log("split.moveClient edge" ~ dir.to!string)){
+                    auto client = active;
+                    remove(client);
+                    addRelative(client, dir);
+                    client.focus;
+                }
+            }else{
+                with(Log("split.moveClient parent" ~ dir.to!string)){
+                    (cast(Container)parent).moveClient(dir);
+                }
+            }
+        }
+    }
+
+    /+
+    override void moveClient(int dir){
         lock = true;
         if(clientActive >= 0 && clientActive < children.length){
             auto tabs = children[clientActive].to!Tabs;
@@ -271,6 +408,7 @@ class Split: Container {
         lock = false;
         rebuild;
     }
+    +/
 
     override void remove(Base base){
         Base.remove(base);
@@ -279,11 +417,12 @@ class Split: Container {
 
     override void remove(Client client){
         with(Log("split.remove %s".format(client))){
-            foreach(i, container; children.to!(Tabs[])){
-                if(container.children.canFind(client)){
+            foreach(i, container; children.to!(Container[])){
+                if(container.clients.canFind(client)){
                     container.remove(client);
                     if(!container.children.length){
                         container.destroy;
+                        Log("split.removeContainer " ~ i.to!string);
                         remove(container);
                         sizes = sizes[0..i] ~ sizes[i+1..$];
                         if(separators.length){
@@ -292,12 +431,29 @@ class Split: Container {
                         }
                         if(clientActive >= children.length)
                             clientActive = cast(int)children.length-1;
-                        foreach(child; children.to!(Tabs[]))
-                            child.updateHints;
+                        // foreach(child; children.to!(Tabs[]))
+                            // child.updateHints;
                         rebuild;
                         return;
                     }
                 }
+            }
+        }
+    }
+
+    override void tryMerge(){
+        auto activeContainer = clientActive >= 0 && clientActive < children.length
+                               ? cast(Container)children[clientActive]
+                               : null;
+        while(activeContainer.children.length == 1){
+            with(Log("split.flatten")){
+                activeContainer.parent = null;
+                children[clientActive] = activeContainer.children[activeContainer.clientActive];
+                children[clientActive].parent = this;
+                activeContainer.children = [];
+                activeContainer.destroy;
+                activeContainer = cast(Container)children[clientActive];
+                rebuild;
             }
         }
     }
@@ -324,8 +480,11 @@ class Split: Container {
     }
 
     void normalize(){
-        auto padding = config.split.paddingElem;
-        long max = size.w-padding*(children.length-1);
+        auto padding = config.split.padding;
+        auto spacing = config.split.spacing;
+        long max = (horizontal ? size.w : size.h)
+                   - spacing*(children.length-1)
+                   - padding*2;
         max = max.max(400);
         foreach(ref s; sizes)
             s = s.min(max).max(10);
@@ -350,72 +509,44 @@ class Split: Container {
     void rebuild(){
         if(lock)
             return;
+        background.moveResize(pos, size);
+        auto padding = config.split.padding;
         with(Log("split.rebuild")){
             normalize;
-            int offset = 0;
-            auto padding = config.split.paddingElem;
+            int offset = padding;
+            auto spacing = config.split.spacing;
             foreach(i, c; children){
-                c.move(pos.a + (mode==horizontal ? [offset, 0].a : [0, offset].a));
-                c.resize(mode==horizontal ? [cast(int)sizes[i], size.h] : [size.w, cast(int)sizes[i]]);
-                offset += cast(int)sizes[i]+padding;
-                if(i != children.length-1)
-                    separators[i].moveResize(c.pos.a+[c.size.w,0], [padding, c.size.h]);
+                c.move(pos.a + (horizontal
+                                ? [offset, padding].a
+                                : [padding, offset].a));
+                c.resize(horizontal
+                         ? [cast(int)sizes[i], size.h-padding*2]
+                         : [size.w-padding*2, cast(int)sizes[i]]);
+                offset += cast(int)sizes[i]+spacing;
+                if(i != children.length-1){
+                    if(horizontal)
+                        separators[i].moveResize(c.pos.a+[c.size.w,0], [spacing, c.size.h]);
+                    else
+                        separators[i].moveResize(c.pos.a+[0,c.size.h], [c.size.w, spacing]);
+                }
             }
         }
     }
 
-    Client next(){
-        if(!children.length)
-            return null;
-        if(clientActive < 0)
-            clientActive = 0;
-        if(clientActive >= children.length)
-            clientActive = children.length-1;
-        Client n = children[clientActive].to!Tabs.next;
-        if(!n && clientActive < children.length-1)
-            n = children[clientActive+1].to!Tabs.active;
-        return n;
-    }
-
-    Client prev(){
-        if(!children.length)
-            return null;
-        if(clientActive < 0)
-            clientActive = 0;
-        if(clientActive >= children.length)
-            clientActive = children.length-1;
-        Client n = children[clientActive].to!Tabs.prev;
-        if(!n && clientActive > 0)
-            n = children[clientActive-1].to!Tabs.active;
-        return n;
-    }
-
-    Client clientDir(short direction){
-        if(clientActive >= 0 && clientActive < children.length)
-            return children[clientActive].to!Tabs.clientDir(direction);
-        return null;
+    override Client clientDir(int[2] direction){
+        auto shift = horizontal ? direction.x : direction.y;
+        if(shift && clientActive+shift >= 0 && clientActive+shift < children.length){
+            return children[clientActive+shift].to!Container.active;
+        }else{
+            return (cast(Container)parent).clientDir(direction);
+        }
     }
 
     Client clientContainerDir(string direction){
         auto target = clientActive + (direction == "right" ? 1 : -1);
         if(target < 0 || target >= children.length)
             return null;
-        return children[target].to!Tabs.active;
-    }
-
-    void focusDir(int dir){
-        auto client = dir == 0 ? active : (dir > 0 ? next : prev);
-        if(client){
-            with(Log("split.focusDir %s client=%s".format(dir, client))){
-                focus(client);
-            }
-        }
-    }
-
-    void focusTabs(int dir){
-        if(clientActive+dir >= 0 && clientActive+dir < children.length){
-            focus(children[clientActive+dir].to!Tabs.active);
-        }
+        return children[target].to!Container.active;
     }
 
     @property
@@ -428,7 +559,7 @@ class Split: Container {
     @property
     override void active(Client client){
         foreach(i, c; children.map!(a=>a.to!Container).array){
-            if(c.children.canFind(client)){
+            if(c.clients.canFind(client)){
                 clientActive = cast(int)i;
                 c.active = client;
             }

@@ -24,7 +24,8 @@ void focus(Monitor monitor){
 
 
 void focusTab(string direction){
-	auto client = monitor.workspace.clientDir(direction == "next" ? 1 : -1);
+	auto container = cast(Container)active.parent;
+	auto client = container ? container.tabDir(direction == "next" ? 1 : -1) : null;
 	if(!client && !monitor.workspace.active){
 		auto sorted = monitors
 			.enumerate
@@ -47,9 +48,17 @@ void focusTab(string direction){
 }
 
 
-void focusDir(string direction){
-	auto client = monitor.workspace.clientContainerDir(direction);
+void focusDir(string dir){
+	int[2] direction = [
+		"up": [0, -1],
+		"down": [0, 1],
+		"left": [-1, 0],
+		"right": [1, 0]
+	][dir];
+	auto container = active ? cast(Container)active.parent : null;
+	auto client = container ? container.clientDir(direction) : null;
 	if(!client){
+		Log("Containers gave no client, grabbing positionally");
 		auto sorted = monitors
 			.enumerate
 			.array
@@ -59,7 +68,7 @@ void focusDir(string direction){
 				(a, b) => a.index < b.index
 			);
 		
-		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + (direction == "right" ? 1 : -1);
+		auto index = sorted.countUntil!(a => monitors[a.index] == monitor) + direction.x + direction.y;
 
 		if(index >= 0 && index < sorted.length){
 			client = monitors[sorted[index][0]].active;
@@ -300,16 +309,17 @@ void moveWorkspace(int pos){
 
 
 void moveLeft(){
-	monitor.workspace.split.moveClient(-1);
+	(cast(Container)active.parent).moveClient([-1, 0]);
 }
 
 
 void moveRight(){
-	monitor.workspace.split.moveClient(1);
+	(cast(Container)active.parent).moveClient([1, 0]);
 }
 
 
 void moveDown(){
+	/+
 	if(monitor.workspaceActive == monitor.workspaces.length-1)
 		newWorkspace(monitor.workspaces.length);
 	auto win = active;
@@ -318,10 +328,13 @@ void moveDown(){
 	switchWorkspace(monitor.workspaceActive+1);
 	if(win)
 		win.focus;
+	+/
+	(cast(Container)active.parent).moveClient([0, 1]);
 }
 
 
 void moveUp(){
+	/+
 	if(monitor.workspaceActive == 0)
 		newWorkspace(0);
 	auto win = active;
@@ -330,4 +343,6 @@ void moveUp(){
 	switchWorkspace(monitor.workspaceActive-1);
 	if(win)
 		focus(win);
+	+/
+	(cast(Container)active.parent).moveClient([0, -1]);
 }

@@ -9,6 +9,8 @@ class Container: Base {
 
 	long clientActive;
 
+	void destroy(){}
+
 	@property
 	Client active(){
 		if(clientActive < children.length && clientActive >= 0)
@@ -24,9 +26,33 @@ class Container: Base {
 			}
 	}
 
+	WindowHandle[] stack(){
+		assert(false);
+	}
+
+	Client clientDir(int[2]){
+		assert(false);
+	}
+
+	Client tabDir(int){
+		assert(false);
+	}
+
+	void tryMerge(){
+		assert(false);
+	}
+
+	long containerId(){
+		Container parent = cast(Container)parent;
+		return parent.containerId*10 + parent.children.countUntil(this);
+	}
+
 	alias add = Base.add;
 
 	abstract void add(Client client);
+	void add(Client, int[2]){
+		assert(false);
+	};
 
 	alias remove = Base.remove;
 
@@ -54,6 +80,10 @@ class Container: Base {
 		if(active)
 			clients ~= active;
 		return clients;
+	}
+
+	void moveClient(int[2] pos){
+		assert(false);
 	}
 
 }

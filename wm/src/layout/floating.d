@@ -24,7 +24,7 @@ class Floating: Container {
 		resize(size);
 	}
 
-	WindowHandle[] stack(){
+	override WindowHandle[] stack(){
 		WindowHandle[] result;
 		foreach_reverse(w; clients){
 			result ~= w.win;
@@ -97,7 +97,7 @@ class Floating: Container {
 		return children.to!(Client[]);
 	}
 
-	void destroy(){
+	override void destroy(){
 		foreach(c; children.to!(Client[])){
 			if(c.frame)
 				c.frame.destroy;
@@ -105,7 +105,7 @@ class Floating: Container {
 		}
 	}
 
-	Client clientDir(short direction){
+	override Client clientDir(int[2] direction){
 
 		auto sorted = children
 			.enumerate
@@ -116,7 +116,7 @@ class Floating: Container {
 				(a, b) => a.index < b.index
 			);
 		
-		auto index = sorted.countUntil!(a => a.index == clientActive) + direction;
+		auto index = sorted.countUntil!(a => a.index == clientActive) + direction.x + direction.y;
 
 		if(index >= 0 && index < sorted.length)
 			return children[sorted[index][0]].to!Client;

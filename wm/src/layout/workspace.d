@@ -33,8 +33,11 @@ class Workspace: Container {
     override void resize(int[2] size){
         with(Log("workspace.resize %s".format(size))){
             this.size = size;
-            foreach(c; children)
-                c.resize(size);
+            auto p = config.workspacePadding;
+            foreach(c; children){
+                c.move([pos.x+p,pos.y+p]);
+                c.resize([size.w-p*2, size.h-p*2]);
+            }
         }
     }
 
@@ -52,6 +55,8 @@ class Workspace: Container {
             }
         }
     }
+
+    override void moveClient(int[2]){}
 
     void update(Client client){
         ewmh.updateWindowDesktop(client, monitor.workspaces.countUntil(this));
@@ -84,13 +89,14 @@ class Workspace: Container {
         }
     }
 
-    Client clientDir(short direction){
-        Client result;
-        if(focusFloating)
-            result = floating.clientDir(direction);
-        else
-            result = split.clientDir(direction);
-        return result;
+    override Client clientDir(int[2] direction){
+        // Client result;
+        // if(focusFloating)
+        //     result = floating.clientDir(direction);
+        // else
+        //     result = split.clientDir(direction);
+        // return result;
+        return null;
     }
 
     Client clientContainerDir(string direction){
@@ -137,7 +143,13 @@ class Workspace: Container {
         return split.clients ~ floating.clients;
     }
 
-    void destroy(){
+    override void tryMerge(){}
+
+    override long containerId(){
+        return 1;
+    }
+
+    override void destroy(){
         floating.destroy;
         split.destroy;
     }
