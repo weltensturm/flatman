@@ -124,6 +124,10 @@ class Floating: Container {
 		return null;
 	}
 
+	override Client tabDir(int dir){
+		return clientDir([dir, 0]);
+	}
+
 	void focusDir(int dir){
 		if(!children.length)
 			return;
