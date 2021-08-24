@@ -80,7 +80,7 @@ class Tabs: Container {
         updateHints;
     }
 
-    void updateHints(){
+    override void updateHints(){
         foreach(i, c; children.to!(Client[])){
             c.win.replace(Atoms._FLATMAN_TAB, cast(long)i);
             auto position = containerId;

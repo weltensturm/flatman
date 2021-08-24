@@ -287,11 +287,11 @@ class Split: Container {
                         separators[$-1].show;
                 }
             }
-            // foreach(child; children.to!(Container[]))
-                // child.updateHints;
             rebuild;
             container.add(client);
             rebuild; // TODO: nicify
+            foreach(child; children.to!(Container[]))
+                child.updateHints;
         }
     }
 

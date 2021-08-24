@@ -86,4 +86,6 @@ class Container: Base {
 		assert(false);
 	}
 
+	void updateHints(){}
+
 }
