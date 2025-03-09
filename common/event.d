@@ -67,7 +67,7 @@ template Event(alias Unique, Functions...) if(allSatisfy!(isFunctionPointer, Fun
         }
 
         static opIndex(FilterArgs...)(FilterArgs filter){
-            FilteredEvent!(Unique, Tuple!Functions, registerCallback, forget, FilterArgs)(filter);
+            return FilteredEvent!(Unique, Tuple!Functions, registerCallback, forget, FilterArgs)(filter);
         }
 
     }
