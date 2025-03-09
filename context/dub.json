@@ -1,15 +1,21 @@
 {
-	"name" : "flatman-context",
-	"description" : "per-workspace current directory for flatman",
-	"targetType": "executable",
-	"sourcePaths": ["src"],
-	"dependencies": {
-		"ws": "18.10.1"
-	},
-
 	"configurations": [
-		{ "name": "default" },
-		{ "name": "unittest" }
-	]
-	
+		{
+			"name": "default",
+			"targetType": "executable"
+		},
+		{
+			"name": "unittest",
+			"targetType": "executable"
+		}
+	],
+	"dependencies": {
+		"ws": "~>19.1.0"
+	},
+	"description": "per-workspace current directory for flatman",
+	"name": "flatman-context",
+	"sourcePaths": [
+		"src"
+	],
+	"targetType": "executable"
 }

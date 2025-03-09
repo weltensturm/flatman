@@ -3,7 +3,7 @@ module bar.widget.tray;
 
 import bar;
 
-import common.xevents;
+import ws.bindings.xlib, common.xevents;
 
 
 enum SYSTEM_TRAY_REQUEST_DOCK =    0;
@@ -42,8 +42,9 @@ class Tray: Widget {
         X.CompositeRedirectSubwindows(wm.displayHandle, bar.windowHandle, CompositeRedirectManual);
         iconSize = [24, 24];
         bar.windowHandle.setSelection(Atoms._NET_SYSTEM_TRAY_S0);
-        bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_ORIENTATION, XA_CARDINAL, 32, [_NET_SYSTEM_TRAY_ORIENTATION_HORZ]);
-        bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_VISUAL, XA_VISUALID, 32, [wm.graphicsInfo.visualid]);
+        bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_ORIENTATION, cast(int)XA_CARDINAL, 32,
+                             [_NET_SYSTEM_TRAY_ORIENTATION_HORZ]);
+        bar.windowHandle.set(Atoms._NET_SYSTEM_TRAY_VISUAL, cast(int)XA_VISUALID, 32, [wm.graphicsInfo.visualid]);
         .root.send(Atoms.MANAGER, 32, [CurrentTime, Atoms._NET_SYSTEM_TRAY_S0, bar.windowHandle]);
         XDamageQueryExtension(wm.displayHandle, &damageEvent, &damageError);
         Events ~= this;
@@ -138,7 +139,7 @@ class Tray: Widget {
         disable;
     }
 
-    void dock(x11.X.Window window){
+    void dock(WindowHandle window){
         writeln("dock ", window);
         if(clients.canFind!(c => c.window == window)){
             writeln("WARNING: already docked");
@@ -195,17 +196,17 @@ class Tray: Widget {
 class TrayClient: Base {
 
     Damage damage;
-    x11.X.Window window;
+    WindowHandle window;
     Managed!Pixmap pixmap;
     Managed!Picture picture;
 
-    this(x11.X.Window window){
+    this(WindowHandle window){
         this.window = window;
         XWindowAttributes wa;
         X.GetWindowAttributes(wm.displayHandle, window, &wa);
         pos = [wa.x, wa.y];
         size = [wa.width, wa.height];
-        damage = XDamageCreate(wm.displayHandle, window, XDamageReportNonEmpty);
+        damage = cast(uint)XDamageCreate(wm.displayHandle, window, XDamageReportNonEmpty);
         Events[window] ~= this;
     }
 
@@ -311,7 +312,7 @@ void repair(XDamageNotifyEvent* event){
 }
 
 
-TrayClient find(TrayClient[] windows, x11.X.Window window){
+TrayClient find(TrayClient[] windows, WindowHandle window){
     foreach(c; windows){
         if(c.window == window)
             return c;
@@ -320,7 +321,7 @@ TrayClient find(TrayClient[] windows, x11.X.Window window){
 }
 
 
-void setSelection(x11.X.Window window, Atom atom){
+void setSelection(WindowHandle window, Atom atom){
     if(X.GetSelectionOwner(wm.displayHandle, atom) != None)
         throw new Exception("someone else already has selection");
     if(!X.SetSelectionOwner(wm.displayHandle, atom, window, CurrentTime))
@@ -329,11 +330,12 @@ void setSelection(x11.X.Window window, Atom atom){
 
 
 void set(WindowHandle window, Atom atom, int type, int format, long[] data){
-    X.ChangeProperty(wm.displayHandle, window, atom, type, format, PropModeReplace, cast(ubyte*)data.ptr, cast(int)data.length);
+    X.ChangeProperty(wm.displayHandle, window, atom, type, format, PropModeReplace,
+                     cast(ubyte*)data.ptr, cast(int)data.length);
 }
 
 
-void sendExpose(x11.X.Window window){
+void sendExpose(WindowHandle window){
     XEvent xev;
     xev.type = Expose;
     xev.xexpose.window = window;
@@ -341,7 +343,7 @@ void sendExpose(x11.X.Window window){
 
 }
 
-void send(x11.X.Window window, Atom message, int format, long[] data){
+void send(WindowHandle window, Atom message, int format, long[] data){
     XClientMessageEvent xev;
     xev.type = ClientMessage;
     xev.window = window;

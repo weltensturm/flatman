@@ -28,7 +28,7 @@ bool gettextprop(Window w, Atom atom, ref string text){
 	if(name.encoding == XA_STRING){
 		text = to!string(*name.value);
 	}else{
-		if(XmbTextPropertyToTextList(dpy, &name, &list, &n) >= XErrorCode.Success && n > 0 && *list){
+		if(XmbTextPropertyToTextList(dpy, &name, &list, &n) >= Success && n > 0 && *list){
 			text = (*list).to!string;
 			XFreeStringList(list);
 		}

@@ -4,7 +4,7 @@ module composite.client;
 import composite;
 
 
-import common.log;
+import ws.bindings.xlib, common.log;
 
 
 class ClientFramebuffer {
@@ -18,7 +18,7 @@ class ClientFramebuffer {
 
     bool hasAlpha;
 
-    this(x11.X.Window window, XWindowAttributes a){
+    this(WindowHandle window, XWindowAttributes a){
         XRenderPictFormat* format = XRenderFindVisualFormat(wm.displayHandle, a.visual);
         if(!format){
             "failed to find format".writeln;
@@ -29,7 +29,7 @@ class ClientFramebuffer {
         pa.subwindow_mode = IncludeInferiors;
         pixmap = XCompositeNameWindowPixmap(wm.displayHandle, window);
 
-        x11.X.Window root_return;
+        WindowHandle root_return;
         int int_return;
         uint short_return;
 
@@ -104,22 +104,22 @@ class CompositeClient: ws.wm.Window {
 
     CompositeClient attachedTo;
 
-    Properties!(
-        "workspace", "_NET_WM_DESKTOP", XA_CARDINAL, false,
-        "tab", "_FLATMAN_TAB", XA_CARDINAL, false,
-        "tabs", "_FLATMAN_TABS", XA_CARDINAL, false,
-        "dir", "_FLATMAN_TAB_DIR", XA_CARDINAL, false,
-        "width", "_FLATMAN_WIDTH", XA_CARDINAL, false,
-        "overviewHide", "_FLATMAN_OVERVIEW_HIDE", XA_CARDINAL, false,
-        "name", "_NET_WM_NAME", XA_STRING, false,
-        "xaname", "WM_NAME", XA_STRING, false,
-        "wintype", "_NET_WM_WINDOW_TYPE", XA_ATOM, true,
-        "attachTo", "_FLATMAN_ATTACH_TO", XA_WINDOW, false
-    ) properties;
+    mixin WindowProperties!q{
+        _NET_WM_DESKTOP        XA_CARDINAL
+        _FLATMAN_TAB           XA_CARDINAL
+        _FLATMAN_TABS          XA_CARDINAL
+        _FLATMAN_TAB_DIR       XA_CARDINAL
+        _FLATMAN_WIDTH         XA_CARDINAL
+        _FLATMAN_OVERVIEW_HIDE XA_CARDINAL
+        _NET_WM_NAME           XA_STRING
+        WM_NAME                XA_STRING
+        _NET_WM_WINDOW_TYPE    XA_ATOM[]
+        _FLATMAN_ATTACH_TO     XA_WINDOW
+    };
 
     override void hide(){}
 
-    this(x11.X.Window window, int[2] pos, int[2] size, XWindowAttributes a){
+    this(WindowHandle window, int[2] pos, int[2] size, XWindowAttributes a){
         super(window);
         this.a = a;
         damage = new WindowDamage(this);
@@ -127,19 +127,16 @@ class CompositeClient: ws.wm.Window {
         overviewAnimation = new OverviewAnimation(pos, size);
         hidden = true;
         isActive = true;
-        properties.window(window);
+        setPropertyWindow(window);
         XSync(wm.displayHandle, false);
         XSelectInput(wm.displayHandle, windowHandle, PropertyChangeMask | StructureNotifyMask);
-        properties.workspace ~= (long workspace){
-            workspaceAnimation(workspace, workspace);
-        };
-        properties.name ~= (string){
+        _NET_WM_NAME ~= (string){
             title = getTitle;
         };
-        properties.xaname ~= (string){
+        WM_NAME ~= (string){
             title = getTitle;
         };
-        properties.attachTo ~= (x11.X.Window window){
+        _FLATMAN_ATTACH_TO ~= (WindowHandle window){
             foreach(client; manager.clients){
                 if(client.windowHandle == window){
                     attachedTo = client;
@@ -149,7 +146,7 @@ class CompositeClient: ws.wm.Window {
         };
         if(a.map_state & IsViewable)
             onShow;
-        properties.update;
+        updateProperties;
         moved(pos);
         this.size = size;
     }
@@ -160,7 +157,7 @@ class CompositeClient: ws.wm.Window {
     }
 
     bool floating(){
-        return properties.tabs.value.max(0) == 0;
+        return _FLATMAN_TABS.value.max(0) == 0;
     }
 
     void createPicture(bool force=false){
@@ -202,7 +199,7 @@ class CompositeClient: ws.wm.Window {
     override void moved(int[2] pos){
         if(pos.y >= manager.height && !a.override_redirect)
             pos.y -= manager.height;
-        if(properties.workspace.value < 0 || animation.fade.completion < 0.1 || a.override_redirect){
+        if(_NET_WM_DESKTOP.value < 0 || animation.fade.completion < 0.1 || a.override_redirect){
             animation.rect.pos = [pos.x, pos.y];
             overviewAnimation.pos.x.replace(pos.x);
             overviewAnimation.pos.y.replace(pos.y);
@@ -210,21 +207,6 @@ class CompositeClient: ws.wm.Window {
         if(pos == this.pos)
             return;
         this.pos = pos;
-    }
-
-    void workspaceAnimation(long ws, long old){
-        //moved(pos);
-        /+
-        if(properties.workspace.value < 0)
-            return;
-        auto target = ws > properties.workspace.value ? -manager.height+pos.y : manager.height;
-        if(ws == properties.workspace.value)
-            target = pos.y;
-        +/
-        /+
-        if(target != animation.pos.y.end)
-            animation.pos.y.change(target);
-        +/
     }
 
     override void onShow(){

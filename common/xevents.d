@@ -6,8 +6,7 @@ import
     std.string,
     std.meta,
     std.typecons,
-    x11.X,
-    x11.Xlib,
+    ws.bindings.xlib,
     ws.gui.input,
     ws.wm,
     common.event;

@@ -6,6 +6,8 @@ import
     common.event,
     common.log,
 
+    ws.bindings.xlib,
+
     composite,
     composite.events,
     composite.overview.window,
@@ -18,7 +20,7 @@ import
 
 
 bool nodraw(CompositeClient client){
-    return client.properties.overviewHide.value
+    return client._FLATMAN_OVERVIEW_HIDE.value
            || (client.destroyed && client.animation.fade.calculate < 0.00001);
 }
 
@@ -39,16 +41,15 @@ class Overview {
 
 	Dock dock;
 
-    Properties!(
-        "workspaceNames", "_NET_DESKTOP_NAMES", XA_STRING, false,
-        "workspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false,
-        "workspaces", "_NET_NUMBER_OF_DESKTOPS", XA_CARDINAL, false,
-        "workspaceCount", "_NET_NUMBER_OF_DESKTOPS", XA_CARDINAL, false,
-        "overview", "_FLATMAN_OVERVIEW", XA_CARDINAL, false,
-		"windowActive", "_NET_ACTIVE_WINDOW", XA_WINDOW, false,
-        "workspaceSort", "_FLATMAN_WORKSPACE_HISTORY", XA_CARDINAL, true,
-        "workspaceEmpty", "_FLATMAN_WORKSPACE_EMPTY", XA_CARDINAL, true
-    ) properties;
+    mixin WindowProperties!q{
+        _NET_DESKTOP_NAMES         XA_STRING
+        _NET_CURRENT_DESKTOP       XA_CARDINAL
+        _NET_NUMBER_OF_DESKTOPS    XA_CARDINAL
+        _FLATMAN_OVERVIEW          XA_CARDINAL
+        _NET_ACTIVE_WINDOW         XA_WINDOW
+        _FLATMAN_WORKSPACE_HISTORY XA_CARDINAL[]
+        _FLATMAN_WORKSPACE_EMPTY   XA_CARDINAL[]
+    };
 
     string[] workspaceNames;
 
@@ -57,9 +58,9 @@ class Overview {
     this(CompositeManager manager){
 		dock = new Dock(this);
         this.manager = manager;
-        properties.window(.root);
+        setPropertyWindow(.root);
         wm.on(.root, [
-            PropertyNotify: (XEvent* e) => properties.update(&e.xproperty)
+            PropertyNotify: (XEvent* e) => updateProperties(&e.xproperty)
         ]);
 		wm.on([
 			PropertyNotify: (XEvent* e){
@@ -72,12 +73,12 @@ class Overview {
 			ConfigureNotify: (XEvent* e){ doLayout = true; },
             DestroyNotify: (XEvent* e){ doLayout = true; }
 		]);
-        properties.workspaceNames ~= (string names){ workspaceNames = names.split("\0"); };
-        properties.update;
-        properties.workspace ~= (long){
+        _NET_DESKTOP_NAMES ~= (string names){ workspaceNames = names.split("\0"); };
+        updateProperties;
+        _NET_CURRENT_DESKTOP ~= (long){
             canSwitchWorkspace = true;
         };
-        properties.overview ~= (long activate){
+        _FLATMAN_OVERVIEW ~= (long activate){
             if(activate)
                 start(true);
             else
@@ -85,7 +86,7 @@ class Overview {
         };
         window = new OverviewWindow(this);
         wm.add(window);
-		properties.windowActive ~= (l){};
+		_NET_ACTIVE_WINDOW ~= (l){};
         activeContainer = new ActiveContainerIndicator;
     }
 
@@ -119,7 +120,7 @@ class Overview {
                 }
             }
         }else{
-            properties.overview.request([2, 1, CurrentTime]);
+            _FLATMAN_OVERVIEW.request([2, 1, CurrentTime]);
         }
     }
 
@@ -134,7 +135,7 @@ class Overview {
                 }
             }
         }else{
-            properties.overview.request([2, 0, CurrentTime]);
+            _FLATMAN_OVERVIEW.request([2, 0, CurrentTime]);
         }
     }
 
@@ -182,7 +183,7 @@ class Overview {
         activeContainer.targetSize = [manager.width+20, manager.height+20];
 
         foreach(monitor; monitors){
-            auto count = properties.workspaceCount.value;
+            auto count = _NET_NUMBER_OF_DESKTOPS.value;
             while(monitor.workspaces.length < count)
                 monitor.workspaces ~= new Workspace;
             while(monitor.workspaces.length > count)
@@ -204,7 +205,7 @@ class Overview {
                 if(m.index != manager.screens.findScreen(client.pos, client.size))
                     continue;
                 foreach(i, ws; m.workspaces){
-                    if(i != client.properties.workspace.value)
+                    if(i != client._NET_WM_DESKTOP.value)
                         continue;
                     auto w = new WinInfo(client);
                     w.animation = client.overviewAnimation; //new OverviewAnimation(client.pos, client.size); // TODO: keep windows around so we don't have to use a "global" window attribute
@@ -228,7 +229,7 @@ class Overview {
                 foreach(w; ws.windows){
                     if(nodraw(w.window))
                         continue;
-                    auto tabs = w.window.properties.tabs.value.max(0);
+                    auto tabs = w.window._FLATMAN_TABS.value.max(0);
                     if(tabs == 0 && (w.window.hidden || !w.window.picture))
                         continue;
                     if(tabs !in groups){
@@ -285,7 +286,7 @@ class Overview {
                                         + smallestWindow.h/2
                                         - maxY/2).to!int;
 
-                        if(w.window.windowHandle == properties.windowActive.value){
+                        if(w.window.windowHandle == _NET_ACTIVE_WINDOW.value){
                             auto splitPos = [
                                 (offsetX + mpos.x + splitPadding.w/2 + padding.w).to!int,
                                 ((mpos.y + splitPadding.h/2)).to!int
@@ -306,7 +307,7 @@ class Overview {
                                 ).lround.to!int
                             ];
                         }
-                        auto index = k == 0 ? i : w.window.properties.tab;
+                        auto index = k == 0 ? i : w.window._FLATMAN_TAB;
                         auto cell = [
                             (mpos.x
                                 + offsetX
@@ -403,15 +404,15 @@ class Overview {
         if(find(client, w)){
             double zoom;
             if(!client.destroyed){
-				auto active = properties.windowActive.value == client.windowHandle ? 1 : 1-state.sigmoid*0.25;
-                if(state < 0.99999 && zoomList.canFind(client) && client.properties.workspace.value == manager.properties.workspace.value){
+				auto active = _NET_ACTIVE_WINDOW.value == client.windowHandle ? 1 : 1-state.sigmoid*0.25;
+                if(state < 0.99999 && zoomList.canFind(client) && client._NET_WM_DESKTOP.value == manager._NET_CURRENT_DESKTOP.value){
                     zoom = state.sigmoid;
                     alpha = 0.75 + alpha*0.25;
                 }else{
                     zoom = 1;
                     alpha = state.sigmoid * (client.hidden ? 0.99 : 1);
                 }
-                if(client.properties.workspace.value < 0 || client.properties.overviewHide.value == 1){
+                if(client._NET_WM_DESKTOP.value < 0 || client._FLATMAN_OVERVIEW_HIDE.value == 1){
                     alpha = (1-zoom*2).max(0)^^2;
                     return;
                 }
@@ -419,7 +420,7 @@ class Overview {
             }else{
                 zoom = 1;
             }
-            //alpha = alpha * (1 - (w.window.properties.workspace.value.to!int-manager.properties.workspace.value).abs.min(1).max(0));
+            //alpha = alpha * (1 - (w.window.workspace.value.to!int-manager.workspace.value).abs.min(1).max(0));
             scale = animate(scale, (w.animation.size.w.calculate/size.w)
                                     .min(w.animation.size.h.calculate/size.h), zoom);
             pos = [
@@ -431,7 +432,7 @@ class Overview {
                 animate(size.h, w.animation.size.h.calculate, zoom).lround.to!int
             ];
         }else{
-            if(client.properties.overviewHide.value == 1){
+            if(client._FLATMAN_OVERVIEW_HIDE.value == 1){
                 alpha = alpha*(1-state.sigmoid);
             }
             //alpha = animate(alpha, 0, state.sigmoid);
@@ -453,7 +454,7 @@ class Overview {
             return;
         dock.damage(damage);
         activeContainer.damage(damage);
-        auto workspace = manager.properties.workspace.value;
+        auto workspace = manager._NET_CURRENT_DESKTOP.value;
         if(lastDamage > now-0.5 && workspace == damageWorkspace){
             return;
         }
@@ -498,12 +499,12 @@ class Overview {
             return;
         with(Profile("overview draw pre")){
             /+ TODO: proper gui damage system
-            if(client.windowHandle == manager.properties.activeWin.value){
+            if(client.windowHandle == manager.activeWin.value){
                 backend.setColor([0, 0.2, 0.7, state.sigmoid*alpha]);
                 backend.rect([pos.x-10, manager.height-pos.y+10-size.h-20], [size.w+20, size.h+20]);
             }
             +/
-			if(client.properties.workspace.value != manager.properties.workspace.value)
+			if(client._NET_WM_DESKTOP.value != manager._NET_CURRENT_DESKTOP.value)
 				return;
             double flop = client.hidden ? 1*alpha : state.sigmoid*alpha;
             int textHider;
@@ -555,21 +556,21 @@ class Overview {
         if(pressed && (button == Mouse.wheelDown || button == Mouse.wheelUp)){
 
             if(true){
-                auto current = properties.workspaceSort.value.countUntil(properties.workspace.value);
+                auto current = _FLATMAN_WORKSPACE_HISTORY.value.countUntil(_NET_CURRENT_DESKTOP.value);
                 auto next = current + (button == Mouse.wheelDown ? 1 : -1);
                 if(next < 0)
-                    next = properties.workspaceSort.value.length-1;
-                else if(next >= properties.workspaceSort.value.length)
+                    next = _FLATMAN_WORKSPACE_HISTORY.value.length-1;
+                else if(next >= _FLATMAN_WORKSPACE_HISTORY.value.length)
                     next = 0;
-                if(canSwitchWorkspace && next >= 0 && next < properties.workspaceSort.value.length){
+                if(canSwitchWorkspace && next >= 0 && next < _FLATMAN_WORKSPACE_HISTORY.value.length){
                     canSwitchWorkspace = false;
-                    properties.workspace.request([properties.workspaceSort[next], CurrentTime]);
+                    _NET_CURRENT_DESKTOP.request([_FLATMAN_WORKSPACE_HISTORY[next], CurrentTime]);
                 }
             }else{
-                auto selectedWorkspace = properties.workspace.value + (button == Mouse.wheelDown ? 1 : -1);
-                if(canSwitchWorkspace && selectedWorkspace >= 0 && selectedWorkspace < properties.workspaces.value){
+                auto selectedWorkspace = _NET_CURRENT_DESKTOP.value + (button == Mouse.wheelDown ? 1 : -1);
+                if(canSwitchWorkspace && selectedWorkspace >= 0 && selectedWorkspace < _NET_CURRENT_DESKTOP.value){
                     canSwitchWorkspace = false;
-                    properties.workspace.request([selectedWorkspace, CurrentTime]);
+                    _NET_CURRENT_DESKTOP.request([selectedWorkspace, CurrentTime]);
                 }
             }
         }

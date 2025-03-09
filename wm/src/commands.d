@@ -24,6 +24,11 @@ string call()(bool pressed, string fn, string[] args){
 }
 
 
+string callDone()(string fn, string[] args){
+    CommandStop(fn, args);
+}
+
+
 void register(T, Args...)(string name, T delegate(Args) dg){
 	functions[name] = delegate(bool pressed, string[] args){
 		if(!pressed && !is(Args[0] == bool))
@@ -111,9 +116,9 @@ void move(string what){
 		case "down":
 			moveDown;
 			break;
-		case "mouse":
-			mouseMove;
-			break;
+		// case "mouse":
+		//	mouseMove;
+		//	break;
 	}
 }
 
@@ -162,12 +167,12 @@ void reload(){
 }
 
 void toggleTabs(){
-	auto s = monitor.workspace.split.to!Split;
-	if(s.clients){
-		auto tabs = s.children[s.clientActive].to!Tabs;
-		tabs.showTabs = !tabs.showTabs;
-		tabs.resize(tabs.size);
-	}
+	//auto s = monitor.workspace.split.to!Split;
+	//if(s.clients){
+	//	auto tabs = s.children[s.clientActive].to!Tabs;
+	//	tabs.showTabs = !tabs.showTabs;
+		//tabs.resize(tabs.size);
+	//}
 }
 
 bool doOverview = false;

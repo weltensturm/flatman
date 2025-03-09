@@ -1,6 +1,8 @@
 module flatman.frame;
 
-import flatman;
+import
+	flatman,
+	drag = flatman.dragging;
 
 import common.xevents;
 
@@ -12,7 +14,7 @@ class Frame: Base {
 
 	Client client;
 
-	x11.X.Window window;
+	WindowHandle window;
 
 	int[2] dragStart;
 	double clickTime;

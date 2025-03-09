@@ -6,12 +6,13 @@ import flatman;
 
 __gshared:
 
-
+/*
 enum Success = 0;
 enum XC_fleur = 52;
 enum XC_left_ptr = 68;
 enum XC_sizing = 120;
 enum CompositeRedirectManual = 1;
+*/
 // endtodo
 
 
@@ -59,7 +60,7 @@ bool updateStrut;
 int[2] rootSize = [1,1];
 
 
-DragSystem drag;
+// DragSystem drag;
 KeybindSystem keys;
 WorkspaceHistory workspaceHistory;
 EventSequence eventSequence;
@@ -75,6 +76,13 @@ int main(string[] args){
 	(Log.BOLD ~ Log.GREEN ~ "===== FLATMAN =====").log;
 	"args %s".format(args[1..$]).log;
 	try{
+
+		{
+			auto path = "~/.flatman".expandTilde;
+			if(!path.exists)
+				path.mkdir;
+		}
+
 		environment["_JAVA_AWT_WM_NONREPARENTING"] = "1";
 		if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 			"warning: no locale support".log;
@@ -86,13 +94,13 @@ int main(string[] args){
 			throw new Exception("cannot open display");
 		getDisplay = () => dpy;
 		checkOtherWm;
-		setup(args[$-1] != "restarting");
+		setup;
 		scan;
 		run;
 	}catch(Throwable t){
 		Log.error("FATAL ERROR\n" ~ t.toString);
-        stdout.flush;
-        stderr.flush;
+        // stdout.flush; // TODO: ????
+        // stderr.flush; // TODO: ????
         return 1;
 	}
 	try
@@ -102,9 +110,7 @@ int main(string[] args){
 
 	if(restart){
 		"restart".log;
-		XSetCloseDownMode(dpy, CloseDownMode.RetainTemporary);
-		if(args[$-1] != "restarting")
-			args ~= "restarting";
+		XSetCloseDownMode(dpy, RetainTemporary);
 		execvp(args[0], args);
 		"execv failed".log;
 	}else
@@ -122,7 +128,7 @@ void checkOtherWm(){
 	XSync(dpy, false);
 }
 
-void setup(bool autostart){
+void setup(){
 
 	registerAll;
 
@@ -160,7 +166,7 @@ void setup(bool autostart){
 	registerFunctions;
 
 	keys = new KeybindSystem;
-	drag = new DragSystem;
+	// drag = new DragSystem;
 	workspaceHistory = new WorkspaceHistory;
 	eventSequence = new EventSequence;
 	
@@ -173,7 +179,7 @@ void setup(bool autostart){
         if(!config.logging)
             Log.setLevel(Log.Level.error);
         else
-            Log.setLevel(Log.Level.info);
+            Log.setLevel(Log.Level.dbg);
     };
 
 	auto configs = ["/etc/flatman/config.ws", "~/.config/flatman/config.ws"];
@@ -185,7 +191,7 @@ void setup(bool autostart){
 }
 
 void scan(){
-	Window[][AtomType!XA_CARDINAL] workspaces;
+	Window[][AtomType!(cast(uint)XA_CARDINAL)] workspaces;
 	XWindowAttributes wa;
 
 	with(Log(Log.YELLOW ~ "scan" ~ Log.DEFAULT)){
@@ -204,7 +210,7 @@ void scan(){
 					"scan manages %s".format(w).log;
 					long workspace;
 					try {
-						workspace = w.getprop!XA_CARDINAL(Atoms._NET_WM_DESKTOP);
+						workspace = w.getprop!(cast(int)XA_CARDINAL)(Atoms._NET_WM_DESKTOP);
 					}catch(Exception e){
 						Log.error(e.to!string);
 						workspace = 0;
@@ -251,7 +257,6 @@ void scan(){
 
 
 void loop(){
-
 
 	Inotify.update;
 
@@ -317,8 +322,8 @@ void run(){
 		auto start = now;
 		loop;
 		auto end = now;
-		if(end - start < 1/120.0)
-			sleep(1/120.0 - (end-start));
+		//if(end - start < 1/120.0)
+		//	sleep(1/120.0 - (end-start));
 	}
 }
 
@@ -404,7 +409,6 @@ void cleanup(){
 
 		taskPool.stop;
 
-		drag.destroy;
 		keys.destroy;
 	}
 }

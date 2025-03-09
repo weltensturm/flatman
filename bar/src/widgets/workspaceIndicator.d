@@ -1,22 +1,22 @@
 module bar.widget.workspaceIndicator;
 
 
-import bar, common.xevents;
+import ws.bindings.xlib, bar, common.xevents;
 
 
 class WorkspaceIndicator: Widget {
 
-    Properties!(
-        "workspaceNames", "_NET_DESKTOP_NAMES", XA_STRING, false,
-        "currentWorkspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false
-    ) properties;
+    mixin WindowProperties!q{
+        _NET_DESKTOP_NAMES   XA_STRING
+        _NET_CURRENT_DESKTOP XA_CARDINAL
+    };
 
     string workspace;
 
     this(){
-        properties.window(.root);
-        properties.workspaceNames ~= (v) => update;
-        properties.currentWorkspace ~= (v) => update;
+        setPropertyWindow(.root);
+        _NET_DESKTOP_NAMES ~= (v) => update;
+        _NET_CURRENT_DESKTOP ~= (v) => update;
         update;
         Events ~= this;
     }
@@ -27,7 +27,7 @@ class WorkspaceIndicator: Widget {
 
     @WindowProperty
     void windowProperty(WindowHandle window, XPropertyEvent* e){
-        properties.update(e);
+        updateProperties(e);
     }
 
     override int width(){
@@ -48,9 +48,9 @@ class WorkspaceIndicator: Widget {
     }
 
     void update(){
-        auto names = properties.workspaceNames.value.split('\0');
-        if(properties.currentWorkspace.value < names.length){
-            workspace = names[properties.currentWorkspace.value];
+        auto names = _NET_DESKTOP_NAMES.value.split('\0');
+        if(_NET_CURRENT_DESKTOP.value < names.length){
+            workspace = names[_NET_CURRENT_DESKTOP.value];
         }else{
             workspace = "/";
         }

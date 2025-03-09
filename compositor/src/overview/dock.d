@@ -8,11 +8,9 @@ import
     std.range,
     std.math,
 
-    x11.X,
-    x11.Xlib,
-    x11.Xatom,
-
+    ws.bindings.xlib,
     ws.gui.base,
+    ws.wm,
     ws.x.property,
 
     common.atoms,
@@ -112,7 +110,7 @@ class OverviewDock: Widget {
     }
 
     @WindowProperty
-    void onProperty(x11.X.Window window, XPropertyEvent* e){
+    void onProperty(WindowHandle window, XPropertyEvent* e){
         if(window != .root)
             return;
         if(e.atom == Atoms._NET_NUMBER_OF_DESKTOPS)
@@ -139,8 +137,8 @@ class OverviewDock: Widget {
     }
 
     void updateWorkspaceSort(){
-        workspaces = workspaces.sorted(manager.overview.properties.workspaceSort.get);
-        auto empty = manager.overview.properties.workspaceEmpty.get;
+        workspaces = workspaces.sorted(manager.overview._FLATMAN_WORKSPACE_HISTORY.get);
+        auto empty = manager.overview._FLATMAN_WORKSPACE_EMPTY.get;
         workspaces =
             workspaces
             .filter!(a => empty.canFind(a.index))
@@ -178,7 +176,7 @@ class OverviewDock: Widget {
 
     void updateWorkspaceIndicatorPosition(){
         foreach(ws; workspaces){
-            if(ws.index == manager.properties.workspace.get){
+            if(ws.index == manager._NET_CURRENT_DESKTOP.get){
                 /+
                 indicator.targetSize = [ws.size.h.to!int/2, ws.size.h.to!int/2];
                 indicator.targetPos = [
@@ -230,7 +228,7 @@ class OverviewWorkspace: Widget {
     }
 
     @WindowProperty
-    void onProperty(x11.X.Window window, XPropertyEvent* e){
+    void onProperty(WindowHandle window, XPropertyEvent* e){
         if(window == .root && e.atom == Atoms._NET_DESKTOP_NAMES)
             updateWorkspaceName;
     }
@@ -272,7 +270,7 @@ class OverviewWorkspace: Widget {
             return;
         foreach(winInfo; workspace.windows){
             if(winInfo.window == window.window){
-                if(window.window.properties.workspace.value != manager.properties.workspace.value){
+                if(window.window._NET_WM_DESKTOP.value != manager._NET_CURRENT_DESKTOP.value){
                     // window.targetPos.y = manager.height - window.targetSize.h - window.targetPos.y - dock.pos.y;
                     // TODO: same coordinate system everywhere
                     window.targetSize = [
@@ -290,7 +288,7 @@ class OverviewWorkspace: Widget {
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
         if(!pressed){
-            manager.properties.workspace.request([index, CurrentTime]);
+            manager._NET_CURRENT_DESKTOP.request([index, CurrentTime]);
         }
     }
 
@@ -347,7 +345,7 @@ class WorkspaceIndicator: Widget {
 
     override void onMouseButton(Mouse.button button, bool pressed, int x, int y){
         if(!pressed){
-            manager.properties.workspace.request([index, CurrentTime]);
+            manager._NET_CURRENT_DESKTOP.request([index, CurrentTime]);
         }
     }
 

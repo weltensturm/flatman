@@ -3,10 +3,11 @@
 	"description" : "window manager",
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
+	"importPaths": ["src", "../common"],
 	"dependencies" : {
 		"ws": "19.1.0"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama", "Xext"],
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xinerama", "Xext", "Xpresent"],
 
 	"configurations": [
 		{ "name": "default" },

@@ -1,6 +1,6 @@
 module bar.alpha;
 
-import bar;
+import ws.bindings.xlib, bar;
 
 
 enum ALPHA_STEPS = 256;

@@ -56,7 +56,9 @@ class Workspace: Container {
         }
     }
 
-    override void moveClient(int[2]){}
+    override void moveClient(int[2] dir){
+        (cast(Container)parent).moveClient(dir);
+    }
 
     void update(Client client){
         ewmh.updateWindowDesktop(client, monitor.workspaces.countUntil(this));

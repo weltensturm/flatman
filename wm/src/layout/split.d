@@ -1,9 +1,10 @@
 module flatman.layout.split;
 
 import
-    ws.wm.x11.cursorfont,
     flatman,
 	flatman.simpleWindow,
+	drag = flatman.dragging,
+    ws.bindings.xlib,
     common.xevents;
 
 
@@ -30,7 +31,7 @@ void swap(T)(ref T[] array, size_t i1, size_t i2){
 
 class Separator: Base {
 
-    x11.X.Window window;
+    WindowHandle window;
     XDraw _draw;
     int[2] cursor;
 

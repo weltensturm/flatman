@@ -6,7 +6,7 @@
 	"dependencies" : {
 		"ws": "19.1.0"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage"],
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage", "Xpresent"],
 
 	"configurations": [
 		{ "name": "default" },

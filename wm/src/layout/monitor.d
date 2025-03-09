@@ -1,6 +1,8 @@
 module flatman.layout.monitor;
 
-import flatman;
+import
+    flatman,
+	drag = flatman.dragging;
 
 __gshared:
 
@@ -91,6 +93,10 @@ class Monitor {
                 //client.moveResize(client.posFloating, client.sizeFloating);
             }
         }
+    }
+
+    void moveClient(int[2] dir){
+        
     }
 
     void move(Client client, int workspace){

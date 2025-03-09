@@ -1,13 +1,16 @@
 module flatman.events;
 
 
-import flatman;
+import
+    flatman,
+	drag = flatman.dragging;
 
 import common.xevents;
 
 
 alias Tick                   = Event!("Tick", void function());
 alias Command				 = Event!("Command", void function(string, bool, string[]));
+alias CommandStop			 = Event!("CommandStop", void function(string, string[]));
 alias Overview				 = Event!("Overview", void function(bool));
 alias WorkspaceCreate		 = Event!("WorkspaceCreate", void function(int));
 alias WorkspaceDestroy		 = Event!("WorkspaceDestroy", void function(int));
@@ -17,15 +20,21 @@ alias WorkspaceSwitch        = Event!("WorkspaceSwitch", void function(int));
 void handleEvents(){
     XEvent ev;
     XSync(dpy, false);
-    while(XPending(dpy)){
+    bool handledFirst;
+    while(XPending(dpy) || !handledFirst){
+        handledFirst = true;
         XNextEvent(dpy, &ev);
         eventSequence.update(ev.xany.serial);
         if(eventSequence.ignored(ev.type)){
             log(Log.RED ~ "ignoring " ~ Log.DEFAULT ~ formatEvent(&ev, root));
             continue;
         }
-        with(Log(formatEvent(&ev, root))){
+        if([MotionNotify].canFind(ev.type)){
             handleEvent(&ev);
+        } else {
+            with(Log(formatEvent(&ev, root), Log.Level.dbg)){
+                handleEvent(&ev);
+            }
         }
     }
 }
@@ -262,13 +271,13 @@ void onConfigureRequest(XConfigureRequestEvent* ev){
         wc.border_width = ev.border_width;
         wc.sibling = ev.above;
         wc.stack_mode = ev.detail;
-        XConfigureWindow(dpy, ev.window, ev.value_mask, &wc);
+        XConfigureWindow(dpy, ev.window, cast(uint)ev.value_mask, &wc);
     }
 }
 
 void onCreate(bool override_redirect, Window window){
     if(override_redirect){
-        x11.X.Window[] wmWindows;
+        WindowHandle[] wmWindows;
         foreach(ws; monitor.workspaces){
             foreach(separator; ws.split.separators)
                 wmWindows ~= separator.window;
@@ -323,14 +332,14 @@ void onEnter(Window window){
 }
 
 
-void onFocus(x11.X.Window window){
+void onFocus(WindowHandle window){
     if(window == .root && monitor.active){
         focus(monitor.active);
     }
 }
 
 
-void onFocusOut(x11.X.Window window){
+void onFocusOut(WindowHandle window){
 }
 
 

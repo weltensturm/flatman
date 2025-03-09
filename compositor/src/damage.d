@@ -1,6 +1,7 @@
 module composite.damage;
 
 import
+    ws.bindings.xlib,
     composite,
     common.log,
     common.xerror;
@@ -13,7 +14,7 @@ class WindowDamage {
     XRectangle[] areas;
 
     this(CompositeClient client){
-        damage = XDamageCreate(wm.displayHandle, client.windowHandle, XDamageReportNonEmpty);
+        damage = cast(uint)XDamageCreate(wm.displayHandle, client.windowHandle, XDamageReportNonEmpty);
     }
 
     void destroy(){

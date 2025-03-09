@@ -9,15 +9,9 @@ import
     std.math,
     std.conv,
     std.range,
-    x11.X,
-    x11.Xlib,
-    x11.extensions.render,
-    x11.extensions.Xrender,
-    x11.extensions.Xfixes,
-    x11.extensions.Xrandr,
     ws.draw,
     ws.wm,
-    ws.bindings.xft,
+    ws.bindings.xlib,
     ws.gui.point,
     ws.x.backbuffer,
     ws.x.font,
@@ -80,6 +74,7 @@ class ManagedPicture {
 
 struct ClipStack {
     XserverRegion[] stack;
+    XRectangle[] rects;
 
     void push(XserverRegion region){
         XserverRegion newregion = XFixesCreateRegion(wm.displayHandle, null, 0);
@@ -87,6 +82,7 @@ struct ClipStack {
         if(stack.length)
             XFixesIntersectRegion(wm.displayHandle, newregion, stack[$-1], newregion);
         stack ~= newregion;
+        rects ~= XRectangle(0, 0, 0, 0);
     }
 
     void push(int[2] pos, int[2] size){
@@ -97,17 +93,16 @@ struct ClipStack {
             size.h.max(0).to!ushort
         };
         XserverRegion region = XFixesCreateRegion(wm.displayHandle, &r, 1);
+        
         if(stack.length)
             XFixesIntersectRegion(wm.displayHandle, region, stack[$-1], region);
         stack ~= region;
+        rects ~= r;
     }
 
     void clip(XftDraw* xft, GC gc, Picture picture){
         if(stack.length){
-            int count;
-            auto area = XFixesFetchRegion(wm.displayHandle, stack[$-1], &count);
-            XftDrawSetClipRectangles(xft, 0, 0, area, count);
-            XFree(area);
+            XftDrawSetClipRectangles(xft, 0, 0, rects.ptr, rects.length.to!uint);
             XFixesSetPictureClipRegion(wm.displayHandle, picture, 0, 0, stack[$-1]);
             if(gc)
                 XFixesSetGCClipRegion(wm.displayHandle, gc, 0, 0, stack[$-1]);
@@ -122,6 +117,7 @@ struct ClipStack {
     void pop(){
         XFixesDestroyRegion(wm.displayHandle, stack[$-1]);
         stack.length -= 1;
+        rects.length -= 1;
     }
 
     XserverRegion all(){
@@ -162,7 +158,7 @@ class XRenderMultiDraw: DrawEmpty {
     int[2] size;
     Display* dpy;
     int screen;
-    x11.X.Window window;
+    WindowHandle window;
     Visual* visual;
     XftDraw* xft;
     GC gc;
@@ -185,7 +181,7 @@ class XRenderMultiDraw: DrawEmpty {
         this(wm.displayHandle, window.windowHandle);
     }
 
-    this(Display* dpy, x11.X.Window window){
+    this(Display* dpy, WindowHandle window){
         XWindowAttributes wa;
         XGetWindowAttributes(dpy, window, &wa);
         this.dpy = dpy;
@@ -305,7 +301,7 @@ class XRenderMultiDraw: DrawEmpty {
             auto offsetLeft = max(0.0,offset-1)*fontHeight;
             auto x = this.pos.x + pos.x - min(1,max(0,offset))*width + offsetRight - offsetLeft;
             auto y = this.pos.y + pos.y - 2 + fontHeight;
-            XftDrawStringUtf8(xft, &color.rgb, font.xfont, cast(int)x.lround, cast(int)y.lround, text.toStringz, cast(int)text.length);
+            XftDrawStringUtf8(xft, &color.rgb, font.xfont, cast(int)x.lround, cast(int)y.lround, cast(ubyte*)text.toStringz, cast(int)text.length);
             return this.width(text);
         }
         return 0;

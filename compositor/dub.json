@@ -3,10 +3,11 @@
 	"description" : "compositor for flatman",
 	"targetType": "executable",
 	"sourcePaths": ["src", "../common"],
+	"importPaths": ["src", "../common"],
 	"dependencies" : {
 		"ws": "19.1.0"
 	},
-	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage"],
+	"libs-posix": ["Xft", "fontconfig", "Xcomposite", "Xfixes", "Xrender", "Xext", "Xinerama", "Xdamage", "Xrandr", "Xpresent"],
 
 	"configurations": [
 		{ "name": "default" },

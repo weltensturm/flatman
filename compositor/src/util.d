@@ -1,6 +1,6 @@
 module composite.util;
 
-import composite;
+import ws.bindings.xlib, composite;
 
 /+
 double rip(double dist, double a, double b, double delta){
@@ -86,6 +86,8 @@ auto median(alias comparator, T)(T input) if(isInputRange!T) {
 
 struct Profile {
 
+    enum FRAMES = 1024;
+
     private struct Perf {
         double time;
         string name;
@@ -93,30 +95,39 @@ struct Profile {
     }
 
     private struct PerfSection {
+        this(string fullName, string name, size_t level){
+            this.fullName = fullName;
+            this.name = name;
+            this.level = level;
+            times[] = 0;
+        }
         string fullName;
         string name;
         size_t level;
         double sum = 0;
-        RotatingArray!(240, double) times;
+        double[FRAMES] times;
     }
 
     private static Stack!string levels;
     private static PerfSection[string] sections;
-    private static bool[string] ticked;
     private static double lastDraw = 0;
+    private static size_t index = 0;
 
-    static reset(){
+    static newFrame(){
         debug(Profile){
-            foreach(ref b; ticked)
-                b = false;
+            index++;
+            if(index >= FRAMES){
+                index = 0;
+            }
+            foreach(ref section; sections)
+                section.times[index] = 0;
             string[] marked;
             foreach(name, ref section; sections){
-                if(section.times.elements[].sum == 0)
+                if(section.times[].all!"a == 0")
                     marked ~= name;
             }
             foreach(name; marked){
                 sections.remove(name);
-                ticked.remove(name);
             }
         }
     }
@@ -127,22 +138,21 @@ struct Profile {
 
     this(string name){
         debug(Profile){
-            start = now;
             levels.push(name);
             auto fullName = levels.slice.join(".");
             if(fullName !in sections){
                 sections[fullName] = PerfSection(fullName, name, levels.length);
             }
             perf = &sections[fullName];
+            start = now;
         }
     }
 
     ~this(){
         debug(Profile){
             levels.pop;
-            ticked[perf.fullName] = true;
             auto diff = now - start;
-            perf.sum += diff;
+            perf.times[index] += diff;
         }
     }
 
@@ -155,14 +165,6 @@ struct Profile {
     static display(DrawEmpty backend, int[2] pos){
         debug(Profile){
             auto currTime = now;
-            foreach(name, ref section; sections){
-                if(section.fullName !in ticked || !ticked[section.fullName]){
-                    section.times ~= 0;
-                }else{
-                    section.times ~= section.sum;
-                    section.sum = 0;
-                }
-            }
             lastDraw = currTime;
             //writeln(" ".replicate(level*4) ~ "%3.5f".format(diff) ~ ": " ~ name());
             int y = pos.y + 50;
@@ -173,22 +175,9 @@ struct Profile {
             foreach(section; sections.keys.sort){
                 auto perf = sections[section];
                 double time;
-                if(section == "sleep")
-                    time = perf.times.first;
-                else
-                    time = perf.times.fold!max;
-                auto time_frame = perf.times.first;
-                bool zero = true;
-                foreach(v; perf.times){
-                    if(v > 0)
-                        zero = false;
-                }
-                if(zero)
-                    continue;
-                /+
-                if(time < 0.00005)
-                    continue;
-                +/
+                time = perf.times.fold!max;
+                auto time_frame = perf.times[index > 0 ? index-1 : perf.times.length-1];
+
                 if(section == "sleep"){
                     backend.setColor([1 - time*60, 1, 1 - time*60, time*60]);
                 }else{
@@ -198,8 +187,10 @@ struct Profile {
                 backend.text([100, y], "%s".format((time * 1000000).to!long), 1);
                 backend.setColor([1, 1, 1]);
                 backend.text([100 + 10, y], "- ".repeat(perf.level-1).join ~ perf.name);
+                // backend.text([100 + 10, y], perf.fullName);
                 y += backend.fontHeight;
             }
+            backend.text([100 + 10, y], index.to!string, 1);
             backend.noclip;
         }
     }

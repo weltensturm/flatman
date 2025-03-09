@@ -2,7 +2,9 @@ module flatman.client;
 
 import flatman;
 
-import common.xevents;
+import
+    ws.bindings.xlib,
+    common.xevents;
 
 
 __gshared:
@@ -292,7 +294,7 @@ class Client: Base {
                 AnyModifier,
                 orig,
                 true,
-                ButtonPressMask,
+                cast(uint)ButtonPressMask,
                 GrabModeSync,
                 GrabModeAsync,
                 .root,

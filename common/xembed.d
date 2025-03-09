@@ -2,12 +2,11 @@ module common.xembed;
 
 
 import
-    x11.X,
-    x11.Xatom,
-    x11.Xlib,
+    ws.bindings.c_xlib,
     ws.x.property,
     ws.wm,
     common.xerror;
+
 
 enum XEMBED_VERSION =  0;
 
@@ -41,6 +40,8 @@ enum XEMBED_MODIFIER_HYPER =   (1 << 4);
 enum XEMBED_ACCELERATOR_OVERLOADED =   (1 << 0);
 
 
+alias XWindow = ws.bindings.c_xlib.Window;
+
 
 struct XembedInfo {
     ulong version_;
@@ -49,43 +50,43 @@ struct XembedInfo {
 
 
 struct XembedWindow {
-    x11.X.Window window;
+    XWindow window;
     XembedInfo info;
 }
 
 
 class Xembed {
 
-    static void embedNotify(x11.X.Window client, x11.X.Window embedder, long version_){
+    static void embedNotify(XWindow client, XWindow embedder, long version_){
         message_send(client, XEMBED_EMBEDDED_NOTIFY, 0, embedder, version_);
     }
 
-    static void embed(x11.X.Window child, x11.X.Window parent){
+    static void embed(XWindow child, XWindow parent){
         X.ReparentWindow(wm.displayHandle, child, parent, 0, 0);
         embedNotify(child, parent, XEMBED_VERSION);
     }
 
-    static void unembed(x11.X.Window child){
+    static void unembed(XWindow child){
         X.ReparentWindow(wm.displayHandle, child, DefaultRootWindow(wm.displayHandle), 0, 0);
     }
 
-    static void focus_in(x11.X.Window client, long focus_type){
+    static void focus_in(XWindow client, long focus_type){
         message_send(client, XEMBED_FOCUS_IN, focus_type, 0, 0);
     }
 
-    static void focus_out(x11.X.Window client){
+    static void focus_out(XWindow client){
         message_send(client, XEMBED_FOCUS_OUT, 0, 0, 0);
     }
 
-    static void window_activate(x11.X.Window client){
+    static void window_activate(XWindow client){
         message_send(client, XEMBED_WINDOW_ACTIVATE, 0, 0, 0);
     }
 
-    static void window_deactivate(x11.X.Window client){
+    static void window_deactivate(XWindow client){
         message_send(client, XEMBED_WINDOW_DEACTIVATE, 0, 0, 0);
     }
 
-    static void message_send(x11.X.Window window, long message, long d1, long d2, long d3){
+    static void message_send(XWindow window, long message, long d1, long d2, long d3){
         XClientMessageEvent ev;
         ev.type = ClientMessage;
         ev.window = window;
@@ -99,14 +100,14 @@ class Xembed {
         X.SendEvent(wm.displayHandle, window, false, None, cast(XEvent*)&ev);
     }
 
-    static XembedInfo get_info(x11.X.Window win){
-        auto list = new Property!(XA_CARDINAL, true)(win, "_XEMBED_INFO").get;
+    static XembedInfo get_info(XWindow win){
+        auto list = new Property!(cast(long)XA_CARDINAL, true)(win, "_XEMBED_INFO").get;
         if(list.length < 2)
             return XembedInfo(XEMBED_VERSION, XEMBED_MAPPED);
         return XembedInfo(list[0], list[1]);
     }
 
-    static void property_update(x11.X.Window window){
+    static void property_update(XWindow window){
         XembedInfo info = get_info(window);
         /+
         bool flagsChanged = 0 != (info.flags ^ window.info.flags);

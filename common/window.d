@@ -7,15 +7,11 @@ import common.atoms;
 import
 	std.conv,
 	std.string,
-	x11.X,
-	x11.Xlib,
-	x11.Xutil,
-	x11.Xproto,
-	x11.Xatom,
+    ws.bindings.xlib,
 	ws.wm;
 
 
-bool gettextprop(x11.X.Window w, Atom atom, ref string text){
+bool gettextprop(WindowHandle w, Atom atom, ref string text){
 	char** list;
 	int n;
 	XTextProperty name;
@@ -25,7 +21,7 @@ bool gettextprop(x11.X.Window w, Atom atom, ref string text){
 	if(name.encoding == XA_STRING){
 		text = to!string(*name.value);
 	}else{
-		if(XmbTextPropertyToTextList(wm.displayHandle, &name, &list, &n) >= XErrorCode.Success && n > 0 && *list){
+		if(XmbTextPropertyToTextList(wm.displayHandle, &name, &list, &n) >= Success && n > 0 && *list){
 			text = (*list).to!string;
 			XFreeStringList(list);
 		}
@@ -35,7 +31,7 @@ bool gettextprop(x11.X.Window w, Atom atom, ref string text){
 }
 
 
-string getTitle(x11.X.Window window){
+string getTitle(WindowHandle window){
 	Atom utf8, actType;
 	size_t nItems, bytes;
 	int actFormat;

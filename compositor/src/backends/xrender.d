@@ -1,8 +1,7 @@
 module composite.backend.xrender;
 
 import
-    x11.extensions.Xrandr,
-    composite.xpresent,
+    ws.bindings.xlib,
     composite,
     common.xerror;
 
@@ -90,7 +89,7 @@ class XRenderBackend: Backend {
             null,
             0
         );
-        monitor.presenting = true;
+        // monitor.presenting = true;
         draw.noclip;
         draw.noclip;
     }

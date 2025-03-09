@@ -7,15 +7,15 @@ import
 	std.datetime,
 	std.algorithm,
 	std.stdio,
-    x11.Xlib,
 	ws.math,
 	ws.wm,
+	ws.bindings.xlib,
     common.screens,
     pulseaudio,
 	pactl;
 
 
-class NotifyWindow: Window {
+class NotifyWindow: ws.wm.Window {
 
 	this(){
 		super(200, 40, "Volume Notify", true);

@@ -1,6 +1,6 @@
 module bar.widget.workspaceList;
 
-import bar, common.xevents;
+import ws.bindings.xlib, bar, common.xevents;
 
 
 struct Workspace {
@@ -11,21 +11,21 @@ struct Workspace {
 
 class WorkspaceList: Widget {
 
-    Properties!(
-        "workspaceNames", "_NET_DESKTOP_NAMES", XA_STRING, false,
-        "workspaceHistory", "_FLATMAN_WORKSPACE_HISTORY", XA_CARDINAL, true,
-        "currentWorkspace", "_NET_CURRENT_DESKTOP", XA_CARDINAL, false
-    ) properties;
+    mixin WindowProperties!q{
+        _NET_DESKTOP_NAMES         XA_STRING
+        _FLATMAN_WORKSPACE_HISTORY XA_CARDINAL[]
+        _NET_CURRENT_DESKTOP       XA_CARDINAL
+    };
 
     Workspace[] workspaces;
     size_t workspaceCurrent;
 
     this(){
-        properties.window(.root);
-        properties.workspaceNames ~= (v) => update;
-        properties.workspaceHistory ~= (v) => update;
-        properties.currentWorkspace ~= (v) => update;
-        update;
+        setPropertyWindow(.root);
+        _NET_DESKTOP_NAMES ~= (v) => update;
+        _FLATMAN_WORKSPACE_HISTORY ~= (v) => update;
+        _NET_CURRENT_DESKTOP ~= (v) => update;
+        updateProperties;
         Events ~= this;
     }
 
@@ -36,7 +36,7 @@ class WorkspaceList: Widget {
     @WindowProperty
     void windowProperty(WindowHandle window, XPropertyEvent* e){
         if(window == .root)
-            properties.update(e);
+            updateProperties(e);
     }
 
     override int width(){
@@ -85,16 +85,16 @@ class WorkspaceList: Widget {
 
     void update(){
         workspaces = [];
-        foreach(i, ws; properties.workspaceNames.get.split('\0')){
+        foreach(i, ws; _NET_DESKTOP_NAMES.get.split('\0')){
             workspaces ~= Workspace(i, ws);
         }
-        if(properties.currentWorkspace.get < workspaces.length){
-            workspaceCurrent = properties.currentWorkspace.get;
+        if(_NET_CURRENT_DESKTOP.get < workspaces.length){
+            workspaceCurrent = _NET_CURRENT_DESKTOP.get;
         }else{
             workspaceCurrent = 0;
         }
-        if(properties.workspaceHistory.get.length){
-            workspaces = workspaces.sorted(properties.workspaceHistory.get);
+        if(_FLATMAN_WORKSPACE_HISTORY.get.length){
+            workspaces = workspaces.sorted(_FLATMAN_WORKSPACE_HISTORY.get);
         }
     }
 

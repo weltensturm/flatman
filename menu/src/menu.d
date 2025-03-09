@@ -87,7 +87,7 @@ class Menu: ws.wm.Window {
 	long showTime;
 	bool focus;
 
-	x11.X.Window[][long] desktops;
+	WindowHandle[][long] desktops;
 
 	bool active;
 
@@ -211,11 +211,11 @@ class Menu: ws.wm.Window {
 	}
 
 	override void resized(int[2] size){
-		super.resized(size);
 		scroller.move([0,0]);
 		scroller.resize([size.w/2-1,size.h-2]);
 		appScroller.move([size.w/2,0]);
 		appScroller.resize([size.w/2-2, size.h-2]);
+		super.resized(size);
 	}
 
 	override void onHide(){

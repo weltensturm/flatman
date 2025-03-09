@@ -8,14 +8,14 @@ __gshared:
 Display* dpy;
 ulong root;
 
-extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
+extern(C) int function(Display *, XErrorEvent *) xerrorxlib;
 
 
 WorkspaceDock dockWindow;
 
 Composite composite;
 
-Rect[x11.X.Window] damage;
+Rect[WindowHandle] damage;
 
 
 enum wallpaperAtoms = [
@@ -55,12 +55,12 @@ void main(){
 }
 
 
-x11.X.Window[] windows(){
+WindowHandle[] windows(){
 	XFlush(wm.displayHandle);
 	XGrabServer(wm.displayHandle);
-	x11.X.Window root_return, parent_return;
-	x11.X.Window* children;
-	x11.X.Window[] wins;
+	WindowHandle root_return, parent_return;
+	WindowHandle* children;
+	WindowHandle[] wins;
 	uint nchildren;
 	XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &nchildren);
 	if(children){
@@ -219,7 +219,7 @@ class WorkspaceDock: ws.wm.Window {
 	Picture root_picture;
 
 	CompositeClient[] clients;
-	x11.X.Window[] windows;
+	WindowHandle[] windows;
 	CompositeClient[][long] workspaces;
 
 	double showTime;
@@ -227,7 +227,7 @@ class WorkspaceDock: ws.wm.Window {
 
 	Pid launcher;
 
-	Watcher!(x11.X.Window) windowWatcher;
+	Watcher!(WindowHandle) windowWatcher;
 
 	long activeBgPos = 0;
 
@@ -289,8 +289,8 @@ class WorkspaceDock: ws.wm.Window {
 	void init(){
 		XFlush(wm.displayHandle);
 		XGrabServer(wm.displayHandle);
-		x11.X.Window root_return, parent_return;
-		x11.X.Window* children;
+		WindowHandle root_return, parent_return;
+		WindowHandle* children;
 		uint nchildren;
 		XQueryTree(wm.displayHandle, .root, &root_return, &parent_return, &children, &nchildren);
 		if(children){
@@ -340,7 +340,7 @@ class WorkspaceDock: ws.wm.Window {
 		XRenderSetPictureFilter(dpy, root_picture, "best", null, 0);
 	}
 
-	void evCreate(x11.X.Window window){
+	void evCreate(WindowHandle window){
 		XWindowAttributes wa;
 		if(window == dockWindow.windowHandle || !XGetWindowAttributes(wm.displayHandle, window, &wa))
 			return;
@@ -351,7 +351,7 @@ class WorkspaceDock: ws.wm.Window {
 		clients ~= client;
 	}
 
-	void evDestroy(x11.X.Window window){
+	void evDestroy(WindowHandle window){
 		foreach(i, c; clients){
 			if(c.windowHandle == window){
 				c.destroy;
@@ -444,8 +444,8 @@ class WorkspaceDock: ws.wm.Window {
 
 	void updateStack(){
 		XGrabServer(wm.displayHandle);
-		x11.X.Window root_return, parent_return;
-		x11.X.Window* children;
+		WindowHandle root_return, parent_return;
+		WindowHandle* children;
 		uint nchildren;
 		XQueryTree(wm.displayHandle, .root, &root_return, &parent_return, &children, &nchildren);
 		if(children){

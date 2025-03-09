@@ -7,10 +7,7 @@ import
 	std.file,
 	std.random,
 	std.conv,
-	std.array,
-	x11.X,
-	x11.Xlib,
-	x11.Xatom;
+	std.array;
 
 
 enum PATH = "~/.flatman/";

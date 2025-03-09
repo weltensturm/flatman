@@ -13,7 +13,7 @@ class CompositeClient: ws.wm.Window {
 	long workspace;
 	XWindowAttributes a;
 
-	this(x11.X.Window window, int[2] pos, int[2] size, XWindowAttributes a){
+	this(WindowHandle window, int[2] pos, int[2] size, XWindowAttributes a){
 		this.pos = pos;
 		this.size = size;
 		this.a = a;
@@ -49,7 +49,7 @@ class CompositeClient: ws.wm.Window {
 		pa.subwindow_mode = IncludeInferiors;
 		pixmap = XCompositeNameWindowPixmap(dpy, windowHandle);
 
-		x11.X.Window root_return;
+		WindowHandle root_return;
 		int int_return;
 		uint short_return;
 		auto s = XGetGeometry(wm.displayHandle, pixmap, &root_return, &int_return, &int_return, &short_return, &short_return, &short_return, &short_return);

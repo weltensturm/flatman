@@ -1,6 +1,6 @@
 module composite.backend.xrenderWindow;
 
-import composite;
+import ws.bindings.xlib, composite;
 
 
 class XRenderWindowBackend: Backend {

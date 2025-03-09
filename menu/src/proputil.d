@@ -12,11 +12,11 @@ Display* dpy;
 
 class Property {
 	
-	x11.X.Window window;
+	WindowHandle window;
 	Atom property;
-	int format;
+	long format;
 	
-	this(x11.X.Window window, string name){
+	this(WindowHandle window, string name){
 		this.window = window;
 		if(!dpy)
 			dpy = XOpenDisplay(null);
@@ -72,7 +72,7 @@ class Property {
 
 class AtomProperty: Property {
 	
-	this(x11.X.Window window, string name){
+	this(WindowHandle window, string name){
 		super(window, name);
 		format = XA_ATOM;
 	}
@@ -89,7 +89,7 @@ class AtomProperty: Property {
 
 class AtomListProperty: Property {
 	
-	this(x11.X.Window window, string name){
+	this(WindowHandle window, string name){
 		super(window, name);
 		format = XA_ATOM;
 	}
@@ -102,7 +102,7 @@ class AtomListProperty: Property {
 
 class CardinalProperty: Property {
 
-	this(x11.X.Window window, string name){
+	this(WindowHandle window, string name){
 		super(window, name);
 		format = XA_CARDINAL;
 	}
@@ -119,7 +119,7 @@ class CardinalProperty: Property {
 
 class CardinalListProperty: Property {
 	
-	this(x11.X.Window window, string name){
+	this(WindowHandle window, string name){
 		super(window, name);
 		format = XA_CARDINAL;
 	}
@@ -133,13 +133,13 @@ class CardinalListProperty: Property {
 class WindowListProperty: Property {
 
 
-	this(x11.X.Window window, string name){
+	this(WindowHandle window, string name){
 		super(window, name);
 		format = XA_WINDOW;
 	}
 
-	x11.X.Window[] get(ulong n){
-		return _get_list!(x11.X.Window)(n);
+	WindowHandle[] get(ulong n){
+		return _get_list!(WindowHandle)(n);
 	}
 
 }

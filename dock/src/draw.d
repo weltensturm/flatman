@@ -104,7 +104,7 @@ class Draw {
 	uint w, h;
 	Display* dpy;
 	int screen;
-	x11.X.Window root;
+	WindowHandle root;
 	Drawable drawable;
 	XftDraw* xft;
 	GC gc;
@@ -113,7 +113,7 @@ class Draw {
 	size_t fontcount;
 	Font[] fonts;
 
-	this(Display* dpy, int screen, x11.X.Window root, int w, int h){
+	this(Display* dpy, int screen, WindowHandle root, int w, int h){
 		this.dpy = dpy;
 		this.screen = screen;
 		this.root = root;
@@ -194,7 +194,7 @@ class Draw {
 		}
 	}
 
-	void map(x11.X.Window win, int x, int y, uint w, uint h){
+	void map(WindowHandle win, int x, int y, uint w, uint h){
 		XCopyArea(dpy, drawable, win, gc, x, y, w, h, x, y);
 		XSync(dpy, False);
 	}

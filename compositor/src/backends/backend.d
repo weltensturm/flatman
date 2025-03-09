@@ -1,6 +1,6 @@
 module composite.backend.backend;
 
-import composite;
+import ws.bindings.xlib, composite;
 
 
 class Backend {

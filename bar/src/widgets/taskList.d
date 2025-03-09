@@ -3,7 +3,7 @@ module bar.widget.taskList;
 import bar;
 
 
-import common.log, common.xevents;
+import ws.bindings.xlib, common.log, common.xevents;
 
 
 class TaskList: Widget {
@@ -40,16 +40,16 @@ class TaskList: Widget {
         children = [];
 
         auto tabs = clients
-            .filter!(a => !a.state.value.canFind(Atoms._NET_WM_STATE_SKIP_TASKBAR)
-                          && a.workspace.value == currentWorkspace
+            .filter!(a => !a._NET_WM_STATE.canFind(Atoms._NET_WM_STATE_SKIP_TASKBAR)
+                          && a._NET_WM_DESKTOP.value == currentWorkspace
                           && a.screen == bar.screen
-                          && a.flatmanTabs.value != 0)
+                          && a._FLATMAN_TABS.value != 0)
             .array
-            .sort!((a, b) => a.flatmanTabs.value < b.flatmanTabs.value)
-            .chunkBy!(a => a.flatmanTabs.value)
+            .sort!((a, b) => a._FLATMAN_TABS.value < b._FLATMAN_TAB.value)
+            .chunkBy!(a => a._FLATMAN_TABS.value)
             .map!(a => a[1]
                        .array
-                       .sort!((w1, w2) => w1.flatmanTab.value < w2.flatmanTab.value))
+                       .sort!((w1, w2) => w1._FLATMAN_TAB.value < w2._FLATMAN_TAB.value))
             .array;
 
         if(!tabs.length)

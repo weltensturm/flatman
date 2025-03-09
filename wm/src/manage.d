@@ -72,7 +72,9 @@ void focusDir(string dir){
 
 		if(index >= 0 && index < sorted.length){
 			client = monitors[sorted[index][0]].active;
-		}
+		} else {
+
+        }
 		
 	}
 	if(client)
@@ -88,6 +90,7 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 	with(Log(Log.RED ~ "manage" ~ Log.DEFAULT)){
 		XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask);
 		auto c = new Client(w);
+		c.updateStrut;
 		auto monitor = findMonitor(c.pos, c.size);
 		if(!monitor || !scan)
 			monitor = .monitor;
@@ -95,7 +98,6 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 			c.pos = monitor.size.a/2 - c.size.a/2;
 		monitor.add(c, c.originWorkspace);
 		XChangeProperty(dpy, root, Atoms._NET_CLIENT_LIST, XA_WINDOW, 32, PropModeAppend, cast(ubyte*)&c.win, 1);
-		c.updateStrut;
 
 		if(map){
 			c.show;
@@ -105,43 +107,6 @@ void manage(Window w, XWindowAttributes* wa, bool map, bool scan=false){
 			c.requestAttention;
 		ensureEmptyWorkspace;
 	}
-}
-
-
-void mouseMove(){
-	Client c = monitor.active;
-	if(!c || !c.isFloating || c.isfullscreen)
-		return;
-	XEvent ev;
-	Time lasttime = 0;
-	int ocx = c.pos.x;
-	int ocy = c.pos.y;
-	if(XGrabPointer(dpy, root, false, MOUSEMASK, GrabModeAsync, GrabModeAsync,
-	None, cursor[CurMove].cursor, CurrentTime) != GrabSuccess)
-		return;
-	int x, y;
-	if(!getrootptr(&x, &y))
-		return;
-	do {
-		XMaskEvent(dpy, MOUSEMASK|ExposureMask|SubstructureRedirectMask, &ev);
-		switch(ev.type){
-			case ConfigureRequest:
-			case Expose:
-			case MapRequest:
-				//handler[ev.type](&ev);
-				break;
-			case MotionNotify:
-				if ((ev.xmotion.time - lasttime) <= (1000 / 60))
-					continue;
-				lasttime = ev.xmotion.time;
-				int nx = ocx + (ev.xmotion.x - x);
-				int ny = ocy + (ev.xmotion.y - y);
-				c.moveResize([nx, ny], c.size);
-				break;
-			default: break;
-		}
-	} while(ev.type != ButtonRelease);
-	XUngrabPointer(dpy, CurrentTime);
 }
 
 
@@ -197,7 +162,7 @@ void killClient(Client client=null){
 	}else{
 		XGrabServer(dpy);
 		XSetErrorHandler(&xerrordummy);
-		XSetCloseDownMode(dpy, CloseDownMode.DestroyAll);
+		XSetCloseDownMode(dpy, DestroyAll);
 		XKillClient(dpy, client.win);
 		XSetErrorHandler(&xerror);
 		//XSetErrorHandler(xerrorxlib);

@@ -1,6 +1,6 @@
 module composite.backend.opengl;
 
-import composite;
+import ws.bindings.xlib, composite;
 
 
 class OpenGLBackend: Backend {

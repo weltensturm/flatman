@@ -36,9 +36,7 @@ class KeybindSystem {
 		Events ~= this;
 	}
 
-	void destroy(){
-		Events.forget(this);
-	}
+	void destroy() => Events.forget(this);
 
 	void grab(){
 		updatenumlockmask();
@@ -69,7 +67,7 @@ class KeybindSystem {
 		}
 	}
 
-	@(ConfigUpdate!NestedConfig)
+	@ConfigUpdate!NestedConfig
 	void onConfig(ref NestedConfig config){
 		Key[] binds;
 		if(!config.mod.length)
@@ -98,9 +96,9 @@ class KeybindSystem {
 		//});
 
 		buttons = [
-			Button(MODKEY, Button1, {mouseMove;} ),
+			// Button(MODKEY, Button1, {mouseMove;} ),
 			Button(MODKEY, Button2, {if(active) active.togglefloating;} ),
-			Button(MODKEY, Button3, {mouseResize;} ),
+			// Button(MODKEY, Button3, {mouseResize;} ),
 		];
 
 	}
@@ -134,9 +132,12 @@ class KeybindSystem {
 
 }
 
-T cleanMask(T)(T mask){
-	return mask & ~(numlockmask|LockMask) & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask);
-}
+
+auto cleanMask(T)(T mask) =>
+	mask
+		& ~(numlockmask|LockMask)
+		& (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask);
+
 
 void updatenumlockmask(){
 	uint i, j;

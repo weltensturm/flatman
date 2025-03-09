@@ -2,8 +2,6 @@ module composite.events;
 
 
 import
-    x11.X,
-    x11.Xlib,
     common.event;
 
 import ws.wm: wm;

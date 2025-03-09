@@ -2,16 +2,16 @@ module common.queryTree;
 
 import
 	ws.wm,
-	x11.Xlib;
+    ws.bindings.xlib;
 
 
-x11.X.Window[] queryTree(){
-	auto root = XDefaultRootWindow(wm.displayHandle);
-    x11.X.Window[] result;
-    x11.X.Window root_return, parent_return;
-    x11.X.Window* children;
+ws.bindings.c_xlib.Window[] queryTree(){
+	auto root = XDefaultRootWindow(cast(Display*)wm.displayHandle);
+    ws.bindings.c_xlib.Window[] result;
+    ws.bindings.c_xlib.Window root_return, parent_return;
+    ws.bindings.c_xlib.Window* children;
     uint count;
-    XQueryTree(wm.displayHandle, root, &root_return, &parent_return, &children, &count);
+    XQueryTree(cast(Display*)wm.displayHandle, root, &root_return, &parent_return, &children, &count);
     if(children && root == root_return){
         result = children[0..count].dup;
         XFree(children);

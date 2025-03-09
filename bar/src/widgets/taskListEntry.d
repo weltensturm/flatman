@@ -1,6 +1,6 @@
 module bar.widget.taskListEntry;
 
-import bar;
+import ws.bindings.xlib, bar;
 
 
 class TaskListEntry: Base {
@@ -9,6 +9,7 @@ class TaskListEntry: Base {
     Bar bar;
     int[2] start;
     bool dragging;
+    float active = 0;
 
     this(Bar bar, Client client){
         this.bar = bar;
@@ -23,6 +24,17 @@ class TaskListEntry: Base {
         else
             draw.setColor(config.theme.titleTextHidden);
         auto txt = client.title;
+
+        /+
+        if(client == bar.currentClient){
+            active = active+frameTime;
+        }
+        +/
+
+        if(client == bar.currentClient){
+            draw.setColor([1, 1, 1, 0.3]);
+            draw.rect(pos, size);
+        }
 
         if(client == bar.currentClient){
             XRenderComposite(
@@ -95,7 +107,7 @@ class TaskListEntry: Base {
                 xev.format = 32;
                 xev.data.l[0] = 2;
                 xev.data.l[1] = CurrentTime;
-                xev.data.l[2] = bar.currentWindow;
+                xev.data.l[2] = bar._NET_ACTIVE_WINDOW;
                 xev.data.l[3] = 0;    /* manager specific data */
                 xev.data.l[4] = 0;    /* manager specific data */
                 XSendEvent(wm.displayHandle, .root, false, StructureNotifyMask, cast(XEvent*) &xev);

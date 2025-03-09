@@ -2,8 +2,7 @@ module common.screens;
 
 import
 	std.algorithm,
-	x11.Xlib,
-	x11.extensions.Xinerama,
+    ws.bindings.c_xlib,
 	ws.math;
 
 struct Screen {

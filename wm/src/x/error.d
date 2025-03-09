@@ -4,8 +4,8 @@ module flatman.x.error;
 import flatman;
 
 
-extern(C) nothrow int function(Display *, XErrorEvent *) xerrorxlib;
-extern(C) nothrow int function(Display*) xerrorfatalxlib;
+extern(C) int function(Display *, XErrorEvent *) xerrorxlib;
+extern(C) int function(Display*) xerrorfatalxlib;
 
 
 /+
@@ -33,7 +33,7 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* ee){
 +/
 
 
-extern(C) nothrow int xerrorfatal(Display* dpy){
+extern(C) int xerrorfatal(Display* dpy){
 	try{
 		defaultTraceHandler.toString.log;
 		"flatman: X11 fatal i/o error".log;
@@ -41,11 +41,11 @@ extern(C) nothrow int xerrorfatal(Display* dpy){
 	return xerrorfatalxlib(dpy);
 }
 
-extern(C) nothrow int xerrordummy(Display* dpy, XErrorEvent* ee){
+extern(C) int xerrordummy(Display* dpy, XErrorEvent* ee){
 	return 0;
 }
 
-nothrow extern(C) int xerrorstart(Display *dpy, XErrorEvent* ee){
+extern(C) int xerrorstart(Display *dpy, XErrorEvent* ee){
 	try
 		"flatman: another window manager is already running".log;
 	catch(Throwable) {}

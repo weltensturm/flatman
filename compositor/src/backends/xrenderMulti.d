@@ -1,12 +1,16 @@
 module composite.backend.xrenderMulti;
 
 import
-    x11.extensions.Xrandr,
+    ws.bindings.xlib,
     common.log,
-    composite.xpresent,
     composite,
     composite.backend.xrenderMultiDraw,
     common.xerror;
+
+
+static foreach(p; Parameters!XPresentPixmap){
+    pragma(msg, p.sizeof.to!string ~ " " ~ p.stringof);
+}
 
 
 class XRenderMultiBackend: Backend {
@@ -30,14 +34,18 @@ class XRenderMultiBackend: Backend {
             }
             xdraw = xdraw.filter!(a => crtcs.canFind(a.crtc)).array;
 
-            foreach(monitor; manager.monitors.filter!(a => !crtcsCurrent.canFind(a.crtc))){
+            foreach(ref monitor; manager.monitors.filter!(a => !crtcsCurrent.canFind(a.crtc))){
+                if(monitor.fence)
+                    XSyncDestroyFence(wm.displayHandle, monitor.fence);
                 auto n = new XRenderMultiDraw(wm.displayHandle, manager.overlayWindow);
+                monitor.fence = X.SyncCreateFence(wm.displayHandle, n.drawable.pixmap.to!uint, true);
+                Log.info("created fence %s".format(monitor.fence));
                 n.crtc = monitor.crtc;
                 xdraw ~= n;
                 Log.info("add CRTC %s %s %s".format(monitor.crtc, monitor.pos, monitor.size));
             }
 
-            foreach(monitor; manager.monitors){
+            foreach(ref monitor; manager.monitors){
                 foreach(draw; xdraw){
                     if(monitor.crtc == draw.crtc){
                         draw.pos = [-monitor.pos.x, -monitor.pos.y];
@@ -51,13 +59,17 @@ class XRenderMultiBackend: Backend {
 
     override void damage(CompositeMonitor monitor, RootDamage damage){
         auto draw = xdraw.find!(a => a.crtc == monitor.crtc)[0];
-        draw.clip(monitor.pos, monitor.size);
+        with(Profile("clip monitor")){
+            draw.clip(monitor.pos, monitor.size);
+        }
 
         XFixesDestroyRegion(wm.displayHandle, draw.mask);
         draw.mask = XFixesCreateRegion(wm.displayHandle, null, 0);
         XFixesCopyRegion(wm.displayHandle, draw.mask, damage.all);
 
-        draw.clip(draw.mask);
+        with(Profile("clip draw")){
+            draw.clip(draw.mask);
+        }
     }
 
     override DrawEmpty target(CompositeMonitor monitor){
@@ -86,8 +98,8 @@ class XRenderMultiBackend: Backend {
             monitor.pos.x, monitor.pos.y,
             monitor.crtc,
             None,
-            None,
-            0,
+            monitor.fence,
+            PresentOptionCopy,
             0,
             1,
             0,
@@ -95,7 +107,6 @@ class XRenderMultiBackend: Backend {
             0
         );
         monitor.backbufferReady = false;
-        monitor.presenting = true;
     }
 
     override void destroy(){

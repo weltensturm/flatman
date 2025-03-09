@@ -1,15 +1,11 @@
 module common.atoms;
 
 import
-		std.traits,
-		std.stdio,
-		std.string,
-		x11.Xlib,
-		x11.Xutil,
-		x11.Xproto,
-		x11.Xatom,
-		x11.X,
-		ws.wm;
+	std.traits,
+	std.stdio,
+	std.string,
+	ws.bindings.xlib,
+	ws.wm;
 
 static Display* delegate() getDisplay;
 
@@ -44,14 +40,14 @@ template AtomType(int Format){
 	static if(Format == XA_ATOM)
 		alias AtomType = Atom;
 	static if(Format == XA_WINDOW)
-		alias AtomType = x11.X.Window;
+		alias AtomType = WindowHandle;
 	static if(Format == XA_STRING)
 		alias AtomType = string;
 
 }
 
 
-auto getprop(int T)(x11.X.Window window, Atom atom){
+auto getprop(int T)(WindowHandle window, Atom atom){
 	auto raw = _rawget(window, atom, T);
 	auto data = *(cast(AtomType!T*)raw);
 	XFree(raw);
@@ -59,15 +55,15 @@ auto getprop(int T)(x11.X.Window window, Atom atom){
 }
 
 
-long getprop(T: long)(x11.X.Window window, Atom atom){
-	auto p = _rawget(window, atom, XA_CARDINAL);
+long getprop(T: long)(WindowHandle window, Atom atom){
+	auto p = _rawget(window, atom, cast(int)XA_CARDINAL);
 	auto d = *(cast(long*)p);
 	XFree(p);
 	return d;
 }
 
 
-ubyte* _rawget(x11.X.Window window, Atom atom, int type, ulong count=1){
+ubyte* _rawget(WindowHandle window, Atom atom, int type, ulong count=1){
 	int di;
 	ulong dl;
 	ubyte* p;

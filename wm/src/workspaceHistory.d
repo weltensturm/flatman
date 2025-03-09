@@ -5,6 +5,10 @@ import flatman;
 import common.xevents;
 
 
+enum CommandWorkspaceHistory = (Command["workspace-history", true]);
+enum CommandWorkspaceHistoryStop = (CommandStop["workspace-history"]);
+
+
 class WorkspaceHistory {
 
 	struct HistoryEntry {
@@ -44,6 +48,21 @@ class WorkspaceHistory {
 			}
 		}
 	}
+
+    @CommandWorkspaceHistoryStop
+    auto commandStop(string[] args){
+	    if(historySelector > -1){
+			foreach(i, m; monitors){
+				if(m == monitor){
+                    push(i.to!int, monitor.workspaceActive);
+				}
+			}
+			historySelector = -1;
+		}else{
+			historySelector = 0;
+		}
+
+    }
 
 	private void update(){
 		long[] wsEmpty;
@@ -99,6 +118,7 @@ class WorkspaceHistory {
 			}
 		}
 	}
+
 
 	@Overview
 	void overview(bool activate){

@@ -3,19 +3,21 @@ module bar.client;
 import bar;
 
 
-import common.xevents, common.log;
+import ws.bindings.xlib, common.xevents, common.log;
 
 
 class Client {
 
-	x11.X.Window window;	
+	WindowHandle window;	
 
 	int screen;
 
-	Property!(XA_CARDINAL, false) workspace;
-	Property!(XA_CARDINAL, false) flatmanTab;
-	Property!(XA_CARDINAL, false) flatmanTabs;
-	Property!(XA_ATOM, true) state;
+	mixin WindowProperties!q{
+		_NET_WM_DESKTOP XA_CARDINAL
+		_FLATMAN_TAB    XA_CARDINAL
+		_FLATMAN_TABS   XA_CARDINAL
+		_NET_WM_STATE   XA_ATOM[]
+	};
 
 	string title;
 
@@ -24,17 +26,10 @@ class Client {
 	ubyte[] icon;
 	bool hidden;
 
-	PropertyList properties;
-
-	this(x11.X.Window window){
+	this(WindowHandle window){
 		this.window = window;
-		properties = new PropertyList;
-		workspace = new Property!(XA_CARDINAL, false)(window, "_NET_WM_DESKTOP", properties);
-		flatmanTab = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TAB", properties);
-		flatmanTabs = new Property!(XA_CARDINAL, false)(window, "_FLATMAN_TABS", properties);
-		state = new Property!(XA_ATOM, true)(window, "_NET_WM_STATE", properties);
 
-		properties.update;
+		setPropertyWindow(window);
 
 		updateIcon(window.props._NET_WM_ICON.get!(long[]));
 		title = window.getTitle;
@@ -109,7 +104,7 @@ class Client {
 		}else if([Atoms._NET_WM_NAME, Atoms.WM_NAME].canFind(e.atom)){
 			title = window.getTitle;
 		}
-		properties.update(e);
+		updateProperties(e);
 	}
 
 }

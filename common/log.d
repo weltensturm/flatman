@@ -39,6 +39,11 @@ private {
             }
         });
     }
+
+    shared static ~this(){
+        writeln("wtf");
+        logger.send(false);
+    }
 }
 
 
@@ -58,8 +63,8 @@ struct Log {
         error = 3
     }
 
-    this(lazy string s, Level level=Level.info){
-        log(s, level);
+    this(lazy string s, Level level=Level.info, string mod=__MODULE__){
+        log(s, level, mod);
         synchronized(mutex)
             indent++;
     }
@@ -69,28 +74,28 @@ struct Log {
             indent--;
     }
     
-    static void log(lazy string s, Level level){
+    static void log(lazy string s, Level level, string mod=__MODULE__){
         if(level >= this.level){
-            string text = format(s());
+            string text = format(s(), mod);
             logger.send(text);
         }
     }
 
-    static void dbg(lazy string s){
-        log(s, Level.dbg);
+    static void dbg(lazy string s, string mod=__MODULE__){
+        log(s, Level.dbg, mod);
     }
 
-    static void info(lazy string s){
-        log(s, Level.info);
+    static void info(lazy string s, string mod=__MODULE__){
+        log(s, Level.info, mod);
     }
 
-    static void warning(lazy string s){
-        log(s, Level.warning);
+    static void warning(lazy string s, string mod=__MODULE__){
+        log(s, Level.warning, mod);
     }
 
-    static void error(string s){
-        string text = format(RED ~ s);
-        logger.send(s);
+    static void error(string s, string mod=__MODULE__){
+        string text = format(RED ~ s, mod);
+        logger.send(text);
     }
 
     static void setLevel(Level level){
@@ -106,16 +111,18 @@ struct Log {
         logger.send(false);
     }
 
-    static string format(string s){
+    static string format(string s, string mod){
         int indent;
         synchronized(mutex)
             indent = .indent;
         auto currTime = Clock.currTime;
-        return "%s%s.%03d%s %s\n".format(
+        return "%s%s.%03d%s %s%s %s\n".format(
                 GREY,
                 currTime.toISOExtString[0..19],
                 min(currTime.fracSecs.total!"msecs", 999),
+                GREEN,
                 " ".replicate(indent*2),
+                mod,
                 DEFAULT ~ s ~ DEFAULT
         );
     }
@@ -125,8 +132,8 @@ struct Log {
 }
 
 
-void log(lazy string s){
-    Log.info(s);
+void log(lazy string s, string mod=__MODULE__){
+    Log.info(s, mod);
 }
 
 

@@ -16,17 +16,6 @@ public import
 	std.regex,
 	std.random,
 
-	x11.X,
-	x11.Xlib,
-	x11.Xutil,
-	x11.Xproto,
-	x11.extensions.Xinerama,
-	x11.extensions.render,
-	x11.extensions.Xrender,
-	x11.extensions.Xcomposite,
-	x11.extensions.Xdamage,
-	x11.Xatom,
-
 	ws.time,
 	ws.gui.base,
 	ws.x.property,
@@ -58,5 +47,7 @@ public import
     bar.client,
 	bar.widget.tray;
 
+/+
 enum CompositeRedirectAutomatic = 0;
 enum CompositeRedirectManual = 1;
++/

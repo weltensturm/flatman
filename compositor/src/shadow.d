@@ -1,6 +1,6 @@
 module composite.shadow;
 
-import composite;
+import ws.bindings.xlib, composite;
 
 
 class Shadow {

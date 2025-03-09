@@ -2,20 +2,11 @@ module common.xerror;
 
 
 import
+    c_xlib,
     std.traits,
     std.stdio,
     std.string,
-    std.conv,
-	x11.X,
-	x11.Xlib,
-	x11.Xutil,
-	x11.Xproto,
-	x11.extensions.Xinerama,
-	x11.extensions.render,
-	x11.extensions.Xrender,
-	x11.extensions.Xcomposite,
-	x11.extensions.Xfixes,
-	x11.Xatom;
+    std.conv;
 
 
 string lastXerror;
@@ -23,13 +14,15 @@ string lastXerror;
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
     try {
-        write("XError: ");
         char[128] buffer;
         XGetErrorText(dpy, e.error_code, buffer.ptr, buffer.length);
         debug(XError){
             lastXerror = "%s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, cast(XRequestCode)e.request_code, e.minor_code, e.serial);
+        }else{
+            "XError: %s (major=%s, minor=%s, serial=%s)"
+                .format(buffer.to!string, cast(XRequestCode)e.request_code, e.minor_code, e.serial)
+                .writeln;
         }
-        "%s (major=%s, minor=%s, serial=%s)".format(buffer.to!string, cast(XRequestCode)e.request_code, e.minor_code, e.serial).writeln;
     }
     catch(Exception e){
         try {
@@ -54,7 +47,7 @@ void checkXerror(string prefix){
 
 class X {
     // the things I do for debugging
-    template opDispatch(string s){
+    template opDispatch(string s, string file=__FILE__, size_t line=__LINE__){
 
         debug {
 
@@ -64,10 +57,10 @@ class X {
             alias Returns = ReturnType!Fn;
 
             static auto opDispatch(ParameterTypes args){
-                checkXerror("?: ");
+                checkXerror("PRECEDING " ~ s ~ ": ");
                 static if(!is(Returns == void)){
                     auto result = Fn(args);
-                    checkXerror(s ~ ": ");
+                    checkXerror("\n" ~ file ~ ":" ~ line.to!string ~ " X." ~ s ~ "(" ~ format_tuple(args) ~ "): ");
                     return result;
                 }else{
                     Fn(args);
@@ -82,6 +75,14 @@ class X {
         }
 
     }
+}
+
+
+string format_tuple(Args...)(Args args){
+    string[] strings;
+    foreach(ref a; args)
+        strings ~= a.to!string;
+    return strings.join(", ");
 }
 
 

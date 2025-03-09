@@ -7,7 +7,7 @@ import common.xevents;
 
 class SimpleWindow: Base {
 
-    x11.X.Window window;
+    WindowHandle window;
     /+
     GlDraw _draw;
     GlContext context;

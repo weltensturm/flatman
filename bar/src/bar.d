@@ -4,7 +4,8 @@ import bar;
 
 import
 	common.log,
-	common.xevents;
+	common.xevents,
+	ws.bindings.xlib;
 
 
 Picture generateGlow(float[3] color){
@@ -34,9 +35,14 @@ class Bar: ws.wm.Window {
 
 	int screen;
 
-	Property!(XA_CARDINAL, false) workspace;
-	Property!(XA_WINDOW, false) currentWindow;
-	Property!(XA_CARDINAL, true) strutProperty;
+	mixin WindowProperties!q{
+        _NET_WM_STATE         XA_ATOM[]
+        _MOTIF_WM_HINTS       XA_CARDINAL[]
+        _NET_WM_WINDOW_TYPE   XA_ATOM
+        _NET_WM_DESKTOP       XA_CARDINAL
+        _NET_ACTIVE_WINDOW    XA_WINDOW
+        _NET_WM_STRUT_PARTIAL XA_CARDINAL[]
+	};
 
 	Client currentClient;
 
@@ -56,8 +62,6 @@ class Bar: ws.wm.Window {
 	Battery battery;
 	WorkspaceIndicator workspaceIndicator;
 	ClockWidget clock;
-
-	PropertyList properties;
 
 	bool update = true;
 	int second = 0;
@@ -107,22 +111,15 @@ class Bar: ws.wm.Window {
 		}else
 			resize(size);
 
-		properties = new PropertyList;
+        _NET_WM_STATE.set([Atoms._NET_WM_STATE_SKIP_PAGER, Atoms._NET_WM_STATE_SKIP_TASKBAR, Atoms._NET_WM_STATE_STICKY]);
 
-        auto state = new Property!(XA_ATOM, true)(windowHandle, "_NET_WM_STATE");
-        state = [Atoms._NET_WM_STATE_SKIP_PAGER, Atoms._NET_WM_STATE_SKIP_TASKBAR, Atoms._NET_WM_STATE_STICKY];
+        _MOTIF_WM_HINTS.set([2, 0, 0, 0, 0]);
 
-        auto motifHints = new Property!(XA_CARDINAL, true)(windowHandle, "_MOTIF_WM_HINTS");
-        motifHints = [2, 0, 0, 0, 0];
+        _NET_WM_WINDOW_TYPE.set(Atoms._NET_WM_WINDOW_TYPE_DOCK);
 
-        auto windowType = new Property!(XA_ATOM, false)(windowHandle, "_NET_WM_WINDOW_TYPE");
-        windowType = Atoms._NET_WM_WINDOW_TYPE_DOCK;
+		_NET_WM_DESKTOP.set(-1);
 
-		workspace = new Property!(XA_CARDINAL, false)(windowHandle, "_NET_WM_DESKTOP");
-		workspace = -1;
-
-		currentWindow = new Property!(XA_WINDOW, false)(.root, "_NET_ACTIVE_WINDOW", properties);
-		currentWindow ~= (x11.X.Window window){
+		_NET_ACTIVE_WINDOW ~= (WindowHandle window){
 			foreach(client; app.clients){
 				if(client.window == window){
 					currentClient = client;
@@ -131,9 +128,8 @@ class Bar: ws.wm.Window {
 			}
 		};
 
-		strutProperty = new Property!(XA_CARDINAL, true)(windowHandle, "_NET_WM_STRUT_PARTIAL", properties);
 		if(this.strut){
-			strutProperty = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+			_NET_WM_STRUT_PARTIAL.set([0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0]);
 		}
 
 		Events ~= this;
@@ -200,14 +196,14 @@ class Bar: ws.wm.Window {
 	override void moved(int[2] pos){
 		super.moved(pos);
 		if(strut){
-			strutProperty = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+			_NET_WM_STRUT_PARTIAL = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
 		}
 	}
 
 	override void resized(int[2] size){
 		super.resized(size);
 		if(strut){
-			strutProperty = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
+			_NET_WM_STRUT_PARTIAL = [0, 0, size.h, 0, 0, 0, 0, 0, pos.x, pos.x+size.w, 0, 0];
 		}
 		layout;
 		onDraw;
@@ -247,7 +243,7 @@ class Bar: ws.wm.Window {
 
     @WindowProperty
 	void evProperty(WindowHandle, XPropertyEvent* e){
-		properties.update(e);
+		updateProperties(e);
 		update = true;
 	}
 

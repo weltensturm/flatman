@@ -1,6 +1,6 @@
 module composite.overview.window;
 
-import composite;
+import ws.bindings.xlib, composite;
 
 
 class OverviewWindow: ws.wm.Window {
@@ -19,9 +19,9 @@ class OverviewWindow: ws.wm.Window {
 
     Dragging dragging;
 
-    Properties!(
-        "active", "_NET_ACTIVE_WINDOW", XA_WINDOW, false
-    ) properties;
+    mixin WindowProperties!q{
+        _NET_ACTIVE_WINDOW XA_WINDOW
+    };
 
     CompositeClient windowHit;
     
@@ -30,10 +30,10 @@ class OverviewWindow: ws.wm.Window {
         super(manager.width, manager.height, "Overview Window", true);
         XSelectInput(wm.displayHandle, windowHandle, ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
         wm.on(.root, [
-            PropertyNotify: (XEvent* e) => properties.update(&e.xproperty)
+            PropertyNotify: (XEvent* e) => updateProperties(&e.xproperty)
         ]);
-        properties.window(.root);
-        properties.update;
+        setPropertyWindow(.root);
+        updateProperties;
         draw.setFont("Roboto", 10);
     }
 
@@ -44,8 +44,8 @@ class OverviewWindow: ws.wm.Window {
             dragging.pressed = true;
             dragging.window = windowHit;
             dragging.start = [x,y];
-            if(properties.active.value != windowHit.windowHandle)
-                properties.active.request(windowHit.windowHandle, [2, CurrentTime, properties.active.value]);
+            if(_NET_ACTIVE_WINDOW.value != windowHit.windowHandle)
+                _NET_ACTIVE_WINDOW.request(windowHit.windowHandle, [2, CurrentTime, _NET_ACTIVE_WINDOW.value]);
         }else if(!pressed && button == Mouse.buttonLeft){
             if(!dragging.dragging && windowHit)
                 overview.stop;
@@ -72,7 +72,7 @@ class OverviewWindow: ws.wm.Window {
                 continue;
             foreach(wsi, ws; m.workspaces){
                 foreach(w; ws.windows){
-                    auto tabs = w.window.properties.tabs.value.max(0);
+                    auto tabs = w.window._FLATMAN_TABS.value.max(0);
                     if(tabs == 0 && (w.window.hidden || !w.window.picture))
                         continue;
                     with(w.animation){
@@ -106,7 +106,7 @@ class OverviewWindow: ws.wm.Window {
         }
         /+
         if(windowHit)
-            properties.active.request(windowHit.windowHandle, [2, CurrentTime, properties.active.value]);
+            active.request(windowHit.windowHandle, [2, CurrentTime, .active.value]);
         +/
         overview.onMouseMove(x, y);
         super.onMouseMove(x, y);

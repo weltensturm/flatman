@@ -12,6 +12,7 @@ import
     std.math,
     std.string,
 
+    ws.bindings.xlib,
     ws.wm,
     ws.gui.point,
     ws.gui.input,
@@ -22,16 +23,13 @@ import
     
     launcher.config;
 
-import x11.Xlib: XGrabKeyboard, XUngrabKeyboard;
-import x11.X: GrabModeAsync, CurrentTime;
-
 
 double sinApproach(double a){
     return (sin((a-0.5)*PI)+1)/2;
 }
 
 
-class AskWindow: Window {
+class AskWindow: ws.wm.Window {
 
     double showTime;
     int screenIndex;
@@ -39,7 +37,7 @@ class AskWindow: Window {
 
     void delegate(Keyboard.key)[] answer;
 
-    this(int screenIndex, Screen screen, void delegate(Keyboard.key) answer){
+    this(int screenIndex, common.screens.Screen screen, void delegate(Keyboard.key) answer){
         this.answer ~= answer;
         this.screenIndex = screenIndex;
         super(screen.w, screen.h, "", true);
@@ -177,7 +175,9 @@ void main(){
         auto flatman = "flatman-wm".spawnShell;
         auto status = flatman.wait();
 
-        if(status != 0){
+        if(status == 0){
+            return;
+        }else{
             if(!ask){
                 return;
             }

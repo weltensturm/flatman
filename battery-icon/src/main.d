@@ -12,15 +12,14 @@ import
 	std.string,
 	std.datetime,
 	std.algorithm,
-	x11.X,
-	x11.Xlib,
+	ws.bindings.xlib,
 	ws.gui.input,
 	ws.wm,
 	common.atoms;
 
 enum SYSTEM_TRAY_REQUEST_DOCK =    0;
 
-void sendMessage(x11.X.Window window, long type, long[4] data){
+void sendMessage(WindowHandle window, long type, long[4] data){
 	XClientMessageEvent ev;
 	ev.type = ClientMessage;
 	ev.window = window;

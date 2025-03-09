@@ -2,13 +2,17 @@ module bar.main;
 
 import bar;
 
-import std.typecons, common.xevents, common.log;
+import
+	std.typecons,
+	ws.bindings.xlib,
+	common.xevents,
+	common.log;
 
 
 extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 	try {
 		lastXerror = "X11 error: %s %s"
-				.format(cast(XRequestCode)e.request_code, cast(XErrorCode)e.error_code);
+				.format(cast(XRequestCode)e.request_code, e.error_code);
 		lastXerror.writeln;
 	}
 	catch(Throwable){}
@@ -17,7 +21,7 @@ extern(C) nothrow int xerror(Display* dpy, XErrorEvent* e){
 
 
 Display* dpy;
-x11.X.Window root;
+WindowHandle root;
 
 
 bool running = true;
@@ -138,8 +142,8 @@ class App {
 	void scan(){
 		XFlush(wm.displayHandle);
 		XGrabServer(wm.displayHandle);
-		x11.X.Window root_return, parent_return;
-		x11.X.Window* children;
+		WindowHandle root_return, parent_return;
+		WindowHandle* children;
 		uint nchildren;
 		XQueryTree(dpy, .root, &root_return, &parent_return, &children, &nchildren);
 		if(children){
@@ -200,14 +204,16 @@ class App {
 	}
 
 	@WindowCreate
-	void evCreate(bool override_redirect, x11.X.Window window){
+	void evCreate(bool override_redirect, WindowHandle window){
 		foreach(bar; bars){
 			if(bar.windowHandle == window){
 				return;
 			}
 		}
 		XWindowAttributes wa;
-		if(!XGetWindowAttributes(wm.displayHandle, window, &wa) || wa.c_class == InputOnly || wa.override_redirect){
+		if(!XGetWindowAttributes(wm.displayHandle, window, &wa)
+	       || __traits(getMember, wa, "class") == InputOnly
+	       || wa.override_redirect){
 			return;
 		}
 		Log.info("CreateWindow " ~ window.to!string);
@@ -222,7 +228,7 @@ class App {
 	}
 
 	@WindowDestroy
-	void evDestroy(x11.X.Window window){
+	void evDestroy(WindowHandle window){
 		if(auto client = find(window)){
 			clients = clients.without(client);
 			foreach(bar; bars){
