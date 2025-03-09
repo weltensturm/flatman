@@ -13,11 +13,7 @@ import
 	std.math,
 	std.traits,
 
-	x11.X,
-	x11.Xatom,
-	x11.Xlib,
-	x11.Xutil,
-
+	ws.bindings.xlib,
 	ws.gui.base,
 	ws.wm,
 	ws.x.draw,
@@ -97,7 +93,7 @@ class TrayIcon: ws.wm.Window {
 		this.tray = tray;
 		pa.onUpdate ~= { redraw = true; };
 
-		auto visualid = new Property!(XA_VISUALID, false)(tray, "_NET_SYSTEM_TRAY_VISUAL").get.to!ulong;
+		auto visualid = new Property!(cast(long)XA_VISUALID, false)(tray, "_NET_SYSTEM_TRAY_VISUAL").get.to!ulong;
 
 		auto window = (bindNames!spawnWindow
 			.redirect(true)
@@ -107,7 +103,7 @@ class TrayIcon: ws.wm.Window {
 
 		super(window);
 		setTitle("Flatman Volume Icon");
-		new Property!(XA_CARDINAL, true)(window, "_XEMBED_INFO").set([XEMBED_VERSION, XEMBED_MAPPED]);
+		new Property!(cast(long)XA_CARDINAL, true)(window, "_XEMBED_INFO").set([XEMBED_VERSION, XEMBED_MAPPED]);
 		_draw = new XDraw(this);
 
 		auto eventMask =
@@ -245,7 +241,7 @@ class AudioPanel: ws.wm.Window {
 				wm.displayHandle,
 				windowHandle,
 				False,
-				ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+				cast(uint)(ButtonPressMask | ButtonReleaseMask | PointerMotionMask),
 				GrabModeAsync,
 				GrabModeAsync,
 				None,
@@ -272,7 +268,7 @@ class AudioPanel: ws.wm.Window {
 		resize([width, (sinks ~ sources).length.to!int*50+20]);
 
 		int x, y;
-		x11.X.Window dummy;
+		WindowHandle dummy;
 		X.TranslateCoordinates(wm.displayHandle, icon.windowHandle,
 			DefaultRootWindow(wm.displayHandle), 0, 0, &x, &y, &dummy);
 
@@ -453,7 +449,7 @@ class CustomSlider: Slider {
 }
 
 
-void sendMessage(x11.X.Window window, long type, long[4] data){
+void sendMessage(WindowHandle window, long type, long[4] data){
 	XClientMessageEvent ev;
 	ev.type = ClientMessage;
 	ev.window = window;
