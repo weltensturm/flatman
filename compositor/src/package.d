@@ -20,9 +20,6 @@ public import
 	std.traits,
 	std.random,
 
-	derelict.opengl3.gl,
-	derelict.opengl3.glx,
-
 	ws.wm,
 	ws.event,
 	ws.gui.input,
@@ -32,6 +29,7 @@ public import
 	ws.x.property,
 	ws.x.draw,
 	ws.x.backbuffer,
+	ws.gl.gl,
 	ws.gl.context,
 	ws.gl.draw,
 	ws.draw,
